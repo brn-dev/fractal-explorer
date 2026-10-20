@@ -1,0 +1,10 @@
+.venv/
+.uv-cache/
+.cupy-cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.npm-cache/
+artifacts/
+*.log

@@ -1,0 +1,4963 @@
+{
+  "date": "2026-10-20T19:04:27.162Z",
+  "device": "nvidia blackwell",
+  "gpu": true,
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "repeats": 5,
+  "timing": "performance.now; queue completion; rendering total excludes coloring/drawing",
+  "precision": "MPFR CPU references, paired FP32 GPU deltas; FP32 is experimental",
+  "cases": {
+    "overview": {
+      "x": "-.5",
+      "y": "0",
+      "span": "3.6",
+      "fractal": "mandelbrot",
+      "julia_x": "-.8",
+      "julia_y": ".156",
+      "iterations": 800,
+      "bailout": 64
+    },
+    "spiral": {
+      "x": "-0.743643887037151",
+      "y": "0.13182590420533",
+      "span": "5e-11",
+      "fractal": "mandelbrot",
+      "julia_x": "-.8",
+      "julia_y": ".156",
+      "iterations": 3500,
+      "bailout": 64
+    },
+    "julia": {
+      "x": "0",
+      "y": "0",
+      "span": "3.6",
+      "fractal": "julia",
+      "julia_x": "-.8",
+      "julia_y": ".156",
+      "iterations": 1000,
+      "bailout": 64
+    },
+    "deep80": {
+      "x": "0",
+      "y": "1",
+      "span": "1e-80",
+      "fractal": "mandelbrot",
+      "julia_x": "-.8",
+      "julia_y": ".156",
+      "iterations": 1000,
+      "bailout": 64
+    },
+    "deep1000": {
+      "x": "0",
+      "y": "1",
+      "span": "1e-1000",
+      "fractal": "mandelbrot",
+      "julia_x": "-.8",
+      "julia_y": ".156",
+      "iterations": 4000,
+      "bailout": 64
+    },
+    "criticalJulia": {
+      "x": "0",
+      "y": "0",
+      "span": "1e-180",
+      "fractal": "julia",
+      "julia_x": "-2",
+      "julia_y": "0",
+      "iterations": 1000,
+      "bailout": 64
+    },
+    "burningShip": {
+      "x": "-.5",
+      "y": "0",
+      "span": "3.6",
+      "fractal": "burning-ship",
+      "julia_x": "-.8",
+      "julia_y": ".156",
+      "iterations": 800,
+      "bailout": 64
+    },
+    "tricorn": {
+      "x": "-.5",
+      "y": "0",
+      "span": "3.6",
+      "fractal": "tricorn",
+      "julia_x": "-.8",
+      "julia_y": ".156",
+      "iterations": 800,
+      "bailout": 64
+    },
+    "cubic": {
+      "x": "0",
+      "y": "0",
+      "span": "3.6",
+      "fractal": "cubic",
+      "julia_x": "-.8",
+      "julia_y": ".156",
+      "iterations": 800,
+      "bailout": 64
+    },
+    "deep10000": {
+      "x": "-2",
+      "y": "0",
+      "span": "1e-10000",
+      "fractal": "mandelbrot",
+      "julia_x": "-.8",
+      "julia_y": ".156",
+      "iterations": 20000,
+      "bailout": 64
+    }
+  },
+  "modes": {
+    "auto": {
+      "arithmetic": "auto",
+      "acceleration": "auto"
+    },
+    "series": {
+      "arithmetic": "double-single",
+      "acceleration": "series"
+    },
+    "bla": {
+      "arithmetic": "double-single",
+      "acceleration": "bla"
+    },
+    "combined": {
+      "arithmetic": "double-single",
+      "acceleration": "series-bla"
+    },
+    "fp32": {
+      "arithmetic": "fp32",
+      "acceleration": "auto"
+    }
+  },
+  "rows": [
+    {
+      "case": "overview",
+      "mode": "auto",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "auto",
+        "acceleration": "auto"
+      },
+      "cold_ms": 11.199999988079071,
+      "warm_ms": [
+        9,
+        8.900000035762787,
+        7.099999964237213,
+        9.399999976158142,
+        7.899999976158142
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "standard",
+        "acceleration": "none",
+        "perturbation": false,
+        "digits": 14,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 2.476288080215454,
+        "elapsed_ms": 7.899999976158142,
+        "mean_native_steps": 22.32000096450617,
+        "mean_skipped_steps": 0,
+        "series_prefix": 0,
+        "timings": {
+          "compile_ms": 0,
+          "kernel_ms": 2.899999976158142,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 8.900000035762787,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 2.476288080215454,
+          "actual": 2.476288080215454
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 2.48964786529541,
+          "actual": 2.48964786529541
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": -1,
+          "actual": -1
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 8.335165977478027,
+          "actual": 8.335166931152344
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 2.541675567626953,
+          "actual": 2.541675567626953
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 2.912108898162842,
+          "actual": 2.912108898162842
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 3.5214431285858154,
+          "actual": 3.5214433670043945
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 4.7938618659973145,
+          "actual": 4.793862342834473
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 10.588797569274902,
+          "actual": 10.588798522949219
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 8.326708793640137,
+          "actual": 8.326708793640137
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 6.510951995849609,
+          "actual": 6.510951995849609
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 4.8924784660339355,
+          "actual": 4.8924784660339355
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 4.352673053741455,
+          "actual": 4.352673530578613
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 5.197090148925781,
+          "actual": 5.197090148925781
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 13.672192573547363,
+          "actual": 13.672192573547363
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": -1,
+          "actual": -1
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 9.5367431640625e-7,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "overview",
+      "mode": "fp32",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "fp32",
+        "acceleration": "auto"
+      },
+      "cold_ms": 8.800000011920929,
+      "warm_ms": [
+        11.100000023841858,
+        6,
+        7.399999976158142,
+        5.899999976158142,
+        5.699999988079071
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "fp32",
+        "range_mode": "standard",
+        "acceleration": "none",
+        "perturbation": false,
+        "digits": 14,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 2.476288080215454,
+        "elapsed_ms": 5.699999988079071,
+        "mean_native_steps": 22.31779513888889,
+        "mean_skipped_steps": 0,
+        "series_prefix": 0,
+        "timings": {
+          "compile_ms": 0,
+          "kernel_ms": 2.599999964237213,
+          "repair_ms": 0
+        },
+        "experimental": true
+      },
+      "warm_median_ms": 6,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 2.476288080215454,
+          "actual": 2.476288080215454
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 2.48964786529541,
+          "actual": 2.48964786529541
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": -1,
+          "actual": -1
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 8.335165977478027,
+          "actual": 8.335169792175293
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 2.541675567626953,
+          "actual": 2.541675567626953
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 2.912108898162842,
+          "actual": 2.9121086597442627
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 3.5214431285858154,
+          "actual": 3.5214431285858154
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 4.7938618659973145,
+          "actual": 4.793861389160156
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 10.588797569274902,
+          "actual": 10.588797569274902
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 8.326708793640137,
+          "actual": 8.326706886291504
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 6.510951995849609,
+          "actual": 6.510951042175293
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 4.8924784660339355,
+          "actual": 4.8924784660339355
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 4.352673053741455,
+          "actual": 4.352673053741455
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 5.197090148925781,
+          "actual": 5.197089672088623
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 13.672192573547363,
+          "actual": 13.672187805175781
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": -1,
+          "actual": -1
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0.00000476837158203125,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "spiral",
+      "mode": "auto",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "auto",
+        "acceleration": "auto"
+      },
+      "cold_ms": 321.80000001192093,
+      "warm_ms": [
+        371.5,
+        199.10000002384186,
+        360.69999998807907,
+        364.19999998807907,
+        388.4000000357628
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "standard",
+        "acceleration": "none",
+        "perturbation": true,
+        "digits": 64,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 1139.7718505859375,
+        "elapsed_ms": 388.4000000357628,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 1808.8181023341049,
+        "mean_skipped_steps": 0,
+        "series_prefix": 0,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0.10000002384185791,
+          "kernel_ms": 384.69999998807907,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 364.19999998807907,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 1139.7718505859375,
+          "actual": 1139.7718505859375
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 1140.274169921875,
+          "actual": 1140.274169921875
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 3300.7509765625,
+          "actual": 3300.7509765625
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 2233.70751953125,
+          "actual": 2233.70751953125
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 1388.97119140625,
+          "actual": 1388.97119140625
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 1149.6368408203125,
+          "actual": 1149.6368408203125
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 1297.4288330078125,
+          "actual": 1297.4288330078125
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 1245.0133056640625,
+          "actual": 1245.0133056640625
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 1481.0323486328125,
+          "actual": 1481.0323486328125
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 1853.90771484375,
+          "actual": 1853.90771484375
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 2243.561279296875,
+          "actual": 2243.561279296875
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 1817.492919921875,
+          "actual": 1817.492919921875
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 1240.3631591796875,
+          "actual": 1240.3631591796875
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 1270.0640869140625,
+          "actual": 1270.0640869140625
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 3305.108642578125,
+          "actual": 3305.108642578125
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 1685.01123046875,
+          "actual": 1685.01123046875
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "spiral",
+      "mode": "series",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "series"
+      },
+      "cold_ms": 262,
+      "warm_ms": [
+        215.69999998807907,
+        115.60000002384186,
+        221.5,
+        246.80000001192093,
+        218.5
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "standard",
+        "acceleration": "series",
+        "perturbation": true,
+        "digits": 64,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 1139.7718505859375,
+        "elapsed_ms": 218.5,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 786.8159384645062,
+        "mean_skipped_steps": 1022,
+        "series_prefix": 1022,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 213.5,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 218.5,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 1139.7718505859375,
+          "actual": 1139.7718505859375
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 1140.274169921875,
+          "actual": 1140.274169921875
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 3300.7509765625,
+          "actual": 3300.7509765625
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 2233.70751953125,
+          "actual": 2233.70751953125
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 1388.97119140625,
+          "actual": 1388.97119140625
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 1149.6368408203125,
+          "actual": 1149.6368408203125
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 1297.4288330078125,
+          "actual": 1297.4288330078125
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 1245.0133056640625,
+          "actual": 1245.0133056640625
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 1481.0323486328125,
+          "actual": 1481.0323486328125
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 1853.90771484375,
+          "actual": 1853.90771484375
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 2243.561279296875,
+          "actual": 2243.561279296875
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 1817.492919921875,
+          "actual": 1817.492919921875
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 1240.3631591796875,
+          "actual": 1240.3631591796875
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 1270.0640869140625,
+          "actual": 1270.0640869140625
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 3305.108642578125,
+          "actual": 3305.108642578125
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 1685.01123046875,
+          "actual": 1685.01123046875
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "spiral",
+      "mode": "bla",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "bla"
+      },
+      "cold_ms": 418.9000000357628,
+      "warm_ms": [
+        387.39999997615814,
+        378.9000000357628,
+        369.60000002384186,
+        350.30000001192093,
+        406.0999999642372
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "standard",
+        "acceleration": "bla",
+        "perturbation": true,
+        "digits": 64,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 1139.7718505859375,
+        "elapsed_ms": 406.0999999642372,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 1808.8181023341049,
+        "mean_skipped_steps": 0,
+        "series_prefix": 0,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 400.30000001192093,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 378.9000000357628,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 1139.7718505859375,
+          "actual": 1139.7718505859375
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 1140.274169921875,
+          "actual": 1140.274169921875
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 3300.7509765625,
+          "actual": 3300.7509765625
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 2233.70751953125,
+          "actual": 2233.70751953125
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 1388.97119140625,
+          "actual": 1388.97119140625
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 1149.6368408203125,
+          "actual": 1149.6368408203125
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 1297.4288330078125,
+          "actual": 1297.4288330078125
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 1245.0133056640625,
+          "actual": 1245.0133056640625
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 1481.0323486328125,
+          "actual": 1481.0323486328125
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 1853.90771484375,
+          "actual": 1853.90771484375
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 2243.561279296875,
+          "actual": 2243.561279296875
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 1817.492919921875,
+          "actual": 1817.492919921875
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 1240.3631591796875,
+          "actual": 1240.3631591796875
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 1270.0640869140625,
+          "actual": 1270.0640869140625
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 3305.108642578125,
+          "actual": 3305.108642578125
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 1685.01123046875,
+          "actual": 1685.01123046875
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "spiral",
+      "mode": "combined",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "series-bla"
+      },
+      "cold_ms": 285.19999998807907,
+      "warm_ms": [
+        222,
+        266.69999998807907,
+        197.60000002384186,
+        251.39999997615814,
+        249.70000004768372
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "standard",
+        "acceleration": "series-bla",
+        "perturbation": true,
+        "digits": 64,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 1139.7718505859375,
+        "elapsed_ms": 249.70000004768372,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 786.8159384645062,
+        "mean_skipped_steps": 1022,
+        "series_prefix": 1022,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 242.39999997615814,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 249.70000004768372,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 1139.7718505859375,
+          "actual": 1139.7718505859375
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 1140.274169921875,
+          "actual": 1140.274169921875
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 3300.7509765625,
+          "actual": 3300.7509765625
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 2233.70751953125,
+          "actual": 2233.70751953125
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 1388.97119140625,
+          "actual": 1388.97119140625
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 1149.6368408203125,
+          "actual": 1149.6368408203125
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 1297.4288330078125,
+          "actual": 1297.4288330078125
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 1245.0133056640625,
+          "actual": 1245.0133056640625
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 1481.0323486328125,
+          "actual": 1481.0323486328125
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 1853.90771484375,
+          "actual": 1853.90771484375
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 2243.561279296875,
+          "actual": 2243.561279296875
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 1817.492919921875,
+          "actual": 1817.492919921875
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 1240.3631591796875,
+          "actual": 1240.3631591796875
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 1270.0640869140625,
+          "actual": 1270.0640869140625
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 3305.108642578125,
+          "actual": 3305.108642578125
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 1685.01123046875,
+          "actual": 1685.01123046875
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "julia",
+      "mode": "auto",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "auto",
+        "acceleration": "auto"
+      },
+      "cold_ms": 13.800000011920929,
+      "warm_ms": [
+        14.100000023841858,
+        17.700000047683716,
+        12.800000011920929,
+        13.5,
+        13.899999976158142
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "standard",
+        "acceleration": "none",
+        "perturbation": false,
+        "digits": 14,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 1.4943325519561768,
+        "elapsed_ms": 13.899999976158142,
+        "mean_native_steps": 38.93094521604938,
+        "mean_skipped_steps": 0,
+        "series_prefix": 0,
+        "timings": {
+          "compile_ms": 0,
+          "kernel_ms": 9.5,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 13.899999976158142,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 1.5766083002090454,
+          "actual": 1.576608419418335
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 1.5766083002090454,
+          "actual": 1.576608419418335
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 198.70526123046875,
+          "actual": 198.70526123046875
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 5.150714874267578,
+          "actual": 5.150714874267578
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 1.653746485710144,
+          "actual": 1.6537466049194336
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 2.1283774375915527,
+          "actual": 2.128377676010132
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 3.0793724060058594,
+          "actual": 3.0793728828430176
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 7.576392650604248,
+          "actual": 7.576392650604248
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 154.76251220703125,
+          "actual": 154.76251220703125
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 193.18345642089844,
+          "actual": 193.18345642089844
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 4.792074680328369,
+          "actual": 4.792075157165527
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 3.809907913208008,
+          "actual": 3.809907913208008
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 3.1872496604919434,
+          "actual": 3.1872498989105225
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 4.850172996520996,
+          "actual": 4.850172996520996
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 10.529989242553711,
+          "actual": 10.529989242553711
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 119.10154724121094,
+          "actual": 119.10154724121094
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 4.76837158203125e-7,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "julia",
+      "mode": "fp32",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "fp32",
+        "acceleration": "auto"
+      },
+      "cold_ms": 8.799999952316284,
+      "warm_ms": [
+        9.300000011920929,
+        7.599999964237213,
+        9.800000011920929,
+        8.100000023841858,
+        5.700000047683716
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "fp32",
+        "range_mode": "standard",
+        "acceleration": "none",
+        "perturbation": false,
+        "digits": 14,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 1.4943323135375977,
+        "elapsed_ms": 5.700000047683716,
+        "mean_native_steps": 38.96221161265432,
+        "mean_skipped_steps": 0,
+        "series_prefix": 0,
+        "timings": {
+          "compile_ms": 0,
+          "kernel_ms": 2.700000047683716,
+          "repair_ms": 0
+        },
+        "experimental": true
+      },
+      "warm_median_ms": 8.100000023841858,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 1.5766083002090454,
+          "actual": 1.5766081809997559
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 1.5766083002090454,
+          "actual": 1.5766081809997559
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 198.70526123046875,
+          "actual": 199.05401611328125
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 5.150714874267578,
+          "actual": 5.150713920593262
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 1.653746485710144,
+          "actual": 1.6537466049194336
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 2.1283774375915527,
+          "actual": 2.1283774375915527
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 3.0793724060058594,
+          "actual": 3.0793724060058594
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 7.576392650604248,
+          "actual": 7.576387882232666
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 154.76251220703125,
+          "actual": 154.76217651367188
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 193.18345642089844,
+          "actual": 278.2508239746094
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 4.792074680328369,
+          "actual": 4.792075157165527
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 3.809907913208008,
+          "actual": 3.8099076747894287
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 3.1872496604919434,
+          "actual": 3.1872496604919434
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 4.850172996520996,
+          "actual": 4.850172519683838
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 10.529989242553711,
+          "actual": 10.529980659484863
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 119.10154724121094,
+          "actual": 119.10131072998047
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 85.06736755371094,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "deep80",
+      "mode": "auto",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "auto",
+        "acceleration": "auto"
+      },
+      "cold_ms": 22.80000001192093,
+      "warm_ms": [
+        7.899999976158142,
+        7.399999976158142,
+        11.199999988079071,
+        8.700000047683716,
+        6.600000023841858
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "series",
+        "perturbation": true,
+        "digits": 128,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 215.7386474609375,
+        "elapsed_ms": 6.600000023841858,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 7.65179157021605,
+        "mean_skipped_steps": 213,
+        "series_prefix": 213,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 3.199999988079071,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 7.899999976158142,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 227.57017517089844,
+          "actual": 227.57017517089844
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 215.7386474609375,
+          "actual": 215.7386474609375
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 228.61985778808594,
+          "actual": 228.61985778808594
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 218.3898162841797,
+          "actual": 218.3898162841797
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 227.0760955810547,
+          "actual": 227.0760955810547
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 223.99069213867188,
+          "actual": 223.99069213867188
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 224.5596466064453,
+          "actual": 224.5596466064453
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 222.06170654296875,
+          "actual": 222.06170654296875
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 220.7810821533203,
+          "actual": 220.7810821533203
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 219.0894317626953,
+          "actual": 219.0894317626953
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 218.23797607421875,
+          "actual": 218.23797607421875
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 217.67523193359375,
+          "actual": 217.67523193359375
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 217.24822998046875,
+          "actual": 217.24822998046875
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 231.8229217529297,
+          "actual": 231.8229217529297
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 220.82220458984375,
+          "actual": 220.82220458984375
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 219.0601348876953,
+          "actual": 219.0601348876953
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "deep80",
+      "mode": "series",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "series"
+      },
+      "cold_ms": 25.5,
+      "warm_ms": [
+        7,
+        8.5,
+        11.100000023841858,
+        7.100000023841858,
+        7.900000035762787
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "series",
+        "perturbation": true,
+        "digits": 128,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 215.7386474609375,
+        "elapsed_ms": 7.900000035762787,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 7.65179157021605,
+        "mean_skipped_steps": 213,
+        "series_prefix": 213,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 4,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 7.900000035762787,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 227.57017517089844,
+          "actual": 227.57017517089844
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 215.7386474609375,
+          "actual": 215.7386474609375
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 228.61985778808594,
+          "actual": 228.61985778808594
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 218.3898162841797,
+          "actual": 218.3898162841797
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 227.0760955810547,
+          "actual": 227.0760955810547
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 223.99069213867188,
+          "actual": 223.99069213867188
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 224.5596466064453,
+          "actual": 224.5596466064453
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 222.06170654296875,
+          "actual": 222.06170654296875
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 220.7810821533203,
+          "actual": 220.7810821533203
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 219.0894317626953,
+          "actual": 219.0894317626953
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 218.23797607421875,
+          "actual": 218.23797607421875
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 217.67523193359375,
+          "actual": 217.67523193359375
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 217.24822998046875,
+          "actual": 217.24822998046875
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 231.8229217529297,
+          "actual": 231.8229217529297
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 220.82220458984375,
+          "actual": 220.82220458984375
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 219.0601348876953,
+          "actual": 219.0601348876953
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "deep80",
+      "mode": "bla",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "bla"
+      },
+      "cold_ms": 17.700000047683716,
+      "warm_ms": [
+        14.800000011920929,
+        14.300000011920929,
+        14,
+        17.69999998807907,
+        18.5
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "bla",
+        "perturbation": true,
+        "digits": 128,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 215.7386474609375,
+        "elapsed_ms": 18.5,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 28.651796875,
+        "mean_skipped_steps": 192,
+        "series_prefix": 0,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 13.299999952316284,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 14.800000011920929,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 227.57017517089844,
+          "actual": 227.57017517089844
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 215.7386474609375,
+          "actual": 215.7386474609375
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 228.61985778808594,
+          "actual": 228.61985778808594
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 218.3898162841797,
+          "actual": 218.3898162841797
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 227.0760955810547,
+          "actual": 227.0760955810547
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 223.99069213867188,
+          "actual": 223.99069213867188
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 224.5596466064453,
+          "actual": 224.5596466064453
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 222.06170654296875,
+          "actual": 222.06170654296875
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 220.7810821533203,
+          "actual": 220.7810821533203
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 219.0894317626953,
+          "actual": 219.0894317626953
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 218.23797607421875,
+          "actual": 218.23797607421875
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 217.67523193359375,
+          "actual": 217.67523193359375
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 217.24822998046875,
+          "actual": 217.24822998046875
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 231.8229217529297,
+          "actual": 231.8229217529297
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 220.82220458984375,
+          "actual": 220.82220458984375
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 219.0601348876953,
+          "actual": 219.0601348876953
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "deep80",
+      "mode": "combined",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "series-bla"
+      },
+      "cold_ms": 22.19999998807907,
+      "warm_ms": [
+        7.599999964237213,
+        12,
+        7.199999988079071,
+        12.399999976158142,
+        7.299999952316284
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "series-bla",
+        "perturbation": true,
+        "digits": 128,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 215.7386474609375,
+        "elapsed_ms": 7.299999952316284,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 7.65179157021605,
+        "mean_skipped_steps": 213,
+        "series_prefix": 213,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 2.5,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 7.599999964237213,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 227.57017517089844,
+          "actual": 227.57017517089844
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 215.7386474609375,
+          "actual": 215.7386474609375
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 228.61985778808594,
+          "actual": 228.61985778808594
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 218.3898162841797,
+          "actual": 218.3898162841797
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 227.0760955810547,
+          "actual": 227.0760955810547
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 223.99069213867188,
+          "actual": 223.99069213867188
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 224.5596466064453,
+          "actual": 224.5596466064453
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 222.06170654296875,
+          "actual": 222.06170654296875
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 220.7810821533203,
+          "actual": 220.7810821533203
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 219.0894317626953,
+          "actual": 219.0894317626953
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 218.23797607421875,
+          "actual": 218.23797607421875
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 217.67523193359375,
+          "actual": 217.67523193359375
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 217.24822998046875,
+          "actual": 217.24822998046875
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 231.8229217529297,
+          "actual": 231.8229217529297
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 220.82220458984375,
+          "actual": 220.82220458984375
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 219.0601348876953,
+          "actual": 219.0601348876953
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "deep1000",
+      "mode": "auto",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "auto",
+        "acceleration": "auto"
+      },
+      "cold_ms": 141,
+      "warm_ms": [
+        7.5,
+        11.699999988079071,
+        8.399999976158142,
+        11.600000023841858,
+        7.900000035762787
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "series",
+        "perturbation": true,
+        "digits": 1088,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 2660.739990234375,
+        "elapsed_ms": 7.900000035762787,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 7.590166859567901,
+        "mean_skipped_steps": 2658,
+        "series_prefix": 2658,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 3.300000011920929,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 8.399999976158142,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 2663.20654296875,
+          "actual": 2663.20654296875
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 2661.513427734375,
+          "actual": 2661.513427734375
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 2670.24658203125,
+          "actual": 2670.24658203125
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 2667.636962890625,
+          "actual": 2667.636962890625
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 2663.142333984375,
+          "actual": 2663.142333984375
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 2663.397216796875,
+          "actual": 2663.397216796875
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 2663.68408203125,
+          "actual": 2663.68408203125
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 2664.21630859375,
+          "actual": 2664.21630859375
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 2665.65087890625,
+          "actual": 2665.65087890625
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 2678.0205078125,
+          "actual": 2678.0205078125
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 2666.797119140625,
+          "actual": 2666.797119140625
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 2665.130126953125,
+          "actual": 2665.130126953125
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 2664.335205078125,
+          "actual": 2664.335205078125
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 2662.0703125,
+          "actual": 2662.0703125
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 2662.4140625,
+          "actual": 2662.4140625
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 2662.47314453125,
+          "actual": 2662.47314453125
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "deep1000",
+      "mode": "series",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "series"
+      },
+      "cold_ms": 141.4000000357628,
+      "warm_ms": [
+        9.900000035762787,
+        6.800000011920929,
+        7.100000023841858,
+        7.600000023841858,
+        7.5
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "series",
+        "perturbation": true,
+        "digits": 1088,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 2660.739990234375,
+        "elapsed_ms": 7.5,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 7.590166859567901,
+        "mean_skipped_steps": 2658,
+        "series_prefix": 2658,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 2.899999976158142,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 7.5,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 2663.20654296875,
+          "actual": 2663.20654296875
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 2661.513427734375,
+          "actual": 2661.513427734375
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 2670.24658203125,
+          "actual": 2670.24658203125
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 2667.636962890625,
+          "actual": 2667.636962890625
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 2663.142333984375,
+          "actual": 2663.142333984375
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 2663.397216796875,
+          "actual": 2663.397216796875
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 2663.68408203125,
+          "actual": 2663.68408203125
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 2664.21630859375,
+          "actual": 2664.21630859375
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 2665.65087890625,
+          "actual": 2665.65087890625
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 2678.0205078125,
+          "actual": 2678.0205078125
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 2666.797119140625,
+          "actual": 2666.797119140625
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 2665.130126953125,
+          "actual": 2665.130126953125
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 2664.335205078125,
+          "actual": 2664.335205078125
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 2662.0703125,
+          "actual": 2662.0703125
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 2662.4140625,
+          "actual": 2662.4140625
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 2662.47314453125,
+          "actual": 2662.47314453125
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "deep1000",
+      "mode": "bla",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "bla"
+      },
+      "cold_ms": 40.19999998807907,
+      "warm_ms": [
+        21.69999998807907,
+        24,
+        25.80000001192093,
+        20.399999976158142,
+        22.700000047683716
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "bla",
+        "perturbation": true,
+        "digits": 1088,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 2660.739990234375,
+        "elapsed_ms": 22.700000047683716,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 41.5901668595679,
+        "mean_skipped_steps": 2624,
+        "series_prefix": 0,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 17.899999976158142,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 22.700000047683716,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 2663.20654296875,
+          "actual": 2663.20654296875
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 2661.513427734375,
+          "actual": 2661.513427734375
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 2670.24658203125,
+          "actual": 2670.24658203125
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 2667.636962890625,
+          "actual": 2667.636962890625
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 2663.142333984375,
+          "actual": 2663.142333984375
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 2663.397216796875,
+          "actual": 2663.397216796875
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 2663.68408203125,
+          "actual": 2663.68408203125
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 2664.21630859375,
+          "actual": 2664.21630859375
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 2665.65087890625,
+          "actual": 2665.65087890625
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 2678.0205078125,
+          "actual": 2678.0205078125
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 2666.797119140625,
+          "actual": 2666.797119140625
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 2665.130126953125,
+          "actual": 2665.130126953125
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 2664.335205078125,
+          "actual": 2664.335205078125
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 2662.0703125,
+          "actual": 2662.0703125
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 2662.4140625,
+          "actual": 2662.4140625
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 2662.47314453125,
+          "actual": 2662.47314453125
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "deep1000",
+      "mode": "combined",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "series-bla"
+      },
+      "cold_ms": 155.39999997615814,
+      "warm_ms": [
+        9.899999976158142,
+        6.900000035762787,
+        6.900000035762787,
+        6.899999976158142,
+        13.599999964237213
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "series-bla",
+        "perturbation": true,
+        "digits": 1088,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 2660.739990234375,
+        "elapsed_ms": 13.599999964237213,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 7.590166859567901,
+        "mean_skipped_steps": 2658,
+        "series_prefix": 2658,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 8.199999988079071,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 6.900000035762787,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 2663.20654296875,
+          "actual": 2663.20654296875
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 2661.513427734375,
+          "actual": 2661.513427734375
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 2670.24658203125,
+          "actual": 2670.24658203125
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 2667.636962890625,
+          "actual": 2667.636962890625
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 2663.142333984375,
+          "actual": 2663.142333984375
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 2663.397216796875,
+          "actual": 2663.397216796875
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 2663.68408203125,
+          "actual": 2663.68408203125
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 2664.21630859375,
+          "actual": 2664.21630859375
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 2665.65087890625,
+          "actual": 2665.65087890625
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 2678.0205078125,
+          "actual": 2678.0205078125
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 2666.797119140625,
+          "actual": 2666.797119140625
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 2665.130126953125,
+          "actual": 2665.130126953125
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 2664.335205078125,
+          "actual": 2664.335205078125
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 2662.0703125,
+          "actual": 2662.0703125
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 2662.4140625,
+          "actual": 2662.4140625
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 2662.47314453125,
+          "actual": 2662.47314453125
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "criticalJulia",
+      "mode": "auto",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "auto",
+        "acceleration": "auto"
+      },
+      "cold_ms": 20.600000023841858,
+      "warm_ms": [
+        8.199999988079071,
+        9.800000011920929,
+        7.700000047683716,
+        11.699999988079071,
+        6.400000035762787
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "series",
+        "perturbation": true,
+        "digits": 256,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 601.7784423828125,
+        "elapsed_ms": 6.400000035762787,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 6.781481481481482,
+        "mean_skipped_steps": 598,
+        "series_prefix": 598,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 2.600000023841858,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 8.199999988079071,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 601.7785034179688,
+          "actual": 601.7785034179688
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 601.7785034179688,
+          "actual": 601.7785034179688
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 611.85400390625,
+          "actual": 611.85400390625
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 603.095703125,
+          "actual": 603.095703125
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 601.82470703125,
+          "actual": 601.82470703125
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 602.2264404296875,
+          "actual": 602.2264404296875
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 602.78515625,
+          "actual": 602.78515625
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 603.7092895507812,
+          "actual": 603.7092895507812
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 606.9959716796875,
+          "actual": 606.9959716796875
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 604.0401611328125,
+          "actual": 604.0401611328125
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 602.9500732421875,
+          "actual": 602.9500732421875
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 602.3363037109375,
+          "actual": 602.3363037109375
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 601.9071044921875,
+          "actual": 601.9071044921875
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 602.010009765625,
+          "actual": 602.010009765625
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 602.4767456054688,
+          "actual": 602.4767456054688
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 603.1709594726562,
+          "actual": 603.1709594726562
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "criticalJulia",
+      "mode": "series",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "series"
+      },
+      "cold_ms": 22.299999952316284,
+      "warm_ms": [
+        8.199999988079071,
+        10.700000047683716,
+        7.400000035762787,
+        10.099999964237213,
+        9.699999988079071
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "series",
+        "perturbation": true,
+        "digits": 256,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 601.7784423828125,
+        "elapsed_ms": 9.699999988079071,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 6.781481481481482,
+        "mean_skipped_steps": 598,
+        "series_prefix": 598,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0.09999996423721313,
+          "kernel_ms": 6.899999976158142,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 9.699999988079071,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 601.7785034179688,
+          "actual": 601.7785034179688
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 601.7785034179688,
+          "actual": 601.7785034179688
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 611.85400390625,
+          "actual": 611.85400390625
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 603.095703125,
+          "actual": 603.095703125
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 601.82470703125,
+          "actual": 601.82470703125
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 602.2264404296875,
+          "actual": 602.2264404296875
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 602.78515625,
+          "actual": 602.78515625
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 603.7092895507812,
+          "actual": 603.7092895507812
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 606.9959716796875,
+          "actual": 606.9959716796875
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 604.0401611328125,
+          "actual": 604.0401611328125
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 602.9500732421875,
+          "actual": 602.9500732421875
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 602.3363037109375,
+          "actual": 602.3363037109375
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 601.9071044921875,
+          "actual": 601.9071044921875
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 602.010009765625,
+          "actual": 602.010009765625
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 602.4767456054688,
+          "actual": 602.4767456054688
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 603.1709594726562,
+          "actual": 603.1709594726562
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "criticalJulia",
+      "mode": "bla",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "bla"
+      },
+      "cold_ms": 21.69999998807907,
+      "warm_ms": [
+        27.200000047683716,
+        14.100000023841858,
+        16.399999976158142,
+        20.69999998807907,
+        23
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "bla",
+        "perturbation": true,
+        "digits": 256,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 601.7784423828125,
+        "elapsed_ms": 23,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 60.78148148148148,
+        "mean_skipped_steps": 544,
+        "series_prefix": 0,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 22.099999964237213,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 20.69999998807907,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 601.7785034179688,
+          "actual": 601.7785034179688
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 601.7785034179688,
+          "actual": 601.7785034179688
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 611.85400390625,
+          "actual": 611.85400390625
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 603.095703125,
+          "actual": 603.095703125
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 601.82470703125,
+          "actual": 601.82470703125
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 602.2264404296875,
+          "actual": 602.2264404296875
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 602.78515625,
+          "actual": 602.78515625
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 603.7092895507812,
+          "actual": 603.7092895507812
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 606.9959716796875,
+          "actual": 606.9959716796875
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 604.0401611328125,
+          "actual": 604.0401611328125
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 602.9500732421875,
+          "actual": 602.9500732421875
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 602.3363037109375,
+          "actual": 602.3363037109375
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 601.9071044921875,
+          "actual": 601.9071044921875
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 602.010009765625,
+          "actual": 602.010009765625
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 602.4767456054688,
+          "actual": 602.4767456054688
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 603.1709594726562,
+          "actual": 603.1709594726562
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "criticalJulia",
+      "mode": "combined",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "series-bla"
+      },
+      "cold_ms": 19.5,
+      "warm_ms": [
+        5.5,
+        11.600000023841858,
+        10.599999964237213,
+        8.5,
+        6.799999952316284
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "series-bla",
+        "perturbation": true,
+        "digits": 256,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 601.7784423828125,
+        "elapsed_ms": 6.799999952316284,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 6.781481481481482,
+        "mean_skipped_steps": 598,
+        "series_prefix": 598,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0.09999996423721313,
+          "kernel_ms": 3.099999964237213,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 8.5,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 601.7785034179688,
+          "actual": 601.7785034179688
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 601.7785034179688,
+          "actual": 601.7785034179688
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 611.85400390625,
+          "actual": 611.85400390625
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 603.095703125,
+          "actual": 603.095703125
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 601.82470703125,
+          "actual": 601.82470703125
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 602.2264404296875,
+          "actual": 602.2264404296875
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 602.78515625,
+          "actual": 602.78515625
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 603.7092895507812,
+          "actual": 603.7092895507812
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 606.9959716796875,
+          "actual": 606.9959716796875
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 604.0401611328125,
+          "actual": 604.0401611328125
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 602.9500732421875,
+          "actual": 602.9500732421875
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 602.3363037109375,
+          "actual": 602.3363037109375
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 601.9071044921875,
+          "actual": 601.9071044921875
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 602.010009765625,
+          "actual": 602.010009765625
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 602.4767456054688,
+          "actual": 602.4767456054688
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 603.1709594726562,
+          "actual": 603.1709594726562
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "burningShip",
+      "mode": "auto",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "auto",
+        "acceleration": "auto"
+      },
+      "cold_ms": 23.5,
+      "warm_ms": [
+        14.199999988079071,
+        14.699999988079071,
+        23.5,
+        20.899999976158142,
+        21.100000023841858
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "standard",
+        "acceleration": "none",
+        "perturbation": false,
+        "digits": 14,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 2.133237838745117,
+        "elapsed_ms": 21.100000023841858,
+        "mean_native_steps": 187.81797309027777,
+        "mean_skipped_steps": 0,
+        "series_prefix": 0,
+        "timings": {
+          "compile_ms": 0.10000002384185791,
+          "kernel_ms": 20.5,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 20.899999976158142,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 2.133237600326538,
+          "actual": 2.133237838745117
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 3.1902339458465576,
+          "actual": 3.1902341842651367
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": -1,
+          "actual": -1
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 78.24897766113281,
+          "actual": 78.52396392822266
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 2.1753575801849365,
+          "actual": 2.1753578186035156
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 2.4404122829437256,
+          "actual": 2.4404125213623047
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 2.850555658340454,
+          "actual": 2.850555658340454
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 3.662933826446533,
+          "actual": 3.662933826446533
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 7.740478992462158,
+          "actual": 7.740478992462158
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": -1,
+          "actual": -1
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 7.741279602050781,
+          "actual": 7.741279602050781
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 31.36991310119629,
+          "actual": 31.36991310119629
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": -1,
+          "actual": -1
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 3.196850061416626,
+          "actual": 3.196850061416626
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 4.047693252563477,
+          "actual": 4.047693252563477
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 6.409091949462891,
+          "actual": 6.409091949462891
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0.27498626708984375,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "burningShip",
+      "mode": "fp32",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "fp32",
+        "acceleration": "auto"
+      },
+      "cold_ms": 9.5,
+      "warm_ms": [
+        7.899999976158142,
+        13,
+        12,
+        9.5,
+        9.699999988079071
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "fp32",
+        "range_mode": "standard",
+        "acceleration": "none",
+        "perturbation": false,
+        "digits": 14,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 2.133237838745117,
+        "elapsed_ms": 9.699999988079071,
+        "mean_native_steps": 187.85774305555555,
+        "mean_skipped_steps": 0,
+        "series_prefix": 0,
+        "timings": {
+          "compile_ms": 0,
+          "kernel_ms": 2.799999952316284,
+          "repair_ms": 0
+        },
+        "experimental": true
+      },
+      "warm_median_ms": 9.699999988079071,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 2.133237600326538,
+          "actual": 2.133237838745117
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 3.1902339458465576,
+          "actual": 3.1902337074279785
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": -1,
+          "actual": -1
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 78.24897766113281,
+          "actual": 56.818843841552734
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 2.1753575801849365,
+          "actual": 2.1753578186035156
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 2.4404122829437256,
+          "actual": 2.4404125213623047
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 2.850555658340454,
+          "actual": 2.850555658340454
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 3.662933826446533,
+          "actual": 3.662933826446533
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 7.740478992462158,
+          "actual": 7.740479469299316
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": -1,
+          "actual": -1
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 7.741279602050781,
+          "actual": 7.741278648376465
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 31.36991310119629,
+          "actual": 114.85429382324219
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": -1,
+          "actual": -1
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 3.196850061416626,
+          "actual": 3.196850061416626
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 4.047693252563477,
+          "actual": 4.047693252563477
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 6.409091949462891,
+          "actual": 6.409091949462891
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 83.4843807220459,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "tricorn",
+      "mode": "auto",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "auto",
+        "acceleration": "auto"
+      },
+      "cold_ms": 10.799999952316284,
+      "warm_ms": [
+        10.5,
+        14,
+        18.5,
+        16.30000001192093,
+        23.600000023841858
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "standard",
+        "acceleration": "none",
+        "perturbation": false,
+        "digits": 14,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 2.146073579788208,
+        "elapsed_ms": 23.600000023841858,
+        "mean_native_steps": 85.07370949074074,
+        "mean_skipped_steps": 0,
+        "series_prefix": 0,
+        "timings": {
+          "compile_ms": 0.10000002384185791,
+          "kernel_ms": 15,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 16.30000001192093,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 2.146073579788208,
+          "actual": 2.146073579788208
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 2.9725143909454346,
+          "actual": 2.9725148677825928
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": -1,
+          "actual": -1
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 3.884132146835327,
+          "actual": 3.884132146835327
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 2.189319372177124,
+          "actual": 2.189319372177124
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 2.468033790588379,
+          "actual": 2.468033790588379
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 2.914041757583618,
+          "actual": 2.9140419960021973
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 3.8606908321380615,
+          "actual": 3.8606908321380615
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 9.3371000289917,
+          "actual": 9.337100982666016
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 5.442414283752441,
+          "actual": 5.442414283752441
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 3.7668004035949707,
+          "actual": 3.7668004035949707
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 3.2284579277038574,
+          "actual": 3.2284579277038574
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 2.944873332977295,
+          "actual": 2.944873809814453
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 3.196850061416626,
+          "actual": 3.196850061416626
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 4.047693252563477,
+          "actual": 4.047693252563477
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 6.409091949462891,
+          "actual": 6.409091949462891
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 9.5367431640625e-7,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "tricorn",
+      "mode": "fp32",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "fp32",
+        "acceleration": "auto"
+      },
+      "cold_ms": 10.5,
+      "warm_ms": [
+        10.800000011920929,
+        6.600000023841858,
+        7.099999964237213,
+        8.200000047683716,
+        10.100000023841858
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "fp32",
+        "range_mode": "standard",
+        "acceleration": "none",
+        "perturbation": false,
+        "digits": 14,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 2.146073579788208,
+        "elapsed_ms": 10.100000023841858,
+        "mean_native_steps": 85.07250675154322,
+        "mean_skipped_steps": 0,
+        "series_prefix": 0,
+        "timings": {
+          "compile_ms": 0,
+          "kernel_ms": 4,
+          "repair_ms": 0
+        },
+        "experimental": true
+      },
+      "warm_median_ms": 8.200000047683716,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 2.146073579788208,
+          "actual": 2.146073579788208
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 2.9725143909454346,
+          "actual": 2.9725143909454346
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": -1,
+          "actual": -1
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 3.884132146835327,
+          "actual": 3.884131908416748
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 2.189319372177124,
+          "actual": 2.189319372177124
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 2.468033790588379,
+          "actual": 2.468033790588379
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 2.914041757583618,
+          "actual": 2.9140419960021973
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 3.8606908321380615,
+          "actual": 3.8606905937194824
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 9.3371000289917,
+          "actual": 9.337100982666016
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 5.442414283752441,
+          "actual": 5.442413806915283
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 3.7668004035949707,
+          "actual": 3.76680064201355
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 3.2284579277038574,
+          "actual": 3.2284579277038574
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 2.944873332977295,
+          "actual": 2.944873809814453
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 3.196850061416626,
+          "actual": 3.196850061416626
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 4.047693252563477,
+          "actual": 4.047693252563477
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 6.409091949462891,
+          "actual": 6.409091949462891
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 9.5367431640625e-7,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "cubic",
+      "mode": "auto",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "auto",
+        "acceleration": "auto"
+      },
+      "cold_ms": 11.399999976158142,
+      "warm_ms": [
+        7.300000011920929,
+        11.399999976158142,
+        6.800000011920929,
+        12.399999976158142,
+        6.600000023841858
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "standard",
+        "acceleration": "none",
+        "perturbation": false,
+        "digits": 14,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 1.2830641269683838,
+        "elapsed_ms": 6.600000023841858,
+        "mean_native_steps": 3.9137504822530866,
+        "mean_skipped_steps": 0,
+        "series_prefix": 0,
+        "timings": {
+          "compile_ms": 0,
+          "kernel_ms": 3.099999964237213,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 7.300000011920929,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 1.2830641269683838,
+          "actual": 1.2830641269683838
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 1.3002616167068481,
+          "actual": 1.3002616167068481
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 3.9284920692443848,
+          "actual": 3.9284920692443848
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 5.57655668258667,
+          "actual": 5.57655668258667
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 1.3233588933944702,
+          "actual": 1.3233588933944702
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 1.5117735862731934,
+          "actual": 1.5117735862731934
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 1.7513688802719116,
+          "actual": 1.7513689994812012
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 2.0413103103637695,
+          "actual": 2.0413103103637695
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 2.382291793823242,
+          "actual": 2.382291793823242
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 2.978787899017334,
+          "actual": 2.978787899017334
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 4.832754611968994,
+          "actual": 4.832754611968994
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 4.893705368041992,
+          "actual": 4.893705368041992
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 5.421851634979248,
+          "actual": 5.421851634979248
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 5.471806526184082,
+          "actual": 5.471806526184082
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 3.682645082473755,
+          "actual": 3.682644844055176
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 3.6638379096984863,
+          "actual": 3.6638379096984863
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 2.384185791015625e-7,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "cubic",
+      "mode": "fp32",
+      "width": 1920,
+      "height": 1080,
+      "settings": {
+        "arithmetic": "fp32",
+        "acceleration": "auto"
+      },
+      "cold_ms": 7.399999976158142,
+      "warm_ms": [
+        8.5,
+        7.599999964237213,
+        10.200000047683716,
+        7.699999988079071,
+        8.899999976158142
+      ],
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "backend": "webgpu",
+        "arithmetic": "fp32",
+        "range_mode": "standard",
+        "acceleration": "none",
+        "perturbation": false,
+        "digits": 14,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 1.2830641269683838,
+        "elapsed_ms": 8.899999976158142,
+        "mean_native_steps": 3.91375,
+        "mean_skipped_steps": 0,
+        "series_prefix": 0,
+        "timings": {
+          "compile_ms": 0,
+          "kernel_ms": 4.800000011920929,
+          "repair_ms": 0
+        },
+        "experimental": true
+      },
+      "warm_median_ms": 8.5,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 1.2830641269683838,
+          "actual": 1.2830641269683838
+        },
+        {
+          "point": [
+            1919,
+            1079
+          ],
+          "expected": 1.3002616167068481,
+          "actual": 1.3002616167068481
+        },
+        {
+          "point": [
+            960,
+            540
+          ],
+          "expected": 3.9284920692443848,
+          "actual": 3.9284920692443848
+        },
+        {
+          "point": [
+            576,
+            756
+          ],
+          "expected": 5.57655668258667,
+          "actual": 5.576557159423828
+        },
+        {
+          "point": [
+            31,
+            17
+          ],
+          "expected": 1.3233588933944702,
+          "actual": 1.3233591318130493
+        },
+        {
+          "point": [
+            128,
+            144
+          ],
+          "expected": 1.5117735862731934,
+          "actual": 1.5117735862731934
+        },
+        {
+          "point": [
+            225,
+            271
+          ],
+          "expected": 1.7513688802719116,
+          "actual": 1.751368761062622
+        },
+        {
+          "point": [
+            322,
+            398
+          ],
+          "expected": 2.0413103103637695,
+          "actual": 2.0413098335266113
+        },
+        {
+          "point": [
+            419,
+            525
+          ],
+          "expected": 2.382291793823242,
+          "actual": 2.382291793823242
+        },
+        {
+          "point": [
+            516,
+            652
+          ],
+          "expected": 2.978787899017334,
+          "actual": 2.978787899017334
+        },
+        {
+          "point": [
+            613,
+            779
+          ],
+          "expected": 4.832754611968994,
+          "actual": 4.832754135131836
+        },
+        {
+          "point": [
+            710,
+            906
+          ],
+          "expected": 4.893705368041992,
+          "actual": 4.893705368041992
+        },
+        {
+          "point": [
+            807,
+            1033
+          ],
+          "expected": 5.421851634979248,
+          "actual": 5.421852111816406
+        },
+        {
+          "point": [
+            904,
+            80
+          ],
+          "expected": 5.471806526184082,
+          "actual": 5.47180700302124
+        },
+        {
+          "point": [
+            1001,
+            207
+          ],
+          "expected": 3.682645082473755,
+          "actual": 3.682644844055176
+        },
+        {
+          "point": [
+            1098,
+            334
+          ],
+          "expected": 3.6638379096984863,
+          "actual": 3.6638379096984863
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 4.76837158203125e-7,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "deep10000",
+      "mode": "series",
+      "width": 32,
+      "height": 24,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "series"
+      },
+      "cold_ms": 511.80000001192093,
+      "warm_ms": [
+        8,
+        9.099999964237213,
+        5.599999964237213,
+        5.899999976158142,
+        6.900000035762787
+      ],
+      "metadata": {
+        "width": 32,
+        "height": 24,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "series",
+        "perturbation": true,
+        "digits": 10048,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 16612.373046875,
+        "elapsed_ms": 6.900000035762787,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 3.3697916666666665,
+        "mean_skipped_steps": 16612,
+        "series_prefix": 16612,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 3.5,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 6.900000035762787,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 16612.373046875,
+          "actual": 16612.373046875
+        },
+        {
+          "point": [
+            31,
+            23
+          ],
+          "expected": 16613.970703125,
+          "actual": 16613.970703125
+        },
+        {
+          "point": [
+            16,
+            12
+          ],
+          "expected": 16616.068359375,
+          "actual": 16616.068359375
+        },
+        {
+          "point": [
+            9,
+            16
+          ],
+          "expected": 16613.0078125,
+          "actual": 16613.0078125
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    },
+    {
+      "case": "deep10000",
+      "mode": "bla",
+      "width": 32,
+      "height": 24,
+      "settings": {
+        "arithmetic": "double-single",
+        "acceleration": "bla"
+      },
+      "cold_ms": 179.30000001192093,
+      "warm_ms": [
+        7.600000023841858,
+        8.800000011920929,
+        5.299999952316284,
+        7.399999976158142,
+        8.599999964237213
+      ],
+      "metadata": {
+        "width": 32,
+        "height": 24,
+        "backend": "webgpu",
+        "arithmetic": "double-single",
+        "range_mode": "scaled",
+        "acceleration": "bla",
+        "perturbation": true,
+        "digits": 10048,
+        "repaired": 0,
+        "reference_repairs": 0,
+        "color_origin": 16612.373046875,
+        "elapsed_ms": 8.599999964237213,
+        "reference_cache_hit": true,
+        "preparation_cache_hit": true,
+        "device_cache_hit": true,
+        "mean_native_steps": 39.369791666666664,
+        "mean_skipped_steps": 16576,
+        "series_prefix": 0,
+        "timings": {
+          "reference_ms": 0,
+          "preparation_ms": 0,
+          "upload_ms": 0,
+          "compile_ms": 0,
+          "kernel_ms": 5.199999988079071,
+          "repair_ms": 0
+        },
+        "experimental": false
+      },
+      "warm_median_ms": 7.600000023841858,
+      "oracle_samples": [
+        {
+          "point": [
+            0,
+            0
+          ],
+          "expected": 16612.373046875,
+          "actual": 16612.373046875
+        },
+        {
+          "point": [
+            31,
+            23
+          ],
+          "expected": 16613.970703125,
+          "actual": 16613.970703125
+        },
+        {
+          "point": [
+            16,
+            12
+          ],
+          "expected": 16616.068359375,
+          "actual": 16616.068359375
+        },
+        {
+          "point": [
+            9,
+            16
+          ],
+          "expected": 16613.0078125,
+          "actual": 16613.0078125
+        }
+      ],
+      "unstable_oracles": 0,
+      "oracle_max_error": 0,
+      "oracle_class_errors": 0
+    }
+  ],
+  "source_sha256": {
+    "arithmetic.wgsl": "14cc8eb8140c9d1a6f9ba54d6c5f38b61ed2ad911df8308a463447c817059669",
+    "fractal.wgsl": "929254f7a19063f95e9bd32fbd06636b131653f4c77b7931946b22d557aa5398",
+    "color.wgsl": "a6bcff2b28b2d4788bd282417f2acd579ddf7bc34eb94028f38b1b3af5fc35dc",
+    "approximation.mjs": "1e0239bc3d2fcae39f27b44732b179ea6494608314df1a028cf527cfc1cee725",
+    "reference.mjs": "02b2fa5df83ce8f5fa1aad6b2a085b2d695063742af899b7e8830d0115c4f6b7"
+  },
+  "source_note": "Render shaders and reference/approximation sources unchanged since measurement. Subsequent additions strengthen startup coordinate-division probes and UI startup/export behavior; render algorithms and measured parameters are unchanged."
+}

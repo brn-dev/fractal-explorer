@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101515" />
+    <title>Fractal Explorer Web — Into the infinite</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='27' font-size='30'%3E✳%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="./style.css" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+  </head>
+  <body>
+    <main
+      id="viewport"
+      aria-label="Interactive fractal; drag to pan, scroll to zoom"
+      tabindex="0"
+    >
+      <canvas id="fractal-canvas"></canvas>
+      <div class="vignette"></div>
+    </main>
+    <header>
+      <div class="header-right">
+        <button
+          id="help"
+          class="icon-button"
+          title="Keyboard shortcuts"
+          aria-label="Keyboard shortcuts"
+        >
+          ?</button
+        ><button
+          id="fullscreen"
+          class="icon-button"
+          title="Fullscreen"
+          aria-label="Fullscreen"
+        >
+          ⛶
+        </button>
+        <button
+          id="toggle-ui"
+          class="icon-button visibility-button"
+          type="button"
+          title="Hide UI (H)"
+          aria-label="Hide UI"
+          aria-controls="panel destinations navigation"
+          aria-expanded="true"
+        >
+          <svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M3 9c2 4 5 6 9 6s7-2 9-6M5 12l-2 3M9 14l-1 4M12 15v4M15 14l1 4M19 12l2 3" />
+          </svg>
+        </button>
+      </div>
+    </header>
+    <section id="location-intro" class="intro" aria-label="Current location">
+      <h1 id="view-title">The Mandelbrot set<span>.</span></h1>
+      <p id="view-description">An entire universe, hiding at the edge.</p>
+    </section>
+    <aside id="panel" aria-label="Explorer controls">
+      <div class="panel-heading">
+        <button
+          id="toggle-panel"
+          class="icon-button visibility-button"
+          type="button"
+          title="Collapse controls"
+          aria-label="Collapse controls"
+          aria-controls="panel-content"
+          aria-expanded="true"
+        >
+          <svg class="controls-collapse" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="m6 15 6-6 6 6" />
+          </svg>
+          <svg class="controls-expand" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M4 7h16M4 17h16" />
+            <circle cx="9" cy="7" r="3" /><circle cx="15" cy="17" r="3" />
+          </svg>
+        </button>
+      </div>
+      <div id="panel-content">
+        <section class="control-section">
+          <div class="section-heading">
+            <span>01</span>
+            <h3>THE FRACTAL</h3>
+            <span class="section-line"></span>
+          </div>
+          <label class="select-wrap"
+            ><span class="sr-only">Fractal type</span
+            ><select id="fractal">
+              <option value="mandelbrot">Mandelbrot</option>
+              <option value="julia">Julia set</option>
+              <option value="burning-ship">Burning Ship · original</option>
+              <option value="tricorn">Tricorn</option>
+              <option value="cubic">Cubic Julia</option>
+            </select></label
+          >
+          <div class="formula" id="formula">
+            z<sub>n+1</sub> = z<sub>n</sub>² + c
+          </div>
+          <div id="julia-controls" hidden>
+            <div class="parameter-control">
+              <label class="field-label" for="julia-x">Constant · real</label>
+              <input id="julia-x" type="text" value="-0.7269" spellcheck="false" inputmode="decimal" />
+              <input id="julia-x-slider" class="parameter-slider" type="range" min="-2" max="2" step="0.0001" value="-0.7269" aria-label="Julia real constant slider" aria-controls="julia-x" />
+            </div>
+            <div class="parameter-control">
+              <label class="field-label" for="julia-y">Constant · imaginary</label>
+              <input id="julia-y" type="text" value="0.1889" spellcheck="false" inputmode="decimal" />
+              <input id="julia-y-slider" class="parameter-slider" type="range" min="-2" max="2" step="0.0001" value="0.1889" aria-label="Julia imaginary constant slider" aria-controls="julia-y" />
+            </div>
+          </div>
+        </section>
+        <section class="control-section">
+          <div class="section-heading">
+            <span>02</span>
+            <h3>LIGHT & COLOR</h3>
+            <span class="section-line"></span>
+          </div>
+          <div class="palette-title">
+            <span id="palette-name">Ember & ice</span><span>PALETTE</span>
+          </div>
+          <div id="palette-preview"></div>
+          <div
+            id="palettes"
+            class="palettes"
+            role="group"
+            aria-label="Color palettes"
+          ></div>
+          <label class="range-label"
+            >Color density <output id="density-value">1.0</output
+            ><input
+              id="density"
+              type="range"
+              min="0.2"
+              max="4"
+              step="0.05"
+              value="1"
+          /></label>
+          <label class="range-label"
+            >Color phase <output id="phase-value">0.00</output
+            ><input
+              id="phase"
+              type="range"
+              min="0"
+              max="1"
+              step="0.005"
+              value="0"
+          /></label>
+          <label class="switch-label"
+            ><span>Let the colors wander</span
+            ><input id="animate" type="checkbox" role="switch" /><span
+              class="switch"
+            ></span
+          ></label>
+        </section>
+        <section class="control-section">
+          <div class="section-heading">
+            <span>03</span>
+            <h3>RENDERING</h3>
+            <span class="section-line"></span>
+          </div>
+          <div class="two-fields">
+            <div class="parameter-control">
+              <label class="field-label" for="iterations">Iterations</label>
+              <input id="iterations" type="number" min="50" max="50000" step="100" value="800" />
+              <input id="iterations-slider" class="parameter-slider" type="range" min="50" max="50000" step="1" value="800" aria-label="Iterations slider" aria-controls="iterations" />
+            </div>
+            <label class="field-label"
+              >Quality<select id="quality" aria-describedby="quality-note">
+                <option value="0.5">Draft · ½</option>
+                <option value="1" selected>Native · 1×</option>
+                <option value="1.5">Fine · 1.5×</option>
+                <option value="2">High · 2×</option>
+                <option value="3">Ultra · 3×</option>
+                <option value="4">Extreme · 4×</option>
+              </select></label
+            >
+          </div>
+          <p id="quality-note">Higher settings render more pixels for smoother fine detail.</p>
+          <div class="precision">
+            <span class="precision-icon">⌁</span>
+            <div>
+              <strong id="precision-mode">Adaptive precision</strong
+              ><span id="precision-detail"
+                >WebGPU + high-precision WebAssembly</span
+              >
+            </div>
+            <span class="precision-dot"></span>
+          </div>
+          <details class="performance-lab">
+            <summary>Performance lab <span>↗</span></summary>
+            <label class="field-label"
+              >Arithmetic<select id="arithmetic">
+                <option value="auto">Auto · paired precision</option>
+                <option value="fp32">FP32 · experimental</option>
+                <option value="double-single">
+                  Double-single
+                </option>
+              </select></label
+            >
+            <label class="field-label"
+              >Exponent range<select id="range-mode">
+                <option value="auto">Auto</option>
+                <option value="standard">Standard</option>
+                <option value="scaled">Rescaled + wide fallback</option>
+              </select></label
+            >
+            <label class="field-label"
+              >Iteration acceleration<select id="acceleration">
+                <option value="auto">Auto</option>
+                <option value="none">None</option>
+                <option value="series">Series approximation</option>
+                <option value="bla">Bilinear jumps</option>
+                <option value="series-bla">Series + bilinear jumps</option>
+              </select></label
+            >
+            <p id="performance-note">
+              Paired precision is checked on your GPU at startup. FP32 is
+              experimental. Deep references and preparation run in a local
+              WebAssembly worker; the first frame can take longer.
+            </p>
+            <div id="stage-times" aria-live="polite"></div>
+            <p id="offline-status" aria-live="polite">Offline caching is checked in the production build.</p>
+            <button id="update-offline" class="secondary-button" hidden>Update cached app ↗</button>
+            <a class="web-benchmark" href="./benchmark.html">Benchmark this device ↗</a>
+          </details>
+        </section>
+        <section class="control-section coordinates-section">
+          <button id="coordinates-toggle" class="disclosure">
+            COORDINATES <span>↗</span>
+          </button>
+          <div id="coordinates" hidden>
+            <label class="field-label"
+              >Real axis<input
+                id="center-x"
+                type="text"
+                spellcheck="false" /></label
+            ><label class="field-label"
+              >Imaginary axis<input
+                id="center-y"
+                type="text"
+                spellcheck="false" /></label
+            ><label class="field-label"
+              >View width<input
+                id="span"
+                type="text"
+                spellcheck="false" /></label
+            ><button id="apply-coordinates" class="secondary-button">
+              Go to coordinates ↗
+            </button>
+          </div>
+        </section>
+        <div class="panel-actions">
+          <button id="save-location" class="secondary-button">
+            ⌖ Save location</button
+          ><button id="export" class="primary-button">
+            Export image <span>↗</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+    <nav id="destinations" aria-label="Featured destinations">
+      <div class="destination-heading">
+        <span id="places-label" class="eyebrow">PLACES TO GET LOST</span
+        ><button
+          id="toggle-destinations"
+          class="icon-button visibility-button"
+          type="button"
+          title="Hide preset location cards (P)"
+          aria-label="Hide places"
+          aria-controls="destination-list"
+          aria-expanded="true"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="m9 6 6 6-6 6" />
+          </svg>
+        </button>
+      </div>
+      <div id="destination-list"></div>
+    </nav>
+    <div id="navigation">
+      <button id="zoom-out" title="Zoom out (Q)" aria-label="Zoom out">−</button
+      ><span id="zoom-label">1.00×</span
+      ><button id="zoom-in" title="Zoom in (E)" aria-label="Zoom in">+</button
+      ><span class="nav-separator"></span
+      ><button id="reset" title="Reset view (R)" aria-label="Reset view">
+        ↺
+      </button>
+    </div>
+    <footer class="status-bar">
+      <div class="status-metrics">
+        <span id="render-dot" class="live-dot"></span
+        ><span id="render-status" role="status">Preparing the universe…</span
+        ><span class="status-divider">/</span
+        ><span id="render-resolution">—</span>
+        <span class="hardware-status"><span class="status-divider">/</span><span id="hardware" class="hardware">STARTING YOUR DEVICE’S GPU</span></span>
+      </div>
+      <div class="interaction-hint">
+        <span>DRAG TO EXPLORE</span><span>SCROLL TO GO DEEPER</span><kbd>H</kbd
+        ><span>HIDE UI</span>
+      </div>
+    </footer>
+    <div id="toast" role="alert" hidden></div>
+    <dialog id="export-dialog">
+      <form method="dialog">
+        <button class="dialog-close icon-button" aria-label="Close">×</button>
+      </form>
+      <div class="eyebrow">TAKE A PIECE OF INFINITY</div>
+      <h2>Made to be kept.</h2>
+      <p>
+        Export the current view with its colors, or save its exact coordinates
+        for another day.
+      </p>
+      <label class="field-label"
+        >Image size<select id="export-size">
+          <option value="1920">Fit to 1920 px</option>
+          <option value="3840" selected>Fit to 3840 px · 4K</option>
+          <option value="current">Current render</option>
+        </select></label
+      ><button id="download-png" class="primary-button">
+        Download PNG <span>↓</span></button
+      ><button id="download-gif" class="secondary-button">
+        Download zoom GIF · 8× journey</button
+      ><button id="download-location" class="secondary-button">
+        Download location · JSON</button
+      ><label class="import-label"
+        >Import a saved location<input
+          id="import-location"
+          type="file"
+          accept="application/json,.json"
+      /></label>
+      <p id="export-status" role="status"></p>
+    </dialog>
+    <dialog id="help-dialog">
+      <form method="dialog">
+        <button class="dialog-close icon-button" aria-label="Close">×</button>
+      </form>
+      <div class="eyebrow">A FEW WAYS TO WANDER</div>
+      <h2>Follow your curiosity.</h2>
+      <div class="shortcut">
+        <span>Pan</span><span>Drag / WASD / arrows</span>
+      </div>
+      <div class="shortcut">
+        <span>Zoom</span><span>Scroll / E / Q / + / −</span>
+      </div>
+      <div class="shortcut">
+        <span>Zoom into a point</span><span>Double click</span>
+      </div>
+      <div class="shortcut">
+        <span>Reset / hide interface</span><span>R / H</span>
+      </div>
+      <div class="shortcut">
+        <span>Show / hide location cards</span><span>P</span>
+      </div>
+      <p>
+        Hold Shift for smaller keyboard steps. Deep zoom uses
+        MPFR reference orbits in a WebAssembly worker and WebGPU perturbation for
+        Mandelbrot and Julia, accepting view widths down to 10⁻¹⁰⁰⁰⁰.
+        This is a finite-precision renderer; zoom depth does not certify every pixel.
+        Other formulas support widths down to 10⁻¹⁰ in the web edition.
+        Pinch with two fingers to zoom on touch screens. All computation stays
+        on this device; no rendering server is used.
+      </p>
+      <p>
+        Interior pixels are points that did not escape within your iteration
+        budget. Increase iterations when deep regions appear solid.
+      </p>
+      <p class="attribution">
+        Interface inspiration:
+        <a
+          href="https://fractalexplorer.org/"
+          target="_blank"
+          rel="noreferrer"
+          >Fractal Explorer ↗</a
+        >
+      </p>
+    </dialog>
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

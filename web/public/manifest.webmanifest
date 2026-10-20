@@ -1,0 +1,9 @@
+{
+  "name": "Fractal Explorer Web",
+  "short_name": "Fractals",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#101515",
+  "theme_color": "#101515",
+  "icons": [{"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]
+}

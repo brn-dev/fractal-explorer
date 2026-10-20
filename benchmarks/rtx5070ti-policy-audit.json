@@ -1,0 +1,32 @@
+{
+  "cuda_sources_unchanged": true,
+  "effective_configs_unchanged": 78,
+  "measured_source_sha256": {
+    "__init__.py": "ff6bd9a1c929a0570960755180fe882449361f6d44848d978b69e0f1af71d004",
+    "__main__.py": "ae58c0000697f1a331749b5e9f261633ddeba327c7c95bf628e797c535f3f4fa",
+    "accelerator.py": "7e26210ad5b2fa9fdd3bc6407eb36b2fb4628132dab18cc4e552d2489c0e1062",
+    "arithmetic.cuh": "d15d8ca14c69b535180c8e8b52834466f166d3e1aa32eff56fa8c5da227eda3b",
+    "color.py": "be7b77160145ea9b8bd356fa8b8e63faf465617abdea6c599a05fe8f8438111c",
+    "engine.py": "9a59bac08718ede1c4138bcf0155b0dff8215200b8f40d13cd3164ee48e18874",
+    "kernel.cu": "9804e27529c162318cb56be8494215b43a26c563839d44b87e8bd31e8d792a81",
+    "models.py": "443c7297a522b7a2f4fbbcc6e645f78148c5374a1d2cc1b236aa1f5756d5d1a2",
+    "optimized.cu": "62140f2c35bb75befa82f749fd449b245197eeff9b9cdff2127210e721aff6f0",
+    "preparation.py": "7d8958e793719a97d965426cbf4ceca7ed2526e9af7dbc2f39d106dc290859db",
+    "server.py": "a2f8199a981be2afd525676510d914071a29a4c6d60cd65b53931415f732e8aa"
+  },
+  "final_source_sha256": {
+    "__init__.py": "ff6bd9a1c929a0570960755180fe882449361f6d44848d978b69e0f1af71d004",
+    "__main__.py": "ae58c0000697f1a331749b5e9f261633ddeba327c7c95bf628e797c535f3f4fa",
+    "accelerator.py": "0fcb65eda6fef88e32197b7575982b109bf0a901ad077f8b861bda1f133295c4",
+    "arithmetic.cuh": "d15d8ca14c69b535180c8e8b52834466f166d3e1aa32eff56fa8c5da227eda3b",
+    "color.py": "be7b77160145ea9b8bd356fa8b8e63faf465617abdea6c599a05fe8f8438111c",
+    "engine.py": "9a59bac08718ede1c4138bcf0155b0dff8215200b8f40d13cd3164ee48e18874",
+    "kernel.cu": "9804e27529c162318cb56be8494215b43a26c563839d44b87e8bd31e8d792a81",
+    "models.py": "443c7297a522b7a2f4fbbcc6e645f78148c5374a1d2cc1b236aa1f5756d5d1a2",
+    "optimized.cu": "62140f2c35bb75befa82f749fd449b245197eeff9b9cdff2127210e721aff6f0",
+    "preparation.py": "7d8958e793719a97d965426cbf4ceca7ed2526e9af7dbc2f39d106dc290859db",
+    "server.py": "5123ef8c86ef4fc2a3e6ca48f2256025801a32af4f7ec02b11a1bf698f9ea117"
+  },
+  "policy_note": "Auto rescaling was moved earlier (FP64/DD: 1e-200 to 1e-140; FP32/DS: 1e-20 to 1e-15) to preserve squared offsets at Julia critical points. All timed configurations still select the identical arithmetic/range/acceleration and CUDA source. Original run fingerprints are retained.",
+  "server_note": "A subsequent static-file MIME fix serves .mjs as JavaScript on Windows; it does not change rendering."
+}

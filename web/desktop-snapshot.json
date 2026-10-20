@@ -1,0 +1,22 @@
+{
+  "fractal_explorer/models.py": "443c7297a522b7a2f4fbbcc6e645f78148c5374a1d2cc1b236aa1f5756d5d1a2",
+  "tests/test_engine.py": "b7e2400aa005351119622165eefe6a7baeb77c729391b466e1102d92386f81e7",
+  "fractal_explorer/static/palettes.json": "88a19a07e76f8edeedf100bae1e12e8faf2fde56b9ecf1d8548ec099e47a494a",
+  "fractal_explorer/static/index.html": "fd8e88998421f46c89aa19dd5d4859e25c9cc1a6ecaadd53451cd11113135583",
+  "fractal_explorer/accelerator.py": "0fcb65eda6fef88e32197b7575982b109bf0a901ad077f8b861bda1f133295c4",
+  "fractal_explorer/static/style.css": "f5abb40560fafe0ed73404ada3e17a9c3595794fa7ce825204c222a556493542",
+  "tests/test_ui_numbers.mjs": "1aefd5fe6f66f9ab778796c0a395d670eabcc902ace8a062810b4be0281f09f4",
+  "fractal_explorer/kernel.cu": "9804e27529c162318cb56be8494215b43a26c563839d44b87e8bd31e8d792a81",
+  "fractal_explorer/__init__.py": "ff6bd9a1c929a0570960755180fe882449361f6d44848d978b69e0f1af71d004",
+  "fractal_explorer/__main__.py": "ae58c0000697f1a331749b5e9f261633ddeba327c7c95bf628e797c535f3f4fa",
+  "fractal_explorer/static/numbers.mjs": "1a8db9f071fb8b9d614b1925380728b8fb338ff83639874b0ca643b9d5605240",
+  "tests/test_server.py": "95b84c3311b2371507a0e8ca7e973b3e0d7507d52fb9cdd82c7d57ecb78a2b2c",
+  "fractal_explorer/optimized.cu": "62140f2c35bb75befa82f749fd449b245197eeff9b9cdff2127210e721aff6f0",
+  "tests/test_accelerator.py": "cffe7ccc7ff1ce03db3c719bc64718b483c6a2af49a13380134b804e29da9d1a",
+  "fractal_explorer/preparation.py": "7d8958e793719a97d965426cbf4ceca7ed2526e9af7dbc2f39d106dc290859db",
+  "fractal_explorer/color.py": "be7b77160145ea9b8bd356fa8b8e63faf465617abdea6c599a05fe8f8438111c",
+  "fractal_explorer/server.py": "5123ef8c86ef4fc2a3e6ca48f2256025801a32af4f7ec02b11a1bf698f9ea117",
+  "fractal_explorer/static/app.js": "c66b9d4c8670b1aa7c52704f305f39a1632e06b342a4a981fe96471052ed99dd",
+  "fractal_explorer/engine.py": "9a59bac08718ede1c4138bcf0155b0dff8215200b8f40d13cd3164ee48e18874",
+  "fractal_explorer/arithmetic.cuh": "d15d8ca14c69b535180c8e8b52834466f166d3e1aa32eff56fa8c5da227eda3b"
+}
