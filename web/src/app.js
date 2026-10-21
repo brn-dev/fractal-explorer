@@ -9,6 +9,7 @@ import { LIVE_FPS, animationPlan, cacheDimensions, cacheMemoryOptionsMiB, cacheM
 import { setupAutomationControls } from './automation-ui.js';
 import { readShareURL } from './share.mjs';
 import { setupShareLinks } from './share-ui.js';
+import { setupAudioControls } from './audio/audio-controller.js';
 const $ = (id) => document.getElementById(id);
 const canvas = $("fractal-canvas");
 const base = {
@@ -116,6 +117,26 @@ let lastPaint = 0,
   imageSettings = null;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let automationSettings = {}, automationRenderer, automationRendererPromise, pausedStatic = null;
+let audio, audioAnalysisTimer, audioAnalysisBusy = false, lastAudioAnalysis = -Infinity;
+// One explicit navigation boundary. Ordinary rendering and parameter edits do
+// not select music. A destination that also changes family reaches this once.
+function majorSceneChange(reason) { audio?.majorSceneChange(reason); }
+function requestAudioAnalysis() {
+  clearTimeout(audioAnalysisTimer);
+  if (!audio?.analyzing) return;
+  if (automationPlayer.plan && automationPlayer.lastShown) { audio.present(automationPlayer.lastShown); return; }
+  audioAnalysisTimer = setTimeout(analyzeStaticAudio,Math.max(0,200 - (performance.now() - lastAudioAnalysis)));
+}
+async function analyzeStaticAudio() {
+  if (!audio?.analyzing || !paintingReady || !imageView || audioAnalysisBusy || automationPlayer.plan) return;
+  const token = generation, snapshot = imageView;
+  audioAnalysisBusy = true; lastAudioAnalysis = performance.now();
+  try {
+    const samples = await engine.readAudioSamples();
+    if (token === generation && snapshot === imageView) audio.presentSamples(samples,snapshot);
+  } catch { /* A lost GPU or superseded field must not interrupt exploration. */ }
+  finally { audioAnalysisBusy = false; }
+}
 const automationPlayer = new ProgressiveAnimation({
   cancel: () => {
     // MPFR preparation and CPU iteration cannot receive a cancel message while
@@ -139,6 +160,7 @@ const automationPlayer = new ProgressiveAnimation({
     engine.presentCached(frame.field, frame.metadata);
     field = frame.field; meta = frame.metadata; imageView = frame.view; imageSettings = { ...renderSettings };
     paintingReady = true; paint(); automationControls.showValues(frame.view);
+    audio?.present(frame);
     $('render-resolution').textContent = `${meta.width} × ${meta.height}`;
     $('render-status').textContent = `${meta.backend.toUpperCase()} · ${automationPlaybackLabel(automationPlayer)}`;
     if (automationPlayer.paused) setRenderIndicator('ready', 'Parameter animations paused');
@@ -194,9 +216,11 @@ function automationPlaybackLabel(player) {
 }
 function toggleParameterAnimations() {
   if (!Object.keys(automationSettings).length) return;
+  audio?.resetAnalysis();
   automationPlayer.setPaused(!automationPlayer.paused);
   syncAutomationPause();
   if (!automationPlayer.paused && pausedStatic) requestRender();
+  requestAudioAnalysis();
 }
 function currentRenderView() {
   return { ...view, ...(automationPlayer.paused ? pausedStatic?.values : {}) };
@@ -311,7 +335,7 @@ function buildDestinations() {
     b.innerHTML = `<span class="card-top"><span>${String(i + 1).padStart(2, '0')}</span><span>↗</span></span><span><span class="card-name"></span><span class="card-level" style="display:block"></span></span>`;
     b.querySelector(".card-name").textContent = d.name;
     b.querySelector(".card-level").textContent = d.level;
-    b.onclick = () => { loadView(d.view, i); setAutomation(d.automation ?? {}); showLocationIntro(); };
+    b.onclick = () => { loadView(d.view, i, false, d.saved ? 'bookmark' : 'featured'); setAutomation(d.automation ?? {}); showLocationIntro(); };
     $("destination-list").append(b);
   });
 }
@@ -445,7 +469,7 @@ function setPanelCollapsed(collapsed) {
   button.setAttribute('aria-expanded', String(!collapsed));
   button.title = label;
 }
-function loadView(next, index = -1, preview = false) {
+function loadView(next, index = -1, preview = false, sceneReason = null) {
   clearTimeout(parameterPreviewTimer);
   parameterPreview = preview;
   viewEpoch++;
@@ -455,6 +479,7 @@ function loadView(next, index = -1, preview = false) {
   }
   if (next.fractal !== view.fractal) automationSettings = {};
   view = parameterDefaults({ ...base, ...next });
+  if (sceneReason) majorSceneChange(sceneReason);
   activeDestination = index;
   generation++;
   syncView();
@@ -525,6 +550,7 @@ async function render() {
       imageSettings = settingsSnapshot;
       paintingReady = true;
       paint();
+      requestAudioAnalysis();
       if (automationPlayer.paused && pausedStatic) automationControls.showValues(snapshot);
       canvas.style.transform = "";
       setRenderIndicator('ready', pausedStatic ? 'Static view · parameter animations paused' : 'View ready');
@@ -563,6 +589,7 @@ async function render() {
   }
 }
 function navigate(dx, dy, factor = 1) {
+  audio?.resetAnalysis();
   // Serialize navigation requests so every tiny decimal movement builds on the previous one.
   generation++;
   const epoch = viewEpoch;
@@ -667,7 +694,7 @@ function setupNavigation() {
       x: defaultView(base, view.fractal).x,
       y: defaultView(base, view.fractal).y,
       span: defaultView(base, view.fractal).span,
-    });
+    }, -1, false, 'reset');
   document.addEventListener("keydown", (e) => {
     if (isInput(e) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('dialog[open]')) return;
     if (e.key === ' ' && (e.target.tagName !== 'BUTTON' || Object.keys(automationSettings).length)) {
@@ -753,6 +780,7 @@ function setupControls() {
       const shared = await readShareURL(location.href, palettes.length);
       if (token !== shareLoad || !shared) return;
       restoreSharedState(shared); setVignetteEnabled(vignetteEnabled);
+      majorSceneChange('shared');
       syncView(); syncPalette(); syncColorControls(); syncAutomationPause(); buildDestinations();
       saveSession(); requestRender(); toast('Shared view loaded.');
     } catch (error) { if (token === shareLoad) toast(error.message); }
@@ -780,7 +808,7 @@ function setupControls() {
 
   $("fractal").onchange = () => {
     const fractal = $("fractal").value;
-    loadView(defaultView(base, fractal));
+    loadView(defaultView(base, fractal), -1, false, 'family');
     showLocationIntro();
   };
   $("density").oninput = () => {
@@ -870,6 +898,7 @@ function setupControls() {
         name: `Saved place ${saved.length}`,
         level: "YOUR OWN CORNER OF INFINITY",
         view: { ...view },
+        saved: true,
         automation: structuredClone(automationSettings),
       });
       buildDestinations();
@@ -912,7 +941,7 @@ function setupControls() {
       syncColorControls();
       syncPalette();
       syncRenderSettings(data.renderSettings);
-      loadView(imported);
+      loadView(imported, -1, false, 'import');
       setAutomation(data.automation ?? {});
       $("export-dialog").close();
     } catch (error) {
@@ -959,6 +988,7 @@ function syncColorControls() {
 function animate(time) {
   const elapsed = lastAnimationTime === null ? 0 : (time - lastAnimationTime) / 1000;
   lastAnimationTime = time;
+  audio?.setPalettePhase(phase);
   automationPlayer.tick(time, document.hidden || !!document.querySelector('dialog[open]'));
   if (
     $("animate").checked &&
@@ -1003,6 +1033,7 @@ async function init() {
           name: `Saved place ${i + 1}`,
           level: "YOUR OWN CORNER OF INFINITY",
           view: b.view,
+          saved: true,
           automation: b.automation,
         });
   } catch {}
@@ -1024,6 +1055,8 @@ async function init() {
   if (!openedShared) showLocationIntro();
   setupNavigation();
   setupControls();
+  audio = setupAudioControls({ requestAnalysis: requestAudioAnalysis });
+  majorSceneChange('initial');
   if (shareError) toast(shareError);
   if (matchMedia('(max-width:700px)').matches) setPanelCollapsed(true);
   document.documentElement.classList.remove('shared-view-loading');

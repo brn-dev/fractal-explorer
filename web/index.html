@@ -66,6 +66,9 @@
     </section>
     <aside id="panel" aria-label="Explorer controls">
       <div class="panel-heading">
+        <button id="audio-mute" class="icon-button visibility-button" type="button" aria-label="Unmute sound" title="Unmute sound" aria-pressed="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4Z" /><path class="audio-audible" d="M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14" /><path class="audio-muted" d="m16 9 6 6m0-6-6 6" /></svg>
+        </button>
         <button id="automation-pause" class="icon-button visibility-button" type="button" aria-label="Pause parameter animations" title="Pause parameter animations (Space)" aria-pressed="false" aria-keyshortcuts="Space" hidden>
           <svg class="animation-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14" /></svg>
           <svg class="animation-resume" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 10 7-10 7Z" /></svg>
@@ -186,6 +189,24 @@
         <section class="control-section">
           <div class="section-heading">
             <span>03</span>
+            <h3>SOUNDSCAPE</h3>
+            <span class="section-line"></span>
+          </div>
+          <label class="switch-label"><span>Sound <span class="audio-switch-hint">On / Off</span></span><input id="audio-enabled" type="checkbox" role="switch" /><span class="switch"></span></label>
+          <label class="field-label audio-mode">Mode<select id="audio-mode"><option value="generative">Generative</option><option value="reactive">Reactive</option></select></label>
+          <div id="audio-generative">
+            <label class="field-label">Soundscape<select id="audio-soundscape" aria-describedby="audio-selection-note audio-resolved"><option value="auto">Auto</option></select></label>
+            <p id="audio-selection-note" class="audio-note">Auto chooses a new atmosphere on major scene changes.</p>
+            <div class="audio-current"><span id="audio-resolved">Celestial Choir</span><button id="audio-shuffle" class="secondary-button" type="button">Shuffle</button></div>
+          </div>
+          <div id="audio-reactive" hidden><p class="audio-current">Fractal Resonance</p><p class="audio-note">Follows parameter animation with harmonic swells and resonant accents as the fractal’s structure changes.</p></div>
+          <label class="range-label">Volume <output id="audio-volume-value">32%</output><input id="audio-volume" type="range" min="0" max="1" step="0.01" value="0.32" aria-label="Soundscape volume" /></label>
+          <label class="range-label">Intensity <output id="audio-intensity-value">45%</output><input id="audio-intensity" type="range" min="0" max="1" step="0.01" value="0.45" aria-label="Soundscape intensity" /></label>
+          <div class="audio-playback"><span id="audio-status" role="status">Off</span><button id="audio-start" class="secondary-button" type="button" hidden>Start</button></div>
+        </section>
+        <section class="control-section">
+          <div class="section-heading">
+            <span>04</span>
             <h3>RENDERING</h3>
             <span class="section-line"></span>
           </div>

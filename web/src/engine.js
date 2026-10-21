@@ -6,6 +6,7 @@ import { packWide } from './wide.mjs';
 import { renderLimits, validateDimensions } from './resolution.mjs';
 
 import { kinds } from './fractals.mjs';
+import { sampleField } from './audio/reactive-analysis.mjs';
 const now = () => performance.now();
 const makeAbort = () => new DOMException('A newer view is ready.', 'AbortError');
 
@@ -282,6 +283,37 @@ export class BrowserEngine {
       const encoder = this.device.createCommandEncoder(); encoder.copyBufferToBuffer(this.output, 0, read, 0, bytes); this.device.queue.submit([encoder.finish()]);
       await read.mapAsync(GPUMapMode.READ); const result = new Float32Array(read.getMappedRange().slice(0)); read.unmap(); return result;
     } finally { read.destroy(); }
+  }
+  async readAudioSamples() {
+    if (!this.last) return null;
+    const { width, height } = this.last.metadata;
+    if (!this.gpu) return sampleField(this.last.field,width,height);
+    // Gather 32 x 32 scalar samples on the GPU. Only 4 KiB crosses the bus,
+    // once per new static field; palette-only paints never call this method.
+    if (!this.audioSamplePipeline) {
+      const module = this.device.createShaderModule({ code: `
+        @group(0) @binding(0) var<storage,read> field:array<f32>;
+        @group(0) @binding(1) var<storage,read_write> samples:array<f32>;
+        @group(0) @binding(2) var<uniform> size:vec2u;
+        @compute @workgroup_size(8,8) fn sample(@builtin(global_invocation_id) id:vec3u) {
+          if(id.x>=32u || id.y>=32u){return;}
+          let x=min(size.x-1u,(2u*id.x+1u)*size.x/64u);
+          let y=min(size.y-1u,(2u*id.y+1u)*size.y/64u);
+          samples[id.y*32u+id.x]=field[y*size.x+x];
+        }` });
+      this.audioSamplePipeline = this.device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'sample' } });
+    }
+    const output = this.buffer(4096,GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
+    const read = this.buffer(4096,GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+    const size = this.buffer(8,GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,new Uint32Array([width,height]));
+    try {
+      const group = this.device.createBindGroup({ layout: this.audioSamplePipeline.getBindGroupLayout(0), entries: [this.output,output,size].map((buffer,binding) => ({ binding, resource: { buffer } })) });
+      const encoder = this.device.createCommandEncoder(), pass = encoder.beginComputePass();
+      pass.setPipeline(this.audioSamplePipeline); pass.setBindGroup(0,group); pass.dispatchWorkgroups(4,4); pass.end();
+      encoder.copyBufferToBuffer(output,0,read,0,4096); this.device.queue.submit([encoder.finish()]);
+      await read.mapAsync(GPUMapMode.READ);
+      const samples = new Float32Array(read.getMappedRange().slice(0)); read.unmap(); return samples;
+    } finally { output.destroy(); read.destroy(); size.destroy(); }
   }
   presentCached(field, metadata) {
     if (this.gpu) {
