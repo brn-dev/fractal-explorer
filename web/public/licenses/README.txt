@@ -17,3 +17,10 @@ gifenc 1.0.3
 Copyright Matt DesLauriers and contributors.
 License: MIT; see gifenc-LICENSE.txt.
 Source: https://github.com/mattdesl/gifenc
+
+mediabunny 1.62.0
+Copyright Vanilagy and contributors.
+License: MPL-2.0; see mediabunny-LICENSE.txt.
+The library is used unmodified. Exact source package (including the covered files):
+https://registry.npmjs.org/mediabunny/-/mediabunny-1.62.0.tgz
+Upstream source: https://github.com/Vanilagy/mediabunny

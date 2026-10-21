@@ -29,6 +29,11 @@ class WorkerClient {
       this.worker.postMessage({ id, method, args });
     });
   }
+  close() {
+    this.worker.terminate();
+    for (const promise of this.pending.values()) promise.reject(makeAbort());
+    this.pending.clear();
+  }
 }
 
 export class BrowserEngine {
@@ -40,18 +45,21 @@ export class BrowserEngine {
   }
   async init({ forceCPU = false } = {}) {
     await this.worker.call('init');
+    if (this.destroyed) throw makeAbort();
     try {
       if (forceCPU) throw new Error('CPU fallback requested.');
       if (!navigator.gpu) throw new Error('WebGPU is unavailable in this browser.');
       const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
       if (!adapter) throw new Error('No WebGPU adapter is available.');
       this.device = await adapter.requestDevice();
+      if (this.destroyed) throw makeAbort();
       this.deviceName = adapter.info?.description || [adapter.info?.vendor, adapter.info?.architecture].filter(Boolean).join(' ') || 'Local GPU';
       this.device.lost.then(info => { this.lost = info.message || 'GPU device lost. Reload to reconnect.'; });
       this.module = await this.compile(arithmetic + '\n' + fractal);
       this.colorModule = await this.compile(color);
       this.colorPipeline = this.device.createRenderPipeline({ layout: 'auto', vertex: { module: this.colorModule, entryPoint: 'vertex' }, fragment: { module: this.colorModule, entryPoint: 'fragment', targets: [{ format: navigator.gpu.getPreferredCanvasFormat() }] }, primitive: { topology: 'triangle-list' } });
       await this.probeArithmetic();
+      if (this.destroyed) throw makeAbort();
       // Check availability before claiming the canvas, so a failed GPU setup can use 2D.
       this.context = this.canvas.getContext('webgpu');
       this.context.configure({ device: this.device, format: navigator.gpu.getPreferredCanvasFormat(), alphaMode: 'opaque' });
@@ -60,6 +68,7 @@ export class BrowserEngine {
       this.gpu = true;
       return { gpu: true, device: this.deviceName, paired: this.pairedOK };
     } catch (error) {
+      if (this.destroyed) { this.device?.destroy(); throw makeAbort(); }
       this.gpuError = error.message;
       this.device?.destroy(); this.device = null;
       this.cpuContext = this.canvas.getContext('2d', { alpha: false });
@@ -274,6 +283,13 @@ export class BrowserEngine {
       await read.mapAsync(GPUMapMode.READ); const result = new Float32Array(read.getMappedRange().slice(0)); read.unmap(); return result;
     } finally { read.destroy(); }
   }
+  presentCached(field, metadata) {
+    if (this.gpu) {
+      this.ensureOutput(metadata.width, metadata.height);
+      this.device.queue.writeBuffer(this.output, 0, field);
+    }
+    this.last = { field: this.gpu ? true : field, metadata };
+  }
   palette(index) {
     const colors = this.palettes[index].colors.map(s => s.match(/[0-9a-f]{2}/gi).map(v => parseInt(v, 16)));
     const data = new Float32Array(4096 * 4);
@@ -310,5 +326,5 @@ export class BrowserEngine {
     for (const p of this.packets.values()) { p.reference.destroy(); p.series.destroy(); p.maps.destroy(); }
     this.packets.clear(); this.packetIds?.clear(); await this.worker.call('clear');
   }
-  destroy() { this.cancel(); this.worker.worker.terminate(); this.device?.destroy(); }
+  destroy() { this.destroyed = true; this.cancel(); this.worker.close(); this.device?.destroy(); }
 }

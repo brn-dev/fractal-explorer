@@ -28,7 +28,8 @@
   font-size: 9px;
   line-height: 1.6;
 }
-#quality-note {
+#quality-note,
+#animation-cache-note {
   margin: 10px 0 0;
   color: var(--muted);
   font-size: 10px;
@@ -456,6 +457,7 @@ select option {
   color: #a5b29b;
   letter-spacing: 0.2px;
 }
+.cache-memory-control { margin-top:14px; }
 .field-label input,
 .field-label select {
   margin-top: 7px;
@@ -478,6 +480,32 @@ select option {
   accent-color: var(--lime);
   cursor: pointer;
 }
+.automatable-slider { position:relative;display:flex;align-items:center;gap:8px; }
+.automatable-slider:has(> .automation-playhead:not([hidden])) { margin-top:10px; }
+.automatable-slider .parameter-slider { flex:1;min-width:0;width:0; }
+/* The diamond follows playback above the track, clear of the editable thumb. */
+.automation-playhead { position:absolute;top:0;left:8px;right:43px;height:6px;pointer-events:none; }
+.automation-playhead::before { content:"";position:absolute;left:var(--animation-position,0%);width:6px;height:6px;transform:translateX(-50%) rotate(45deg);background:var(--ink);box-shadow:0 0 0 1px #111a19; }
+.automation-toggle { position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 27px;width:27px;height:27px;padding:4px;border:0;border-radius:50%;background:transparent;color:var(--muted);cursor:pointer; }
+.automation-toggle::after { content:"";position:absolute;inset:-4px;border-radius:50%; }
+.automation-toggle svg { width:19px;height:19px; }
+.automation-toggle:hover,.automation-toggle[aria-pressed="true"] { color:var(--lime);background:#c7e99c12; }
+.automation-toggle:focus-visible { outline:1px solid var(--lime);outline-offset:2px; }
+.automation-fields { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:5px -10px 12px;padding:10px;background:#c7e99c08;border-radius:7px; }
+.automation-fields[hidden] { display:none; }
+.automation-fields .field-label { margin:0;line-height:1.5; }
+.automation-fields input { width:100%;margin-top:4px;min-width:0; }
+.automation-shape { grid-column:1/-1; }
+.automation-shape select { margin-top:4px; }
+.automation-target-slider { grid-column:1/-1;margin:0; }
+/* Match the main track's edges and reserve the same space as its loop button. */
+.automation-target-slider::after { content:"";flex:0 0 27px; }
+.automation-now { grid-column:1/-1;font-size:9px;color:var(--muted);font-variant-numeric:tabular-nums; }
+.automation-status { margin-top:14px;font-size:10px;color:var(--muted); }
+.automation-status[hidden] { display:none; }
+.automation-status-heading { display:flex;align-items:center;justify-content:space-between;gap:8px; }
+.automation-status progress { display:block;width:100%;height:3px;margin:6px 0 8px;accent-color:var(--lime); }
+.automation-status small { display:block;font-size:9px;line-height:1.6; }
 @media (pointer: coarse) {
   .parameter-slider { height: 32px; }
 }
@@ -724,6 +752,7 @@ select option {
   flex-wrap: wrap;
   row-gap: 2px;
 }
+.memory-status,
 .hardware-status {
   display: inline-flex;
   align-items: center;
@@ -815,6 +844,8 @@ dialog .export-note {
   font-size: 10px;
   margin: 8px 0;
 }
+#share-dialog h2 { padding-right:20px; }
+#share-link { display:block;width:100%;margin-top:7px;min-height:94px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:6px;background:#ffffff05;color:var(--ink);font:11px/1.6 ui-monospace,monospace;overflow-wrap:anywhere; }
 #color-gif-dialog {
   width: min(900px, calc(100vw - 30px));
   padding: 24px;

@@ -16,6 +16,18 @@ function normal({ n, e }) {
   return { n, e };
 }
 export function text(a) { return a.n === 0n ? '0' : `${a.n}${a.e ? `e${a.e}` : ''}`; }
+// Format editable values without converting through Number or losing digits.
+export function plainText(a) {
+  if (!a.n) return '0';
+  const sign = a.n < 0n ? '-' : '', digits = (a.n < 0n ? -a.n : a.n).toString();
+  const point = digits.length + a.e;
+  const length = sign.length + (a.e >= 0 ? point : point > 0 ? digits.length + 1 : 2 - point + digits.length);
+  // Keep extreme values within the decimal input's supported character limit.
+  if (length > 12064) return text(a);
+  if (a.e >= 0) return sign + digits + '0'.repeat(a.e);
+  if (point > 0) return sign + digits.slice(0, point) + '.' + digits.slice(point);
+  return sign + '0.' + '0'.repeat(-point) + digits;
+}
 export function order(a) { return a.n ? (a.n < 0n ? -a.n : a.n).toString().length - 1 + a.e : -Infinity; }
 function power(n) {
   if (n < 0 || n > 24064) throw new Error('Coordinate precision budget exceeded.');

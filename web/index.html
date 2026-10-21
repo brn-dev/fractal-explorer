@@ -119,6 +119,11 @@
             </div>
           </div>
           <div id="fractal-parameters"></div>
+          <div id="automation-status" class="automation-status" hidden>
+            <div class="automation-status-heading"><span id="automation-progress-text">Preparing animation…</span><button id="automation-pause" class="automation-toggle" aria-label="Pause parameter animation" title="Pause parameter animation" aria-pressed="false">Ⅱ</button></div>
+            <progress id="automation-progress" max="1" value="0" aria-label="Frames cached"></progress>
+            <small id="automation-cache-detail"></small>
+          </div>
         </section>
         <section class="control-section">
           <div class="section-heading">
@@ -195,6 +200,8 @@
             >
           </div>
           <p id="quality-note">Higher settings render more pixels for smoother fine detail.</p>
+          <label class="field-label cache-memory-control">Animation cache RAM<select id="animation-cache-memory" aria-describedby="animation-cache-note"><option value="2048">2 GB</option></select></label>
+          <p id="animation-cache-note">Maximum for animation frames. Higher limits preserve more detail; browser memory limits still apply.</p>
           <div class="precision">
             <span class="precision-icon">⌁</span>
             <div>
@@ -269,6 +276,7 @@
           </div>
         </section>
         <div class="panel-actions">
+          <button id="share-location" class="secondary-button">Share link <span>↗</span></button>
           <button id="save-location" class="secondary-button">
             ⌖ Save location</button
           ><button id="export" class="primary-button">
@@ -311,6 +319,7 @@
         ><span id="render-status" role="status">Preparing the universe…</span
         ><span class="status-divider">/</span
         ><span id="render-resolution">—</span>
+        <span class="memory-status"><span class="status-divider">/</span><span id="render-memory" title="RAM retained by animation frame buffers, counting shared buffers once. Excludes other app, GPU, and browser memory.">0 MB RAM cache</span></span>
         <span class="hardware-status"><span class="status-divider">/</span><span id="hardware" class="hardware">STARTING YOUR DEVICE’S GPU</span></span>
       </div>
       <div class="interaction-hint">
@@ -319,6 +328,16 @@
       </div>
     </footer>
     <div id="toast" role="alert" hidden></div>
+    <dialog id="share-dialog" aria-labelledby="share-title">
+      <form method="dialog"><button class="dialog-close icon-button" aria-label="Close share dialog">×</button></form>
+      <h2 id="share-title">Share this view.</h2>
+      <p>The link includes exact coordinates, colors, and animation settings. Playback begins at the start of the loop.</p>
+      <label class="field-label" for="share-link">Link</label>
+      <textarea id="share-link" rows="4" readonly spellcheck="false" aria-describedby="share-status"></textarea>
+      <button id="copy-share-link" class="primary-button" disabled>Copy link</button>
+      <button id="native-share-link" class="secondary-button" disabled hidden>Share…</button>
+      <p id="share-status" role="status"></p>
+    </dialog>
     <dialog id="export-dialog" aria-labelledby="export-title">
       <form method="dialog">
         <button class="dialog-close icon-button" aria-label="Close">×</button>
@@ -336,12 +355,12 @@
           <option value="current">Current render</option>
         </select></label>
       <label class="switch-label"><span>Include vignette in exports</span><input id="export-vignette" type="checkbox" role="switch" /><span class="switch"></span></label>
-      <p class="export-note">Applies to PNG and both GIF options.</p>
+      <p class="export-note">Applies to PNG, GIF, and MP4.</p>
       <button id="download-png" class="primary-button image-export-action">
         Download PNG <span>↓</span></button
       ><button id="download-gif" class="secondary-button image-export-action">
-        Download zoom GIF · 8× journey</button
-      ><button id="open-color-gif" class="secondary-button image-export-action">Animation GIF · preview & export <span>↗</span></button>
+        Zoom animation · 8× journey</button
+      ><button id="open-color-gif" class="secondary-button image-export-action">Animation · GIF / MP4 <span>↗</span></button>
       <button id="download-location" class="secondary-button">
         Download location · JSON</button
       ><label class="import-label"
@@ -355,7 +374,7 @@
     <dialog id="color-gif-dialog" aria-labelledby="color-gif-title">
       <form method="dialog"><button class="dialog-close icon-button" aria-label="Back to download options">×</button></form>
       <h2 id="color-gif-title">Make it move.</h2>
-      <p>Wander through the colors, evolve a fractal’s constant, or combine both.</p>
+      <p>Export your parameter loop, wandering colors, or a zoom journey.</p>
       <div class="animation-layout">
       <section class="animation-preview" aria-label="Animation preview">
       <div id="color-gif-stage" class="gif-preview-stage">
@@ -369,6 +388,15 @@
       </div>
       </section>
       <section class="animation-settings" aria-label="Animation settings">
+      <label class="field-label">Animation<select id="animation-motion"><option value="parameters">Main-view parameter loop</option><option value="colors">Wandering colors</option><option value="zoom">8× zoom journey</option></select></label>
+      <p id="animation-source-note" class="export-note"></p>
+      <div class="two-fields">
+        <label class="field-label">Format<select id="animation-format"><option value="mp4">MP4 · H.264</option><option value="gif">GIF</option></select></label>
+        <label class="field-label">Size · longest edge<select id="animation-size"><option value="480">480 px</option><option value="720" selected>720 px</option><option value="1080">1080 px</option><option value="1920">1920 px</option><option value="2560">2560 px</option><option value="3840">3840 px · 4K</option></select></label>
+        <label class="field-label">Quality<select id="animation-quality"><option value="draft">Draft</option><option value="balanced">Balanced</option><option value="high" selected>High</option></select></label>
+        <label class="field-label">Frame rate<select id="animation-fps"><option value="10">10 fps</option><option value="15">15 fps</option><option value="24">24 fps</option><option value="30" selected>30 fps</option><option value="60">60 fps · MP4</option></select></label>
+      </div>
+      <label id="animation-duration-row" class="field-label" hidden>Duration · seconds<input id="gif-duration" type="number" min="0.5" max="20" step="0.5" value="4" /></label>
       <label class="switch-label"><span>Wander colors</span><input id="gif-wander-colors" type="checkbox" role="switch" checked /><span class="switch"></span></label>
       <div class="two-fields animation-fields">
         <div class="parameter-control">
@@ -382,20 +410,12 @@
           <input id="color-gif-speed-slider" class="parameter-slider" type="range" min="0.05" max="2" step="0.01" value="0.12" aria-label="GIF speed slider" />
         </div>
       </div>
-      <div id="gif-julia-option" hidden>
-        <label class="switch-label"><span id="gif-constant-label">Evolve constant</span><input id="gif-evolve-julia" type="checkbox" role="switch" /><span class="switch"></span></label>
-        <div id="gif-julia-fields" class="animation-fields" hidden>
-          <div class="two-fields">
-            <label class="field-label">Target · real<input id="gif-julia-x" type="text" spellcheck="false" inputmode="decimal" /></label>
-            <label class="field-label">Target · imaginary<input id="gif-julia-y" type="text" spellcheck="false" inputmode="decimal" /></label>
-          </div>
-          <label class="field-label animation-fields">Duration · seconds<input id="gif-duration" type="number" min="0.5" max="20" step="0.5" value="6" /></label>
-          <label class="switch-label"><span>Return to start (loop)</span><input id="gif-return" type="checkbox" role="switch" checked /><span class="switch"></span></label>
-        </div>
-      </div>
+      <label id="animation-dither-row" class="switch-label" hidden><span>Smooth GIF gradients</span><input id="animation-dither" type="checkbox" role="switch" checked /><span class="switch"></span></label>
       <label class="switch-label"><span>Include vignette</span><input id="color-gif-vignette" type="checkbox" role="switch" /><span class="switch"></span></label>
       <p id="color-gif-details" class="export-note"></p>
-      <button id="download-color-gif" class="primary-button image-export-action" disabled>Download animation GIF <span>↓</span></button>
+      <p id="animation-codec-note" class="export-note"></p>
+      <button id="download-color-gif" class="primary-button image-export-action" disabled>Download animation <span>↓</span></button>
+      <button id="animation-cancel" class="secondary-button" hidden>Cancel export</button>
       <p id="color-gif-status" role="status"></p>
       </section>
       </div>

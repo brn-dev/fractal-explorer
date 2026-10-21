@@ -1,8 +1,8 @@
 import { BrowserEngine } from './engine.js';
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
-import { navigate, decimal, add, text } from './decimal.mjs';
-import { animationFrames, colorCycle, createColorFrames, drawVignette, gifPaletteSample, juliaView, wrapPhase } from './export-utils.mjs';
-import { fractals } from './fractals.mjs';
+import { animationPlan } from './animation.mjs';
+import { animationExport, ditherFrame } from './animation-export.mjs';
+import { drawVignette, gifPaletteSample, wrapPhase } from './export-utils.mjs';
 
 const $ = id => document.getElementById(id);
 const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
@@ -17,274 +17,220 @@ function abortable(promise, signal) {
 }
 
 export function setupImageExports({ engine, palettes, getState, getCurrentField, paint, colorTable, downloadBlob }) {
-  const dialog = $('export-dialog'), colorDialog = $('color-gif-dialog');
-  let job = null, preview = null, previewFrame = null, previewStarted = null, previewPaused = false;
-  let previewPhase = 0, previewLastPaint = 0;
-  let previewElapsed = 0;
-  let previewOptions = { start: 0, speed: .12, cycle: colorCycle(0, .12) };
-  const size = (snapshot, longest = 720) => {
-    const aspect = snapshot.aspect;
-    return { width: Math.max(16, Math.round(longest / Math.max(1, aspect))), height: Math.max(16, Math.round(longest * Math.min(1, aspect))) };
-  };
-  const snapshot = () => ({ ...getState(), aspect: innerHeight / innerWidth });
-  function includeVignette(enabled) {
+  const dialog = $('export-dialog'), animationDialog = $('color-gif-dialog');
+  let job = null, preview = null, raf = null, program = null;
+  const snapshot = () => ({ ...getState(), aspect: innerHeight / innerWidth, mobile: engine.mobile });
+  const dimensions = (state, longest) => ({ width: Math.max(16, 2 * Math.round(longest / Math.max(1, state.aspect) / 2)), height: Math.max(16, 2 * Math.round(longest * Math.min(1, state.aspect) / 2)) });
+  function vignette(enabled) {
     $('export-vignette').checked = $('color-gif-vignette').checked = enabled;
     $('color-gif-preview-vignette').hidden = !enabled;
   }
-  function paintExport(canvas, values, metadata, colors, vignette) {
+  function paintExport(canvas, values, metadata, colors, shade) {
     paint(canvas, values, metadata, colors);
-    if (vignette) drawVignette(canvas);
+    if (shade) drawVignette(canvas);
   }
   function setBusy(busy) {
     for (const button of document.querySelectorAll('.image-export-action')) button.disabled = busy;
-    for (const input of colorDialog.querySelectorAll('input')) input.disabled = busy;
-    if (!busy && !$('gif-wander-colors').checked) {
-      $('color-gif-speed').disabled = $('color-gif-speed-slider').disabled = true;
-    }
-    $('download-color-gif').disabled = busy || !preview?.ready || !preview?.optionsValid;
+    for (const input of animationDialog.querySelectorAll('input, select')) input.disabled = busy;
+    $('color-gif-speed').disabled = $('color-gif-speed-slider').disabled = busy || !$('gif-wander-colors').checked;
+    $('color-gif-play').disabled = $('color-gif-restart').disabled = busy;
+    $('download-color-gif').disabled = busy || !preview?.ready || !preview?.valid || preview?.mp4 === false || preview?.mp4 === null;
+    $('animation-cancel').hidden = !busy;
   }
   async function runJob(status, task) {
     if (job) return;
-    const controller = job = new AbortController();
-    setBusy(true);
+    const controller = job = new AbortController(); setBusy(true);
     try { await task(controller.signal); }
-    catch (error) { if (error.name !== 'AbortError') $(status).textContent = error.message; }
+    catch (error) { $(status).textContent = error.name === 'AbortError' ? 'Export cancelled.' : error.message; }
     finally { if (job === controller) { job = null; setBusy(false); } }
   }
-  async function newRenderer(signal) {
-    const renderer = new BrowserEngine(document.createElement('canvas'), palettes);
+  async function newRenderer(signal, canvas = document.createElement('canvas')) {
+    const renderer = new BrowserEngine(canvas, palettes);
     try { await abortable(renderer.init({ forceCPU: !engine.gpu }), signal); return renderer; }
     catch (error) { renderer.destroy(); throw error; }
   }
-  $('export').onclick = () => {
-    includeVignette(false);
-    $('export-status').textContent = '';
-    dialog.showModal();
-  };
-  dialog.addEventListener('close', () => { if (!colorDialog.open) job?.abort(); });
-  $('export-vignette').onchange = () => includeVignette($('export-vignette').checked);
-  $('color-gif-vignette').onchange = () => includeVignette($('color-gif-vignette').checked);
+  $('export').onclick = () => { vignette(false); $('export-status').textContent = ''; dialog.showModal(); };
+  dialog.addEventListener('close', () => { if (!animationDialog.open) job?.abort(); });
+  $('export-vignette').onchange = () => vignette($('export-vignette').checked);
+  $('color-gif-vignette').onchange = () => vignette($('color-gif-vignette').checked);
+  $('animation-cancel').onclick = () => job?.abort();
   $('download-png').onclick = () => runJob('export-status', async signal => {
-    const state = snapshot(), selection = $('export-size').value, vignette = $('export-vignette').checked;
+    const state = snapshot(), selection = $('export-size').value, shade = $('export-vignette').checked;
     $('export-status').textContent = 'Rendering on your device…';
     let renderer;
     try {
       let values, metadata;
       if (selection === 'current') ({ values, metadata } = await abortable(getCurrentField(), signal));
       else {
-        renderer = await newRenderer(signal);
-        const { width, height } = size(state, Number(selection));
-        metadata = (await abortable(renderer.render(state.view, width, height, state.settings), signal)).metadata;
+        renderer = await newRenderer(signal); const { width, height } = dimensions(state, Number(selection));
+        metadata = (await abortable(renderer.render(state.visibleView ?? state.view, width, height, state.settings), signal)).metadata;
         values = await abortable(renderer.readField(), signal);
       }
       check(signal);
-      const output = document.createElement('canvas');
-      paintExport(output, values, metadata, state.colors, vignette);
+      const output = document.createElement('canvas'); paintExport(output, values, metadata, state.colors, shade);
       const blob = await abortable(new Promise(resolve => output.toBlob(resolve, 'image/png')), signal);
       if (!blob) throw new Error('Could not encode the image.');
-      check(signal);
-      await downloadBlob(blob, `fractal-web-${state.view.fractal}-${metadata.width}x${metadata.height}.png`);
+      check(signal); await downloadBlob(blob, `fractal-web-${state.view.fractal}-${metadata.width}x${metadata.height}.png`);
       $('export-status').textContent = 'Your image is ready.';
     } finally { renderer?.destroy(); }
   });
-  $('download-gif').onclick = () => runJob('export-status', async signal => {
-    const state = snapshot(), vignette = $('export-vignette').checked;
-    if (state.view.iterations > 10000) throw new Error('Zoom GIF export supports up to 10,000 iterations.');
-    const { width, height } = size(state);
-    let renderer;
-    try {
-      renderer = await newRenderer(signal);
-      const gif = GIFEncoder(), output = document.createElement('canvas');
-      let current = state.view, gifPalette;
-      for (let frame = 0; frame < 24; frame++) {
-        check(signal);
-        $('export-status').textContent = `Rendering frame ${frame + 1} / 24 on your device…`;
-        const metadata = (await abortable(renderer.render(current, width, height, state.settings), signal)).metadata;
-        const values = await abortable(renderer.readField(), signal);
-        paintExport(output, values, metadata, state.colors, vignette);
-        const rgba = output.getContext('2d').getImageData(0, 0, width, height).data;
-        gifPalette ??= quantize(rgba, 256);
-        gif.writeFrame(applyPalette(rgba, gifPalette), width, height, { palette: frame ? undefined : gifPalette, delay: 80, repeat: 0 });
-        if (frame < 23) current = navigate({ view: current, factor: 8 ** (1 / 23) });
-        await nextFrame();
-      }
-      check(signal); gif.finish();
-      await downloadBlob(new Blob([gif.bytes()], { type: 'image/gif' }), 'fractal-web-zoom.gif');
-      $('export-status').textContent = 'Your 8× zoom journey is ready.';
-    } finally { renderer?.destroy(); }
-  });
 
-  function options() {
-    const start = Number($('color-gif-phase').value), speed = Number($('color-gif-speed').value);
-    const wander = $('gif-wander-colors').checked, evolve = $('gif-evolve-julia').checked;
-    const color = colorCycle(start, speed);
-    if (!evolve) return { start, speed, wander, evolve, returning: true, cycle: { ...color, progress: () => 0, phaseAt: u => wrapPhase(start + u), phase: frame => wander ? color.phase(frame) : wrapPhase(start) } };
-    const target = { x: $('gif-julia-x').value, y: $('gif-julia-y').value };
-    const returning = $('gif-return').checked, plan = animationFrames(Number($('gif-duration').value));
-    juliaView(preview.state.view, target, 0, returning);
-    const cycles = returning ? Math.max(1, Math.round(speed * plan.duration)) : speed * plan.duration;
-    const phaseAt = progress => wrapPhase(start + (wander ? cycles * progress : 0));
-    const progress = frame => frame / (returning ? plan.frames : plan.frames - 1);
-    return { start, speed, wander, evolve, target, returning, cycles, cycle: { ...plan, progress, phaseAt, phase: frame => phaseAt(progress(frame)) } };
+  function readOptions() {
+    return { mode: $('animation-motion').value, format: $('animation-format').value, quality: $('animation-quality').value,
+      longest: Number($('animation-size').value), fps: Number($('animation-fps').value), duration: Number($('gif-duration').value),
+      start: Number($('color-gif-phase').value), speed: Number($('color-gif-speed').value), wander: $('gif-wander-colors').checked };
   }
-  function paintPreview(phase) {
-    if (!preview?.ready) return;
-    preview.renderer.paint(preview.state.colors.palette, preview.state.colors.density, phase);
-    $('color-gif-live-phase').textContent = `Phase ${phase.toFixed(3)}`;
-  }
-  function updateOptions() {
-    $('gif-julia-fields').hidden = !$('gif-evolve-julia').checked;
+  async function updateOptions() {
+    const current = preview; if (!current) return;
+    const version = ++current.version; current.renderer?.cancel(); current.start = null; current.elapsed = 0; current.key = null; current.index = null;
+    if (current.ready && !job) $('color-gif-status').textContent = 'Preview ready.';
+    $('animation-fps').querySelector('option[value="60"]').disabled = $('animation-format').value === 'gif';
+    if ($('animation-format').value === 'gif' && $('animation-fps').value === '60') $('animation-fps').value = '30';
+    $('animation-dither-row').hidden = $('animation-format').value !== 'gif';
+    $('animation-duration-row').hidden = $('animation-motion').value !== 'zoom';
     try {
-      const opts = options(), { start, speed, cycle } = opts;
-      previewOptions = opts;
-      $('color-gif-phase-slider').value = String(start);
-      $('color-gif-speed-slider').value = String(speed);
-      const extra = opts.evolve && opts.returning && opts.wander ? ` · ${opts.cycles} complete color cycle${opts.cycles === 1 ? '' : 's'} (${(opts.cycles / cycle.duration).toFixed(2)} cycles/s)` : '';
-      $('color-gif-details').textContent = `${cycle.duration.toFixed(2)} s ${opts.returning ? 'loop' : 'one pass'} · ${cycle.frames} frames · 720 px longest edge${extra}`;
-      previewStarted = null; previewElapsed = 0; previewPhase = wrapPhase(start);
-      if (preview) { preview.needsPaint = true; preview.version++; preview.optionsValid = opts.wander || opts.evolve; }
-      if (!opts.wander && !opts.evolve) $('color-gif-details').textContent = 'Enable color wander or constant evolution to animate.';
-    } catch (error) {
-      if (preview) preview.optionsValid = false;
-      $('color-gif-details').textContent = error.message;
-    }
+      program = animationExport(current.state, readOptions()); current.valid = true;
+      const p = program;
+      $('color-gif-phase-slider').value = String(p.start); $('color-gif-speed-slider').value = String(p.speed);
+      $('animation-source-note').textContent = p.mode === 'parameters'
+        ? 'Targets, cycle shapes, and speeds come from the loop buttons beside the main-view sliders.' : p.mode === 'zoom' ? 'A single journey ending at 8× magnification.' : 'One complete palette cycle, using the current view.';
+      $('color-gif-details').textContent = `${p.duration.toFixed(2)} s · ${p.frames} frames · ${p.width} × ${p.height} · ${p.fps} fps · preview up to 480 px`;
+      $('download-color-gif').innerHTML = `Download ${p.format.toUpperCase()} <span>↓</span>`;
+      current.mp4 = p.format === 'mp4' ? null : true;
+      $('animation-codec-note').textContent = p.format === 'gif' ? `${p.paletteSize} colors · GIF timing is rounded to hundredths of a second.` : 'Checking H.264 encoding on this device…';
+      setBusy(!!job);
+      if (p.format === 'mp4') {
+        const { supportsMP4 } = await import('./video-export.js'); const supported = await supportsMP4(p);
+        if (preview !== current || version !== current.version) return;
+        current.mp4 = supported;
+        $('animation-codec-note').textContent = supported ? `H.264 · ${(p.bitrate / 1e6).toFixed(1)} Mbps · every frame is rendered before encoding.` : 'H.264 encoding is unavailable at these settings. Choose GIF or a smaller size.';
+      }
+    } catch (error) { current.valid = false; $('color-gif-details').textContent = error.message; }
     setBusy(!!job);
   }
-  function renderPreview(progress, phase, opts) {
+  function previewFrame(index, p) {
     const current = preview;
-    if (!current?.ready || current.renderPromise) return;
-    current.needsPaint = false;
-    const version = current.version;
-    current.renderPromise = (async () => {
-      const frameView = opts.evolve ? juliaView(current.state.view, opts.target, progress, opts.returning) : current.state.view;
-      const key = JSON.stringify(frameView);
-      if (key !== current.lastViewKey) {
-        const { width, height } = current.metadata;
+    if (!current?.ready || current.rendering || !current.valid) return;
+    current.index = index;
+    const version = current.version, frameView = p.viewAt(index), key = JSON.stringify(frameView);
+    current.rendering = (async () => {
+      if (key !== current.key) {
+        const { width, height } = dimensions(current.state, Math.min(480, p.longest));
         await abortable(current.renderer.render(frameView, width, height, current.state.settings), current.controller.signal);
-        current.lastViewKey = key;
+        if (version === current.version) current.key = key;
       }
-      if (preview === current && version === current.version && !job) paintPreview(phase);
+      if (preview === current && version === current.version && !job) {
+        current.renderer.paint(current.state.colors.palette, current.state.colors.density, p.phaseAt(index));
+        $('color-gif-live-phase').textContent = `${(index / p.fps).toFixed(2)} / ${p.duration.toFixed(2)} s`;
+      }
     })().catch(error => {
-      if (error.name !== 'AbortError' && preview === current) {
-        $('color-gif-status').textContent = error.message;
-        previewPaused = true; $('color-gif-play').textContent = 'Play preview';
-        $('color-gif-play').setAttribute('aria-pressed', 'false');
-      }
-    }).finally(() => { current.renderPromise = null; });
+      if (preview === current && error.name !== 'AbortError') { $('color-gif-status').textContent = error.message; current.paused = true; syncPlay(); }
+    }).finally(() => { current.rendering = null; });
   }
   function tick(time) {
-    if (!colorDialog.open) return;
-    if (preview?.ready && (!previewPaused || preview.needsPaint) && !job) {
-      const opts = previewOptions, { start, speed, cycle } = opts;
-      previewStarted ??= time - previewElapsed * 1000;
-      if (!previewPaused) previewElapsed = (time - previewStarted) / 1000;
-      if (time - previewLastPaint >= 32) {
-        const progress = opts.evolve ? (opts.returning ? previewElapsed / cycle.duration % 1 : Math.min(1, previewElapsed / cycle.duration)) : 0;
-        previewPhase = opts.evolve ? cycle.phaseAt(progress) : wrapPhase(start + (opts.wander ? previewElapsed * speed : 0));
-        renderPreview(progress, previewPhase, opts); previewLastPaint = time;
-      }
+    if (!animationDialog.open) return;
+    const current = preview;
+    if (current?.ready && current.valid && !job && !document.hidden) {
+      current.start ??= time - current.elapsed * 1000;
+      if (!current.paused) current.elapsed = (time - current.start) / 1000;
+      const p = program, index = p.looping ? Math.floor(current.elapsed * p.fps) % p.frames : Math.min(p.frames - 1, Math.floor(current.elapsed * p.fps));
+      if (current.index !== index || current.key === null) previewFrame(index, p);
     }
-    previewFrame = requestAnimationFrame(tick);
+    raf = requestAnimationFrame(tick);
   }
-  for (const id of ['gif-wander-colors', 'gif-evolve-julia', 'gif-return']) $(id).onchange = updateOptions;
-  for (const id of ['gif-julia-x', 'gif-julia-y', 'gif-duration']) $(id).oninput = updateOptions;
-  for (const name of ['phase', 'speed']) {
-    $(`color-gif-${name}`).oninput = updateOptions;
-    $(`color-gif-${name}-slider`).oninput = () => {
-      $(`color-gif-${name}`).value = $(`color-gif-${name}-slider`).value; updateOptions();
-    };
+  function syncPlay() {
+    $('color-gif-play').textContent = preview?.paused ? 'Play preview' : 'Pause preview';
+    $('color-gif-play').setAttribute('aria-pressed', String(!preview?.paused));
   }
-  $('color-gif-play').onclick = () => {
-    previewPaused = !previewPaused;
-    if (!previewPaused) {
-      previewStarted = performance.now() - previewElapsed * 1000;
-    }
-    $('color-gif-play').textContent = previewPaused ? 'Play preview' : 'Pause preview';
-    $('color-gif-play').setAttribute('aria-pressed', String(!previewPaused));
-  };
+  $('color-gif-play').onclick = () => { if (!preview) return; preview.paused = !preview.paused; preview.start = null; syncPlay(); };
   $('color-gif-restart').onclick = updateOptions;
-  $('open-color-gif').onclick = async () => {
+  for (const id of ['animation-motion', 'animation-format', 'animation-size', 'animation-quality', 'animation-fps', 'gif-wander-colors', 'gif-duration']) $(id).onchange = updateOptions;
+  for (const name of ['phase', 'speed']) {
+    $(`color-gif-${name}-slider`).oninput = () => { $(`color-gif-${name}`).value = $(`color-gif-${name}-slider`).value; updateOptions(); };
+  }
+  for (const id of ['color-gif-phase', 'color-gif-speed', 'gif-duration']) {
+    const input = $(id); let timer;
+    const apply = () => { clearTimeout(timer); updateOptions(); };
+    input.onchange = input.onblur = apply;
+    input.oninput = () => { clearTimeout(timer); timer = setTimeout(apply, 180); };
+    input.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); apply(); } };
+  }
+  async function openAnimation(mode) {
     let state;
-    try { state = snapshot(); }
-    catch (error) { $('export-status').textContent = error.message; return; }
-    const controller = new AbortController();
+    try { state = snapshot(); } catch (error) { $('export-status').textContent = error.message; return; }
     dialog.close();
-    const renderer = new BrowserEngine($('color-gif-preview'), palettes);
-    const current = preview = { state, renderer, controller, ready: false, version: 0 };
-    $('color-gif-phase').value = String(wrapPhase(state.colors.phase));
-    $('color-gif-speed').value = String(state.speed);
-    $('gif-wander-colors').checked = true;
-    $('gif-evolve-julia').checked = false; $('gif-return').checked = true;
-    $('gif-duration').value = '6';
-    $('gif-julia-option').hidden = !fractals[state.view.fractal].constant;
-    $('gif-constant-label').textContent = state.view.fractal === 'newton' ? 'Evolve root target' : 'Evolve constant';
-    $('gif-julia-x').value = state.view.julia_x;
-    $('gif-julia-y').value = text(add(decimal(state.view.julia_y), decimal('.02')));
-    previewPaused = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    $('color-gif-play').textContent = previewPaused ? 'Play preview' : 'Pause preview';
-    $('color-gif-play').setAttribute('aria-pressed', String(!previewPaused));
-    $('color-gif-status').textContent = 'Preparing your view…';
-    $('download-color-gif').disabled = true;
+    const controller = new AbortController(), current = preview = { state, controller, ready: false, version: 0, elapsed: 0, paused: matchMedia('(prefers-reduced-motion: reduce)').matches };
+    const hasParameters = !!animationPlan(state.view, state.automation);
+    $('animation-motion').querySelector('option[value="parameters"]').disabled = !hasParameters;
+    $('animation-motion').value = mode === 'zoom' ? 'zoom' : hasParameters ? 'parameters' : 'colors';
+    $('color-gif-phase').value = String(wrapPhase(state.colors.phase)); $('color-gif-speed').value = String(state.speed);
+    $('gif-wander-colors').checked = mode === 'zoom' ? state.wander : hasParameters ? state.wander : true;
+    $('animation-format').value = typeof VideoEncoder === 'undefined' ? 'gif' : 'mp4';
+    $('gif-duration').value = '4';
+    $('animation-format').querySelector('option[value="mp4"]').disabled = typeof VideoEncoder === 'undefined';
+    const canvas = document.createElement('canvas'); canvas.id = 'color-gif-preview'; canvas.setAttribute('aria-label', 'Animation preview');
+    $('color-gif-preview').replaceWith(canvas);
+    syncPlay(); $('color-gif-status').textContent = 'Preparing your view…';
     $('color-gif-stage').style.maxWidth = `${220 / state.aspect}px`;
-    colorDialog.showModal(); updateOptions();
-    previewFrame = requestAnimationFrame(tick);
+    animationDialog.showModal(); updateOptions(); raf = requestAnimationFrame(tick);
     try {
-      await abortable(renderer.init({ forceCPU: !engine.gpu }), controller.signal);
-      const { width, height } = size(state);
-      current.metadata = (await abortable(renderer.render(state.view, width, height, state.settings), controller.signal)).metadata;
-      current.values = await abortable(renderer.readField(), controller.signal);
-      check(controller.signal); current.ready = true; current.lastViewKey = JSON.stringify(state.view);
-      updateOptions();
-      $('color-gif-status').textContent = 'Preview ready.';
-    } catch (error) {
-      if (error.name !== 'AbortError') $('color-gif-status').textContent = error.message;
-      renderer.destroy();
-    }
-  };
-  colorDialog.addEventListener('close', () => {
-    cancelAnimationFrame(previewFrame); job?.abort();
-    preview?.controller.abort(); preview?.renderer.destroy(); preview = null;
+      current.renderer = await newRenderer(controller.signal, canvas);
+      check(controller.signal); current.ready = true;
+      $('color-gif-status').textContent = 'Preview ready.'; setBusy(false);
+    } catch (error) { if (error.name !== 'AbortError' && preview === current) $('color-gif-status').textContent = error.message; }
+  }
+  $('open-color-gif').onclick = () => openAnimation('loop');
+  $('download-gif').onclick = () => openAnimation('zoom');
+  animationDialog.addEventListener('close', () => {
+    cancelAnimationFrame(raf); job?.abort(); preview?.controller.abort(); preview?.renderer?.destroy(); preview = null;
     if (!document.body.classList.contains('ui-hidden')) dialog.showModal();
   });
   $('download-color-gif').onclick = () => runJob('color-gif-status', async signal => {
-    if (!preview?.ready) throw new Error('Wait for the preview to finish preparing.');
-    const current = preview, opts = options(), { cycle } = opts, vignette = $('color-gif-vignette').checked;
-    if (!opts.evolve && !opts.wander) throw new Error('Enable color wander or constant evolution to animate.');
-    if (current.renderPromise) await abortable(current.renderPromise, signal);
-    if (!opts.evolve && current.lastViewKey !== JSON.stringify(current.state.view)) {
-      await abortable(current.renderer.render(current.state.view, current.metadata.width, current.metadata.height, current.state.settings), signal);
-      current.lastViewKey = JSON.stringify(current.state.view);
-    }
-    const table = colorTable(current.state.colors.palette);
-    const paintPhase = createColorFrames(current.values, current.metadata, current.state.colors.density, table);
-    const gifPalette = quantize(gifPaletteSample(table, vignette), 256), gif = GIFEncoder();
-    const { width, height } = current.metadata;
-    const output = document.createElement('canvas');
-    for (let frame = 0; frame < cycle.frames; frame++) {
-      check(signal);
-      let canvas, context;
-      if (opts.evolve) {
-        const frameView = juliaView(current.state.view, opts.target, cycle.progress(frame), opts.returning);
-        const metadata = (await abortable(current.renderer.render(frameView, width, height, current.state.settings), signal)).metadata;
-        current.lastViewKey = JSON.stringify(frameView);
-        const values = await abortable(current.renderer.readField(), signal);
-        paintExport(output, values, metadata, { ...current.state.colors, phase: cycle.phase(frame) }, vignette);
-        canvas = output; context = canvas.getContext('2d');
-      } else {
-        const result = paintPhase(cycle.phase(frame));
-        canvas = result.canvas; context = result.context;
-        if (vignette) context.drawImage(result.overlay, 0, 0);
+    const current = preview; if (!current?.ready || !current.valid) throw new Error('Wait for a valid preview.');
+    const p = animationExport(current.state, readOptions()), shade = $('color-gif-vignette').checked;
+    const dither = $('animation-dither').checked;
+    if (current.rendering) await abortable(current.rendering, signal);
+    const output = document.createElement('canvas'); output.width = p.width; output.height = p.height;
+    const gif = p.format === 'gif' ? GIFEncoder() : null;
+    const gifPalette = gif ? quantize(gifPaletteSample(colorTable(current.state.colors.palette), shade), p.paletteSize) : null;
+    let video, finished = false, key = null, values, metadata;
+    const cancel = () => { video?.cancel().catch(() => {}); current.renderer.cancel(); };
+    signal.addEventListener('abort', cancel, { once: true });
+    try {
+      if (p.format === 'mp4') {
+        const { mp4Encoder } = await import('./video-export.js');
+        const pending = mp4Encoder(output, p);
+        pending.then(encoder => { if (signal.aborted) encoder.cancel().catch(() => {}); }, () => {});
+        video = await abortable(pending, signal);
       }
-      const rgba = context.getImageData(0, 0, width, height).data;
-      gif.writeFrame(applyPalette(rgba, gifPalette), width, height, { palette: frame ? undefined : gifPalette, delay: cycle.delay(frame), repeat: opts.returning ? 0 : -1 });
-      $('color-gif-status').textContent = `Encoding frame ${frame + 1} / ${cycle.frames}…`;
-      // Keep the preview synchronized with the frame being encoded.
-      paintPreview(cycle.phase(frame));
-      await nextFrame();
+      for (let index = 0; index < p.frames; index++) {
+        check(signal); $('color-gif-status').textContent = `Rendering & encoding ${index + 1} / ${p.frames}…`;
+        const view = p.viewAt(index), next = JSON.stringify(view);
+        if (next !== key) {
+          // Drain a cancelled render/read before reusing this engine for preview.
+          metadata = (await current.renderer.render(view, p.width, p.height, current.state.settings)).metadata;
+          check(signal); values = await current.renderer.readField(); check(signal); key = next;
+        }
+        paintExport(output, values, metadata, { ...current.state.colors, phase: p.phaseAt(index) }, shade);
+        if (gif) {
+          let rgba = output.getContext('2d').getImageData(0, 0, p.width, p.height).data;
+          if (dither) rgba = ditherFrame(rgba, p.width);
+          gif.writeFrame(applyPalette(rgba, gifPalette), p.width, p.height, { palette: index ? undefined : gifPalette, delay: p.delay(index), repeat: p.looping ? 0 : -1 });
+        } else await abortable(video.add(index), signal);
+        current.renderer.paint(current.state.colors.palette, current.state.colors.density, p.phaseAt(index));
+        await nextFrame();
+      }
+      check(signal);
+      let blob;
+      if (gif) { gif.finish(); blob = new Blob([gif.bytes()], { type: 'image/gif' }); }
+      else blob = await abortable(video.finish(), signal);
+      check(signal); finished = true;
+      await downloadBlob(blob, `fractal-web-${current.state.view.fractal}-${p.mode}.${p.format}`);
+      $('color-gif-status').textContent = `Your ${p.duration.toFixed(2)} s ${p.format.toUpperCase()} is ready.`;
+    } finally {
+      signal.removeEventListener('abort', cancel);
+      if (video && !finished) await video.cancel().catch(() => {});
+      current.key = null; current.index = null; current.start = null; current.elapsed = 0;
     }
-    check(signal); gif.finish();
-    await downloadBlob(new Blob([gif.bytes()], { type: 'image/gif' }), opts.evolve ? `fractal-web-${current.state.view.fractal}-animation.gif` : 'fractal-web-colors.gif');
-    $('color-gif-status').textContent = `Your ${cycle.duration.toFixed(2)} s ${opts.evolve ? 'fractal animation' : 'color loop'} is ready.`;
-    previewStarted = null; previewElapsed = 0; current.needsPaint = true;
   });
 }

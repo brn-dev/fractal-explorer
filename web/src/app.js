@@ -5,6 +5,10 @@ import { renderDimensions, qualityScales } from './resolution.mjs';
 import { setupImageExports } from './export-ui.js';
 import { advancePhase } from './export-utils.mjs';
 import { fractals, defaultView, parameterDefaults } from './fractals.mjs';
+import { animationPlan, cacheDimensions, cacheMemoryOptionsMiB, cacheMemorySetting, cacheMemoryLabel, ProgressiveAnimation, validateAutomation } from './animation.mjs';
+import { setupAutomationControls } from './automation-ui.js';
+import { readShareURL } from './share.mjs';
+import { setupShareLinks } from './share-ui.js';
 const $ = (id) => document.getElementById(id);
 const canvas = $("fractal-canvas");
 const base = {
@@ -19,6 +23,7 @@ const base = {
 };
 const palettes = await (await fetch(new URL('./palettes.json', document.baseURI))).json();
 const engine = new BrowserEngine(canvas, palettes);
+let cacheMemoryMiB = cacheMemorySetting(undefined, engine.mobile);
 let paintingReady = false;
 let engineReady = false;
 let parameterPreview = false, parameterPreviewTimer, locationIntroTimer;
@@ -110,6 +115,68 @@ let lastPaint = 0,
   imageView = null,
   imageSettings = null;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let automationSettings = {}, automationRenderer, automationRendererPromise;
+const automationPlayer = new ProgressiveAnimation({
+  cancel: () => {
+    // MPFR preparation and CPU iteration cannot receive a cancel message while
+    // inside a synchronous worker loop. Terminate that work on a settings edit.
+    if (automationPlayer.busy && automationRenderer && (!automationRenderer.gpu || automationRenderer.worker.pending.size)) {
+      automationRenderer.destroy(); automationRenderer = null; automationRendererPromise = null;
+    } else automationRenderer?.cancel();
+  },
+  render: async (frameView, dimensions) => {
+    if (!automationRenderer) {
+      automationRenderer = new BrowserEngine(document.createElement('canvas'), palettes);
+      automationRendererPromise = automationRenderer.init({ forceCPU: !engine.gpu });
+    }
+    const renderer = automationRenderer, ready = automationRendererPromise;
+    await ready;
+    const result = await renderer.render(frameView, dimensions.width, dimensions.height, dimensions.settings);
+    return { metadata: result.metadata, field: await renderer.readField() };
+  },
+  present: frame => {
+    if (!paintingReady) canvas.style.transform = '';
+    engine.presentCached(frame.field, frame.metadata);
+    field = frame.field; meta = frame.metadata; imageView = frame.view; imageSettings = { ...renderSettings };
+    paintingReady = true; paint(); automationControls.showValues(frame.view);
+    $('render-resolution').textContent = `${meta.width} × ${meta.height}`;
+    $('render-status').textContent = `${meta.backend.toUpperCase()} · ${automationPlayer.schedule.ready.size === automationPlayer.plan.frames ? '30 fps cached' : 'animation warming'}`;
+    $('precision-mode').textContent = meta.perturbation ? `${meta.digits}-digit reference orbit` : `${meta.arithmetic} direct iteration`;
+    $('precision-detail').textContent = 'Parameter animation · cached scalar fields';
+  },
+  status: player => {
+    $('render-memory').textContent = `${cacheMemoryLabel(player.cachedBytes / 1048576)} RAM cache`;
+    $('automation-status').hidden = !player.plan;
+    if (!player.plan) return;
+    const count = player.schedule.ready.size, total = player.plan.frames;
+    $('automation-progress-text').textContent = count === total ? '30 fps · loop cached' : `${count} / ${total} frames cached`;
+    $('automation-progress').max = total; $('automation-progress').value = count;
+    const d = player.dimensions;
+    $('automation-cache-detail').textContent = `${player.plan.duration.toFixed(2)} s loop · ${d.width} × ${d.height} · up to ${cacheMemoryLabel(d.bytes / 1048576)} RAM · ${cacheMemoryLabel(cacheMemoryMiB)} limit${d.capped ? ' · resolution fitted to cache' : ''}`;
+  },
+  error: error => { $('automation-progress-text').textContent = 'Animation stopped'; toast(error.message); },
+});
+const automationControls = setupAutomationControls({
+  getView: () => view, getSettings: () => automationSettings,
+  change: setAutomation, report: toast,
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) automationPlayer.schedule?.pause(performance.now());
+  else automationPlayer.schedule?.resume(performance.now());
+  lastAnimationTime = null;
+});
+function setAutomation(next) {
+  try {
+    automationSettings = validateAutomation(view, next);
+    automationPlayer.paused = false; syncAutomationPause();
+    syncView(); saveSession(); requestRender();
+  } catch (error) { toast(error.message); automationControls.sync(); }
+}
+function syncAutomationPause() {
+  $('automation-pause').textContent = automationPlayer.paused ? '▶' : 'Ⅱ';
+  $('automation-pause').setAttribute('aria-pressed', String(automationPlayer.paused));
+  $('automation-pause').setAttribute('aria-label', automationPlayer.paused ? 'Resume parameter animation' : 'Pause parameter animation');
+}
 
 function toast(message) {
   $("toast").textContent = message;
@@ -212,7 +279,7 @@ function buildDestinations() {
     b.innerHTML = `<span class="card-top"><span>${String(i + 1).padStart(2, '0')}</span><span>↗</span></span><span><span class="card-name"></span><span class="card-level" style="display:block"></span></span>`;
     b.querySelector(".card-name").textContent = d.name;
     b.querySelector(".card-level").textContent = d.level;
-    b.onclick = () => { loadView(d.view, i); showLocationIntro(); };
+    b.onclick = () => { loadView(d.view, i); setAutomation(d.automation ?? {}); showLocationIntro(); };
     $("destination-list").append(b);
   });
 }
@@ -248,6 +315,7 @@ function syncView() {
     $(`julia-${axis}-slider`).setAttribute('aria-label', `${label} slider`);
   }
   syncParameters();
+  automationControls.sync();
   $("zoom-label").textContent = zoomLabel(view.span);
 }
 function syncParameters() {
@@ -299,7 +367,7 @@ function saveSession() {
   try {
     localStorage.setItem(
       "fractal-web-session",
-      JSON.stringify({ view, palette, density, phase, renderSettings, quality: Number($("quality").value), placesHidden, vignetteEnabled, wanderingSpeed }),
+      JSON.stringify({ view, palette, density, phase, renderSettings, quality: Number($("quality").value), cacheMemoryMiB, placesHidden, vignetteEnabled, wanderingSpeed, automation: automationSettings }),
     );
   } catch {}
 }
@@ -334,6 +402,7 @@ function loadView(next, index = -1, preview = false) {
   clearTimeout(parameterPreviewTimer);
   parameterPreview = preview;
   viewEpoch++;
+  if (next.fractal !== view.fractal) automationSettings = {};
   view = parameterDefaults({ ...base, ...next });
   activeDestination = index;
   generation++;
@@ -361,6 +430,7 @@ async function validateAndLoad(next) {
 }
 function requestRender(delay = 0) {
   engine.cancel();
+  if (automationPlayer.plan) automationPlayer.configure(null);
   generation++;
   dirty = true;
   clearTimeout(scheduled);
@@ -380,6 +450,14 @@ async function render() {
   const { width, height, capped } = renderDimensions(innerWidth, innerHeight, quality, { gpu: engine.gpu, mobile: engine.mobile, limits: engine.renderLimits });
   $("quality-note").textContent = `${parameterPreview ? 'Preview · ' : ''}${width.toLocaleString()} × ${height.toLocaleString()} pixels${capped ? ' · resolution limit reached' : ''}. Higher quality smooths fine edges; increase iterations for more fractal detail.`;
   try {
+    const plan = animationPlan(snapshot, automationSettings);
+    if (plan) {
+      const dimensions = cacheDimensions({ width, height, capped }, plan.frames, cacheMemoryMiB * 1048576);
+      automationPlayer.configure(plan, { ...dimensions, settings: settingsSnapshot });
+      $('quality-note').textContent = `${dimensions.width} × ${dimensions.height} animation frames. Resolution fits the ${cacheMemoryLabel(cacheMemoryMiB)} RAM cache; exports render at their selected resolution.`;
+      $('render-status').textContent = 'Rendering first animation frame…';
+      return;
+    }
     const result = await engine.render(snapshot, width, height, settingsSnapshot);
     const metadata = result.metadata, values = result.field;
 
@@ -572,6 +650,7 @@ function locationData() {
     density,
     phase,
     renderSettings,
+    automation: automationSettings,
   };
 }
 function syncRenderSettings(settings) {
@@ -589,7 +668,30 @@ function syncRenderSettings(settings) {
     $(id).value = renderSettings[field];
   }
 }
+function restoreSharedState(shared) {
+  viewEpoch++; view = shared.view; automationSettings = shared.automation; activeDestination = -1;
+  palette = shared.palette; density = shared.density; phase = shared.phase; wanderingSpeed = shared.wanderingSpeed;
+  vignetteEnabled = shared.vignetteEnabled;
+  automationPlayer.paused = shared.paused || reducedMotion;
+  $('animate').checked = shared.wander && !reducedMotion;
+}
 function setupControls() {
+  setupShareLinks({ paletteCount: palettes.length, getState: () => ({
+    ...structuredClone(locationData()), wanderingSpeed, wander: $('animate').checked,
+    vignetteEnabled, paused: automationPlayer.paused,
+  }) });
+  let shareLoad = 0;
+  addEventListener('hashchange', async () => {
+    const token = ++shareLoad;
+    try {
+      const shared = await readShareURL(location.href, palettes.length);
+      if (token !== shareLoad || !shared) return;
+      restoreSharedState(shared); setVignetteEnabled(vignetteEnabled);
+      syncView(); syncPalette(); syncColorControls(); syncAutomationPause(); buildDestinations();
+      saveSession(); requestRender(); toast('Shared view loaded.');
+    } catch (error) { if (token === shareLoad) toast(error.message); }
+  });
+  $('automation-pause').onclick = () => { automationPlayer.paused = !automationPlayer.paused; syncAutomationPause(); };
   $('toggle-ui').onclick = toggleUI;
   $('toggle-destinations').onclick = () => { setPlacesHidden(!placesHidden); saveSession(); };
   $('vignette-enabled').onchange = () => { setVignetteEnabled($('vignette-enabled').checked); saveSession(); };
@@ -644,6 +746,11 @@ function setupControls() {
   $('iterations').onblur = applyIterations;
   $('iterations').onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); applyIterations(); } };
   $("quality").onchange = () => { saveSession(); requestRender(); };
+  $('animation-cache-memory').onchange = () => {
+    cacheMemoryMiB = cacheMemorySetting(Number($('animation-cache-memory').value), engine.mobile);
+    saveSession();
+    if (automationPlayer.plan || Object.keys(automationSettings).length) requestRender();
+  };
   $('iterations-slider').oninput = () => loadView({ ...view, iterations: Number($('iterations-slider').value) }, -1, true);
   $('iterations-slider').onchange = finishParameterPreview;
   for (const axis of ["x", "y"]) {
@@ -703,6 +810,7 @@ function setupControls() {
         name: `Saved place ${saved.length}`,
         level: "YOUR OWN CORNER OF INFINITY",
         view: { ...view },
+        automation: structuredClone(automationSettings),
       });
       buildDestinations();
       toast(placesHidden ? "Location saved. Tap the places arrow to see it." : "Location saved. Find it in your destinations.");
@@ -745,6 +853,7 @@ function setupControls() {
       syncPalette();
       syncRenderSettings(data.renderSettings);
       loadView(imported);
+      setAutomation(data.automation ?? {});
       $("export-dialog").close();
     } catch (error) {
       toast(error.message);
@@ -755,11 +864,12 @@ function setupControls() {
     engine, palettes, paint, colorTable, downloadBlob,
     getState: () => {
       if (!engineReady) throw new Error('Wait for the browser renderer to start.');
-      return { view: { ...view }, settings: { ...renderSettings }, colors: { palette, density, phase }, speed: wanderingSpeed };
+      return { view: { ...view }, visibleView: { ...(imageView ?? view) }, automation: structuredClone(automationSettings), settings: { ...renderSettings }, colors: { palette, density, phase }, speed: wanderingSpeed, wander: $('animate').checked };
     },
     getCurrentField: async () => {
-      if (rendering || !paintingReady || !field || JSON.stringify(imageView) !== JSON.stringify(view) || JSON.stringify(imageSettings) !== JSON.stringify(renderSettings)) throw new Error('Wait for the current view to finish rendering.');
+      if (rendering || !paintingReady || !field || (!automationPlayer.plan && JSON.stringify(imageView) !== JSON.stringify(view)) || JSON.stringify(imageSettings) !== JSON.stringify(renderSettings)) throw new Error('Wait for the current view to finish rendering.');
       const metadata = { ...meta };
+      if (automationPlayer.lastShown) return { values: automationPlayer.lastShown.field, metadata };
       return { values: await engine.readField(), metadata };
     },
   });
@@ -789,10 +899,11 @@ function syncColorControls() {
 function animate(time) {
   const elapsed = lastAnimationTime === null ? 0 : (time - lastAnimationTime) / 1000;
   lastAnimationTime = time;
+  automationPlayer.tick(time, document.hidden || !!document.querySelector('dialog[open]'));
   if (
     $("animate").checked &&
     field &&
-    !reducedMotion &&
+    !reducedMotion && !document.hidden &&
     !document.querySelector('dialog[open]')
   ) {
     phase = advancePhase(phase, wanderingSpeed, elapsed);
@@ -808,11 +919,14 @@ function animate(time) {
 async function init() {
   try {
     const saved = JSON.parse(localStorage.getItem("fractal-web-session"));
+    cacheMemoryMiB = cacheMemorySetting(saved?.cacheMemoryMiB, engine.mobile);
     setPlacesHidden(saved?.placesHidden === true);
     vignetteEnabled = saved?.vignetteEnabled !== false;
     if (Number.isFinite(saved?.wanderingSpeed)) wanderingSpeed = Math.max(.05, Math.min(2, saved.wanderingSpeed));
     if (saved?.view && Object.hasOwn(fractals, saved.view.fractal)) {
       view = validate({ ...base, ...saved.view });
+      try { automationSettings = validateAutomation(view, saved.automation ?? {}); } catch { automationSettings = {}; }
+      automationPlayer.paused = reducedMotion;
       palette = palettes[saved.palette] ? saved.palette : 0;
       density = Number(saved.density) || 1;
       phase = Number(saved.phase) || 0;
@@ -829,16 +943,28 @@ async function init() {
           name: `Saved place ${i + 1}`,
           level: "YOUR OWN CORNER OF INFINITY",
           view: b.view,
+          automation: b.automation,
         });
   } catch {}
+  let shareError;
+  try {
+    const shared = await readShareURL(location.href, palettes.length);
+    if (shared) restoreSharedState(shared);
+  } catch (error) { shareError = error.message; }
+  $('animation-cache-memory').replaceChildren(...cacheMemoryOptionsMiB.map(mib => {
+    const option = document.createElement('option'); option.value = String(mib); option.textContent = cacheMemoryLabel(mib); return option;
+  }));
+  $('animation-cache-memory').value = String(cacheMemoryMiB);
   buildPalettes();
   buildDestinations();
   setVignetteEnabled(vignetteEnabled);
   syncView();
+  syncAutomationPause();
   syncColorControls();
   showLocationIntro();
   setupNavigation();
   setupControls();
+  if (shareError) toast(shareError);
   if (matchMedia('(max-width:700px)').matches) $("toggle-panel").click();
   if (reducedMotion) {
     $("animate").disabled = true;
