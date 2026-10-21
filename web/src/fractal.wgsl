@@ -3,7 +3,7 @@ struct Params {
   bailout:f32,perturb:u32,series_n:u32,series_order:u32,
   span:Wide,center:vec4f,julia:vec4f,
   origin:vec2f,reserved:vec2u,tile:vec4u,
-  options:vec4u,logs:vec4f,offsets:array<vec4u,4>
+  options:vec4u,logs:vec4f,offsets:array<vec4u,4>,extra:vec4f,relaxation:vec2f
 }
 struct Reference {native:vec4f,z:Complex}
 struct Bilinear {a:Complex,b:Complex,logs:vec4f}
@@ -23,6 +23,33 @@ fn finish(id:u32,answer:f32,steps:u32,skipped:u32) {
 }
 fn escape_value(n:u32,mag:f32,power:f32)->f32 {return max(0,f32(n)+1-log(log(sqrt(mag)))/log(power));}
 fn load_native(j:u32)->Native {let a=reference[j].native;return Native(a.xy,a.zw);}
+fn npower(z:Native,degree:u32)->Native {
+  var a=z;
+  for(var k=1u;k<degree;k++){a=nm(a,z);}
+  return a;
+}
+fn nscale(z:Native,s:f32)->Native {return Native(rm(z.r,rf(s)),rm(z.i,rf(s)));}
+fn ndivide(a:Native,b:Native)->Native {
+  // Normalize before squaring: derivatives of high powers can be very large.
+  let scale=rf(max(abs(b.r.x),abs(b.i.x)));
+  let x=Native(rd(a.r,scale),rd(a.i,scale));
+  let y=Native(rd(b.r,scale),rd(b.i,scale));
+  let den=ra(rm(y.r,y.r),rm(y.i,y.i));
+  return Native(rd(ra(rm(x.r,y.r),rm(x.i,y.i)),den),rd(rs(rm(x.i,y.r),rm(x.r,y.i)),den));
+}
+fn log_magnitude(z:Native)->f32 {
+  let scale=max(abs(z.r.x),abs(z.i.x));
+  let v=vec2f(z.r.x,z.i.x)/scale;
+  return log(scale)+.5*log(dot(v,v));
+}
+fn newton_color(z:Native,c:Native,degree:u32,n:u32)->f32 {
+  let tau=6.283185307179586;
+  var angle=0.0;if(c.r.x!=0 || c.i.x!=0){angle=atan2(c.i.x,c.r.x)/f32(degree);}
+  var index=0.0;
+  if((c.r.x!=0 || c.i.x!=0) && (z.r.x!=0 || z.i.x!=0)){index=round((atan2(z.i.x,z.r.x)-angle)*f32(degree)/tau);}
+  let root=((i32(index)%i32(degree))+i32(degree))%i32(degree);
+  return exp(5*(f32(root)/f32(degree)+f32(min(n,50u))*.004))-1;
+}
 struct Jump {d:Complex,length:u32}
 fn try_jump(d:Complex,dc:Complex,j:u32,n:u32)->Jump {
   let ld=clog(d);let lt=log_add(ld,p.logs.x);
@@ -52,8 +79,39 @@ fn iterate(@builtin(global_invocation_id) gid:vec3u) {
   if(p.perturb==0u) {
     let s=wnative(p.span);
     let point=Native(ra(p.center.xy,rm(ux,s)),ra(p.center.zw,rm(uy,s)));
-    let is_julia=p.kind==1u || p.kind==4u;
+    let is_julia=p.kind==1u || p.kind==4u || p.kind>=6u;
     var c=point;var z=nz();if(is_julia){c=Native(p.julia.xy,p.julia.zw);z=point;}
+    if(p.kind==9u) {
+      let degree=u32(p.extra.x);
+      for(var n=0u;n<=p.limit;n++) {
+        if(!(nmag(z)<=1e8)){finish(id,-1,steps,0);return;}
+        let zd1=npower(z,degree-1u);
+        let derivative=nscale(zd1,f32(degree));
+        let zd=nm(zd1,z);
+        let residual=Native(rs(zd.r,c.r),rs(zd.i,c.i));
+        if(nmag(residual)<1e-12){finish(id,newton_color(z,c,degree,n),steps,0);return;}
+        if(n==p.limit || nmag(derivative)<1e-24){break;}
+        let quotient=ndivide(residual,derivative);
+        let delta=Native(rm(quotient.r,p.relaxation),rm(quotient.i,p.relaxation));
+        z=Native(rs(z.r,delta.r),rs(z.i,delta.i));steps++;
+      }
+      finish(id,-1,steps,0);return;
+    }
+    if(p.kind>=5u) {
+      var previous=nz();
+      let degree=select(2u,u32(p.extra.x),p.kind==5u || p.kind==6u);
+      for(var n=1u;n<=p.limit;n++) {
+        if(nmag(z)>1e8){finish(id,max(0,f32(n)-log(log_magnitude(z))/log(f32(degree))),steps,0);return;}
+        let prior=z;
+        if(p.kind==8u){if(z.r.x<0){z.r=-z.r;}if(z.i.x<0){z.i=-z.i;}}
+        z=na(npower(z,degree),c);
+        if(p.kind==7u){z=na(z,Native(rm(previous.r,p.extra.yz),rm(previous.i,p.extra.yz)));}
+        previous=prior;steps++;
+        let scale=max(abs(z.r.x),abs(z.i.x));
+        if(scale>p.bailout || nmag(z)>p.bailout*p.bailout){finish(id,max(0,f32(n)+1-log(log_magnitude(z))/log(f32(degree))),steps,0);return;}
+      }
+      finish(id,-1,steps,0);return;
+    }
     if(p.kind==0u) {
       let x=c.r.x;let y=c.i.x;let q=(x-.25)*(x-.25)+y*y;
       // Margin avoids making membership decisions on a rounded boundary.

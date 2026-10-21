@@ -19,7 +19,7 @@
       tabindex="0"
     >
       <canvas id="fractal-canvas"></canvas>
-      <div class="vignette"></div>
+      <div id="fractal-vignette" class="vignette" aria-hidden="true"></div>
     </main>
     <header>
       <div class="header-right">
@@ -96,6 +96,11 @@
               <option value="burning-ship">Burning Ship · original</option>
               <option value="tricorn">Tricorn</option>
               <option value="cubic">Cubic Julia</option>
+              <option value="multibrot">Multibrot</option>
+              <option value="multijulia">Multijulia</option>
+              <option value="phoenix">Phoenix Julia</option>
+              <option value="ship-julia">Burning Ship Julia</option>
+              <option value="newton">Newton basins</option>
             </select></label
           >
           <div class="formula" id="formula">
@@ -113,6 +118,7 @@
               <input id="julia-y-slider" class="parameter-slider" type="range" min="-2" max="2" step="0.0001" value="0.1889" aria-label="Julia imaginary constant slider" aria-controls="julia-y" />
             </div>
           </div>
+          <div id="fractal-parameters"></div>
         </section>
         <section class="control-section">
           <div class="section-heading">
@@ -156,6 +162,14 @@
               class="switch"
             ></span
           ></label>
+          <label class="range-label">Wandering speed <output id="wandering-speed-value">0.12 cycles/s</output>
+            <input id="wandering-speed" type="range" min="0.05" max="2" step="0.01" value="0.12" aria-label="Wandering speed" />
+          </label>
+          <label class="switch-label">
+            <span>Vignette</span>
+            <input id="vignette-enabled" type="checkbox" role="switch" aria-controls="fractal-vignette" checked />
+            <span class="switch"></span>
+          </label>
         </section>
         <section class="control-section">
           <div class="section-heading">
@@ -305,27 +319,30 @@
       </div>
     </footer>
     <div id="toast" role="alert" hidden></div>
-    <dialog id="export-dialog">
+    <dialog id="export-dialog" aria-labelledby="export-title">
       <form method="dialog">
         <button class="dialog-close icon-button" aria-label="Close">×</button>
       </form>
       <div class="eyebrow">TAKE A PIECE OF INFINITY</div>
-      <h2>Made to be kept.</h2>
+      <h2 id="export-title">Made to be kept.</h2>
       <p>
         Export the current view with its colors, or save its exact coordinates
         for another day.
       </p>
       <label class="field-label"
-        >Image size<select id="export-size">
+        >PNG size<select id="export-size">
           <option value="1920">Fit to 1920 px</option>
           <option value="3840" selected>Fit to 3840 px · 4K</option>
           <option value="current">Current render</option>
-        </select></label
-      ><button id="download-png" class="primary-button">
+        </select></label>
+      <label class="switch-label"><span>Include vignette in exports</span><input id="export-vignette" type="checkbox" role="switch" /><span class="switch"></span></label>
+      <p class="export-note">Applies to PNG and both GIF options.</p>
+      <button id="download-png" class="primary-button image-export-action">
         Download PNG <span>↓</span></button
-      ><button id="download-gif" class="secondary-button">
+      ><button id="download-gif" class="secondary-button image-export-action">
         Download zoom GIF · 8× journey</button
-      ><button id="download-location" class="secondary-button">
+      ><button id="open-color-gif" class="secondary-button image-export-action">Animation GIF · preview & export <span>↗</span></button>
+      <button id="download-location" class="secondary-button">
         Download location · JSON</button
       ><label class="import-label"
         >Import a saved location<input
@@ -334,6 +351,54 @@
           accept="application/json,.json"
       /></label>
       <p id="export-status" role="status"></p>
+    </dialog>
+    <dialog id="color-gif-dialog" aria-labelledby="color-gif-title">
+      <form method="dialog"><button class="dialog-close icon-button" aria-label="Back to download options">×</button></form>
+      <h2 id="color-gif-title">Make it move.</h2>
+      <p>Wander through the colors, evolve a fractal’s constant, or combine both.</p>
+      <div class="animation-layout">
+      <section class="animation-preview" aria-label="Animation preview">
+      <div id="color-gif-stage" class="gif-preview-stage">
+        <canvas id="color-gif-preview" aria-label="Color animation preview"></canvas>
+        <div id="color-gif-preview-vignette" class="vignette" aria-hidden="true" hidden></div>
+      </div>
+      <div class="gif-preview-controls">
+        <button id="color-gif-play" class="secondary-button" type="button" aria-pressed="true">Pause preview</button>
+        <button id="color-gif-restart" class="secondary-button" type="button">Restart preview</button>
+        <output id="color-gif-live-phase">Phase 0.000</output>
+      </div>
+      </section>
+      <section class="animation-settings" aria-label="Animation settings">
+      <label class="switch-label"><span>Wander colors</span><input id="gif-wander-colors" type="checkbox" role="switch" checked /><span class="switch"></span></label>
+      <div class="two-fields animation-fields">
+        <div class="parameter-control">
+          <label class="field-label" for="color-gif-phase">Start phase</label>
+          <input id="color-gif-phase" type="number" min="0" max="1" step="0.005" value="0" />
+          <input id="color-gif-phase-slider" class="parameter-slider" type="range" min="0" max="1" step="0.005" value="0" aria-label="GIF start phase slider" />
+        </div>
+        <div class="parameter-control">
+          <label class="field-label" for="color-gif-speed">Speed · cycles / second</label>
+          <input id="color-gif-speed" type="number" min="0.05" max="2" step="0.01" value="0.12" />
+          <input id="color-gif-speed-slider" class="parameter-slider" type="range" min="0.05" max="2" step="0.01" value="0.12" aria-label="GIF speed slider" />
+        </div>
+      </div>
+      <div id="gif-julia-option" hidden>
+        <label class="switch-label"><span id="gif-constant-label">Evolve constant</span><input id="gif-evolve-julia" type="checkbox" role="switch" /><span class="switch"></span></label>
+        <div id="gif-julia-fields" class="animation-fields" hidden>
+          <div class="two-fields">
+            <label class="field-label">Target · real<input id="gif-julia-x" type="text" spellcheck="false" inputmode="decimal" /></label>
+            <label class="field-label">Target · imaginary<input id="gif-julia-y" type="text" spellcheck="false" inputmode="decimal" /></label>
+          </div>
+          <label class="field-label animation-fields">Duration · seconds<input id="gif-duration" type="number" min="0.5" max="20" step="0.5" value="6" /></label>
+          <label class="switch-label"><span>Return to start (loop)</span><input id="gif-return" type="checkbox" role="switch" checked /><span class="switch"></span></label>
+        </div>
+      </div>
+      <label class="switch-label"><span>Include vignette</span><input id="color-gif-vignette" type="checkbox" role="switch" /><span class="switch"></span></label>
+      <p id="color-gif-details" class="export-note"></p>
+      <button id="download-color-gif" class="primary-button image-export-action" disabled>Download animation GIF <span>↓</span></button>
+      <p id="color-gif-status" role="status"></p>
+      </section>
+      </div>
     </dialog>
     <dialog id="help-dialog">
       <form method="dialog">
@@ -367,7 +432,9 @@
       </p>
       <p>
         Interior pixels are points that did not escape within your iteration
-        budget. Increase iterations when deep regions appear solid.
+        budget. Increase iterations when deep regions appear solid. In Newton
+        basins, colors identify the root reached and how quickly it converges;
+        dark pixels have not converged. Try Power and Relaxation to reshape the basins.
       </p>
       <p class="attribution">
         Interface inspiration:

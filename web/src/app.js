@@ -2,7 +2,9 @@ import { zoomLabel } from './numbers.mjs';
 import { navigate as navigateLocal, validate } from './decimal.mjs';
 import { BrowserEngine } from './engine.js';
 import { renderDimensions, qualityScales } from './resolution.mjs';
-import { GIFEncoder, quantize, applyPalette } from 'gifenc';
+import { setupImageExports } from './export-ui.js';
+import { advancePhase } from './export-utils.mjs';
+import { fractals, defaultView, parameterDefaults } from './fractals.mjs';
 const $ = (id) => document.getElementById(id);
 const canvas = $("fractal-canvas");
 const base = {
@@ -14,33 +16,6 @@ const base = {
   bailout: 64,
   julia_x: "-0.7269",
   julia_y: "0.1889",
-};
-const descriptions = {
-  mandelbrot: [
-    "The Mandelbrot set",
-    "An entire universe, hiding at the edge.",
-    "z<sub>n+1</sub> = z<sub>n</sub>² + c",
-  ],
-  julia: [
-    "A Julia universe",
-    "One constant. Infinitely many possibilities.",
-    "z<sub>n+1</sub> = z<sub>n</sub>² + c",
-  ],
-  "burning-ship": [
-    "The Burning Ship",
-    "Find a little order in the beautiful chaos.",
-    "z<sub>n+1</sub> = |Re(z²+c)| + i|Im(z²+c)|",
-  ],
-  tricorn: [
-    "The Tricorn",
-    "A familiar universe, reflected in itself.",
-    "z<sub>n+1</sub> = z̄<sub>n</sub>² + c",
-  ],
-  cubic: [
-    "A cubic universe",
-    "Symmetry takes an unexpected turn.",
-    "z<sub>n+1</sub> = z<sub>n</sub>³ + c",
-  ],
 };
 const palettes = await (await fetch(new URL('./palettes.json', document.baseURI))).json();
 const engine = new BrowserEngine(canvas, palettes);
@@ -105,6 +80,9 @@ const destinations = [
     view: { ...base, x: "0", y: "1", span: "1e-1000", iterations: 4000 },
     zoom: "3.6e1000×",
   },
+  { name: 'Phoenix feathers', level: 'ORBITS WITH A MEMORY', view: defaultView(base, 'phoenix') },
+  { name: 'Islands of attraction', level: 'NEWTON ROOT BASINS', view: defaultView(base, 'newton') },
+  { name: 'Fourfold gardens', level: 'PLAY WITH THE POWER', view: defaultView(base, 'multijulia') },
 ];
 let renderSettings = {
   arithmetic: "auto",
@@ -112,6 +90,8 @@ let renderSettings = {
   acceleration: "auto",
 };
 let placesHidden = false;
+let vignetteEnabled = true;
+let wanderingSpeed = .12, lastAnimationTime = null;
 let view = { ...base },
   palette = 0,
   density = 1,
@@ -229,7 +209,7 @@ function buildDestinations() {
   destinations.forEach((d, i) => {
     const b = document.createElement("button");
     b.className = `destination-card${i === activeDestination ? " active" : ""}`;
-    b.innerHTML = `<span class="card-top"><span>0${i + 1}</span><span>↗</span></span><span><span class="card-name"></span><span class="card-level" style="display:block"></span></span>`;
+    b.innerHTML = `<span class="card-top"><span>${String(i + 1).padStart(2, '0')}</span><span>↗</span></span><span><span class="card-name"></span><span class="card-level" style="display:block"></span></span>`;
     b.querySelector(".card-name").textContent = d.name;
     b.querySelector(".card-level").textContent = d.level;
     b.onclick = () => { loadView(d.view, i); showLocationIntro(); };
@@ -237,7 +217,7 @@ function buildDestinations() {
   });
 }
 function syncView() {
-  const [title, description, formula] = descriptions[view.fractal];
+  const { title, description, formula, constant } = fractals[view.fractal];
   $("view-title").replaceChildren(
     document.createTextNode(title),
     Object.assign(document.createElement("span"), { textContent: "." }),
@@ -261,8 +241,49 @@ function syncView() {
     slider.value = view[`julia_${axis}`];
   }
   $('iterations-slider').value = String(view.iterations);
-  $("julia-controls").hidden = !["julia", "cubic"].includes(view.fractal);
+  $("julia-controls").hidden = !constant;
+  for (const [axis, name] of [['x', 'real'], ['y', 'imaginary']]) {
+    const label = `${view.fractal === 'newton' ? 'Root target' : 'Constant'} · ${name}`;
+    document.querySelector(`label[for="julia-${axis}"]`).textContent = label;
+    $(`julia-${axis}-slider`).setAttribute('aria-label', `${label} slider`);
+  }
+  syncParameters();
   $("zoom-label").textContent = zoomLabel(view.span);
+}
+function syncParameters() {
+  const container = $('fractal-parameters');
+  const parameters = fractals[view.fractal].parameters ?? [];
+  // Keep slider nodes alive while dragging, including across preview renders.
+  if (container.dataset.fractal !== view.fractal) {
+    container.dataset.fractal = view.fractal;
+    container.replaceChildren();
+    for (const p of parameters) {
+      const group = document.createElement('div'); group.className = 'parameter-control';
+      const label = document.createElement('label'); label.className = 'field-label';
+      label.htmlFor = `parameter-${p.key}`; label.textContent = p.label;
+      const input = document.createElement('input');
+      Object.assign(input, { id: `parameter-${p.key}`, type: 'number', min: p.min, max: p.max, step: p.step });
+      const slider = document.createElement('input');
+      Object.assign(slider, { id: `parameter-${p.key}-slider`, type: 'range', min: p.min, max: p.max, step: p.step, className: 'parameter-slider' });
+      slider.setAttribute('aria-label', `${p.label} slider`); slider.setAttribute('aria-controls', input.id);
+      const apply = () => {
+        try {
+          if (!input.value.trim()) throw new Error(`Enter a value for ${p.label}.`);
+          const next = validate({ ...view, [p.key]: Number(input.value) });
+          if (next[p.key] !== view[p.key]) loadView(next);
+        } catch (error) { toast(error.message); syncView(); }
+      };
+      input.onchange = apply; input.onblur = apply;
+      input.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); apply(); } };
+      slider.oninput = () => loadView({ ...view, [p.key]: Number(slider.value) }, -1, true);
+      slider.onchange = finishParameterPreview;
+      group.append(label, input, slider); container.append(group);
+    }
+  }
+  for (const p of parameters) {
+    $(`parameter-${p.key}`).value = String(view[p.key]);
+    $(`parameter-${p.key}-slider`).value = String(view[p.key]);
+  }
 }
 function showLocationIntro() {
   clearTimeout(locationIntroTimer);
@@ -278,7 +299,7 @@ function saveSession() {
   try {
     localStorage.setItem(
       "fractal-web-session",
-      JSON.stringify({ view, palette, density, phase, renderSettings, quality: Number($("quality").value), placesHidden }),
+      JSON.stringify({ view, palette, density, phase, renderSettings, quality: Number($("quality").value), placesHidden, vignetteEnabled, wanderingSpeed }),
     );
   } catch {}
 }
@@ -294,6 +315,11 @@ function toggleUI() {
     button.focus({ preventScroll: true });
   }
 }
+function setVignetteEnabled(enabled) {
+  vignetteEnabled = enabled;
+  $('vignette-enabled').checked = enabled;
+  $('fractal-vignette').hidden = !enabled;
+}
 function setPlacesHidden(hidden) {
   placesHidden = hidden;
   $('destination-list').hidden = hidden;
@@ -308,7 +334,7 @@ function loadView(next, index = -1, preview = false) {
   clearTimeout(parameterPreviewTimer);
   parameterPreview = preview;
   viewEpoch++;
-  view = { ...base, ...next };
+  view = parameterDefaults({ ...base, ...next });
   activeDestination = index;
   generation++;
   syncView();
@@ -375,7 +401,7 @@ async function render() {
       $("precision-detail").textContent =
         meta.perturbation
           ? `${meta.arithmetic || "fp64"} · ${meta.range_mode || "standard"} · ${meta.acceleration || "none"}`
-          : "Adaptive · deep zoom activates automatically";
+          : fractals[view.fractal].deep ? "Adaptive · deep zoom activates automatically" : view.fractal === 'newton' ? 'Colors identify roots and convergence speed' : 'Direct iteration · minimum view width 1e-10';
       $("precision-detail").title =
         `${meta.repaired} unstable pixels repaired; ${meta.promoted_pixels || 0} pixels promoted`;
       $("performance-note").classList.toggle(
@@ -500,14 +526,13 @@ function setupNavigation() {
   $("zoom-out").onclick = () => navigate(0, 0, 0.5);
   $("reset").onclick = () =>
     loadView({
-      ...base,
-      fractal: view.fractal,
-      x: view.fractal === "mandelbrot" ? "-0.5" : "0",
-      julia_x: view.julia_x,
-      julia_y: view.julia_y,
+      ...view,
+      x: defaultView(base, view.fractal).x,
+      y: defaultView(base, view.fractal).y,
+      span: defaultView(base, view.fractal).span,
     });
   document.addEventListener("keydown", (e) => {
-    if (isInput(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (isInput(e) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('dialog[open]')) return;
     if (e.target.tagName === "BUTTON" && [" ", "Enter"].includes(e.key)) return;
     const key = e.key.toLowerCase(),
       step = e.shiftKey ? 0.02 : 0.15;
@@ -567,6 +592,12 @@ function syncRenderSettings(settings) {
 function setupControls() {
   $('toggle-ui').onclick = toggleUI;
   $('toggle-destinations').onclick = () => { setPlacesHidden(!placesHidden); saveSession(); };
+  $('vignette-enabled').onchange = () => { setVignetteEnabled($('vignette-enabled').checked); saveSession(); };
+  $('wandering-speed').oninput = () => {
+    wanderingSpeed = Number($('wandering-speed').value);
+    $('wandering-speed-value').textContent = `${wanderingSpeed.toFixed(2)} cycles/s`;
+    saveSession();
+  };
   for (const [field, id] of [
     ["arithmetic", "arithmetic"],
     ["range_mode", "range-mode"],
@@ -581,19 +612,7 @@ function setupControls() {
 
   $("fractal").onchange = () => {
     const fractal = $("fractal").value;
-    loadView({
-      ...base,
-      fractal,
-      x:
-        fractal === "mandelbrot"
-          ? "-0.5"
-          : fractal === "burning-ship"
-            ? "-0.75"
-            : "0",
-      y: fractal === "burning-ship" ? "0.375" : "0",
-      julia_x: fractal === "cubic" ? "-0.54" : base.julia_x,
-      julia_y: fractal === "cubic" ? "0.196" : base.julia_y,
-    });
+    loadView(defaultView(base, fractal));
     showLocationIntro();
   };
   $("density").oninput = () => {
@@ -693,7 +712,6 @@ function setupControls() {
       );
     }
   };
-  $("export").onclick = () => $("export-dialog").showModal();
   $("download-location").onclick = () =>
     downloadBlob(
       new Blob([JSON.stringify(locationData(), null, 2)], {
@@ -710,7 +728,7 @@ function setupControls() {
       if (
         data.format !== "fractal-explorer/v1" ||
         !data.view ||
-        !descriptions[data.view.fractal]
+        !Object.hasOwn(fractals, data.view.fractal)
       )
         throw new Error("This is not a Fractal Explorer location.");
       const validated = await localNavigation({ view: data.view });
@@ -733,57 +751,18 @@ function setupControls() {
     }
     e.target.value = "";
   };
-  $("download-png").onclick = async () => {
-    const button = $("download-png"); button.disabled = true;
-    $("export-status").textContent = "Rendering on your device…";
-    let exporter;
-    try {
+  setupImageExports({
+    engine, palettes, paint, colorTable, downloadBlob,
+    getState: () => {
       if (!engineReady) throw new Error('Wait for the browser renderer to start.');
-      const selection = $("export-size").value;
-      let values, metadata = meta;
-      if (selection === 'current') {
-        if (rendering || !paintingReady || !field || JSON.stringify(imageView) !== JSON.stringify(view) || JSON.stringify(imageSettings) !== JSON.stringify(renderSettings)) throw new Error('Wait for the current view to finish rendering.');
-        values = await engine.readField();
-      } else {
-        const aspect = innerHeight / innerWidth, width = Math.max(16, Math.round(Number(selection) / Math.max(1, aspect))), height = Math.max(16, Math.round(width * aspect));
-        exporter = new BrowserEngine(document.createElement('canvas'), palettes); await exporter.init({ forceCPU: !engine.gpu });
-        metadata = (await exporter.render({ ...view }, width, height, { ...renderSettings })).metadata;
-        values = await exporter.readField();
-      }
-      const output = document.createElement('canvas'); paint(output, values, metadata);
-      const blob = await new Promise(resolve => output.toBlob(resolve, 'image/png'));
-      if (!blob) throw new Error('Could not encode the image.');
-      await downloadBlob(blob, 'fractal-web-' + view.fractal + '-' + metadata.width + 'x' + metadata.height + '.png');
-      $("export-status").textContent = "Your image is ready. Keep exploring.";
-    } catch (error) { $("export-status").textContent = error.message; }
-    finally { exporter?.destroy(); button.disabled = false; }
-  };
-  $("download-gif").onclick = async () => {
-    const button = $("download-gif"); button.disabled = true;
-    let exporter;
-    try {
-      const snapshot = { ...view }, settings = { ...renderSettings };
-      const exportColors = {palette,density,phase};
-      if (snapshot.iterations > 10000) throw new Error('GIF export supports up to 10,000 iterations.');
-      const aspect = innerHeight / innerWidth, width = Math.max(16, Math.round(720 / Math.max(1, aspect))), height = Math.max(16, Math.round(width * aspect));
-      exporter = new BrowserEngine(document.createElement('canvas'), palettes); await exporter.init({ forceCPU: !engine.gpu });
-      const gif = GIFEncoder(), output = document.createElement('canvas');
-      let current = snapshot, gifPalette;
-      for (let frame = 0; frame < 24; frame++) {
-        $("export-status").textContent = 'Rendering frame ' + (frame + 1) + ' / 24 on your device…';
-        const metadata = (await exporter.render(current, width, height, settings)).metadata;
-        paint(output, await exporter.readField(), metadata, exportColors);
-        const rgba = output.getContext('2d').getImageData(0, 0, width, height).data;
-        gifPalette ??= quantize(rgba, 256);
-        gif.writeFrame(applyPalette(rgba, gifPalette), width, height, { palette: gifPalette, delay: 83, repeat: 0 });
-        current = navigateLocal({ view: current, factor: 8 ** (1 / 23) });
-        await new Promise(resolve => requestAnimationFrame(resolve));
-      }
-      gif.finish(); await downloadBlob(new Blob([gif.bytes()], { type: 'image/gif' }), 'fractal-web-zoom.gif');
-      $("export-status").textContent = 'Your 8× zoom journey is ready.';
-    } catch (error) { $("export-status").textContent = error.message; }
-    finally { exporter?.destroy(); button.disabled = false; }
-  };
+      return { view: { ...view }, settings: { ...renderSettings }, colors: { palette, density, phase }, speed: wanderingSpeed };
+    },
+    getCurrentField: async () => {
+      if (rendering || !paintingReady || !field || JSON.stringify(imageView) !== JSON.stringify(view) || JSON.stringify(imageSettings) !== JSON.stringify(renderSettings)) throw new Error('Wait for the current view to finish rendering.');
+      const metadata = { ...meta };
+      return { values: await engine.readField(), metadata };
+    },
+  });
 
   for (const dialog of document.querySelectorAll("dialog"))
     dialog.addEventListener("click", (e) => {
@@ -804,19 +783,25 @@ function syncColorControls() {
   $("density-value").textContent = density.toFixed(1);
   $("phase").value = phase;
   $("phase-value").textContent = phase.toFixed(2);
+  $('wandering-speed').value = String(wanderingSpeed);
+  $('wandering-speed-value').textContent = `${wanderingSpeed.toFixed(2)} cycles/s`;
 }
 function animate(time) {
+  const elapsed = lastAnimationTime === null ? 0 : (time - lastAnimationTime) / 1000;
+  lastAnimationTime = time;
   if (
     $("animate").checked &&
     field &&
-    time - lastPaint > (engine.gpu ? 16 : 65) &&
-    !reducedMotion
+    !reducedMotion &&
+    !document.querySelector('dialog[open]')
   ) {
-    phase = (phase + 0.002) % 1;
-    $("phase").value = phase;
-    $("phase-value").textContent = phase.toFixed(2);
-    paint();
-    lastPaint = time;
+    phase = advancePhase(phase, wanderingSpeed, elapsed);
+    if (time - lastPaint > (engine.gpu ? 16 : 65)) {
+      $("phase").value = phase;
+      $("phase-value").textContent = phase.toFixed(2);
+      paint();
+      lastPaint = time;
+    }
   }
   requestAnimationFrame(animate);
 }
@@ -824,8 +809,10 @@ async function init() {
   try {
     const saved = JSON.parse(localStorage.getItem("fractal-web-session"));
     setPlacesHidden(saved?.placesHidden === true);
-    if (saved?.view && descriptions[saved.view.fractal]) {
-      view = { ...base, ...saved.view };
+    vignetteEnabled = saved?.vignetteEnabled !== false;
+    if (Number.isFinite(saved?.wanderingSpeed)) wanderingSpeed = Math.max(.05, Math.min(2, saved.wanderingSpeed));
+    if (saved?.view && Object.hasOwn(fractals, saved.view.fractal)) {
+      view = validate({ ...base, ...saved.view });
       palette = palettes[saved.palette] ? saved.palette : 0;
       density = Number(saved.density) || 1;
       phase = Number(saved.phase) || 0;
@@ -837,7 +824,7 @@ async function init() {
       localStorage.getItem("fractal-web-bookmarks") || "[]",
     );
     for (const [i, b] of bookmarks.entries())
-      if (b.view && descriptions[b.view.fractal])
+      if (b.view && Object.hasOwn(fractals, b.view.fractal))
         destinations.push({
           name: `Saved place ${i + 1}`,
           level: "YOUR OWN CORNER OF INFINITY",
@@ -846,6 +833,7 @@ async function init() {
   } catch {}
   buildPalettes();
   buildDestinations();
+  setVignetteEnabled(vignetteEnabled);
   syncView();
   syncColorControls();
   showLocationIntro();
@@ -860,7 +848,7 @@ async function init() {
   try {
     const hardware = await engine.init({ forceCPU: new URLSearchParams(location.search).get('cpu') === '1' });
     engineReady = true;
-    $("hardware").textContent = hardware.gpu ? hardware.device.toUpperCase() + ' · WEBGPU' : 'LOCAL CPU · WASM';
+    $("hardware").textContent = hardware.gpu ? hardware.device.toUpperCase() : 'LOCAL CPU · WASM';
     $("hardware").title = hardware.gpu ? 'Computation runs on this device’s GPU; high-precision references run in its CPU worker.' : hardware.error;
     if (!hardware.gpu) toast('GPU unavailable. Using the local CPU worker at reduced resolution. ' + hardware.error);
 

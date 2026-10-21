@@ -465,7 +465,8 @@ select option {
   margin-top: 7px;
   font-variant-numeric: tabular-nums;
 }
-#julia-controls .parameter-control {
+#julia-controls .parameter-control,
+#fractal-parameters .parameter-control {
   margin-top: 15px;
 }
 .parameter-slider {
@@ -780,6 +781,8 @@ dialog {
   width: min(430px, calc(100vw - 30px));
   padding: 32px;
   box-shadow: 0 30px 90px #0009;
+  max-height: calc(100dvh - 30px);
+  overflow-y: auto;
 }
 dialog::backdrop {
   background: #030a08bb;
@@ -807,6 +810,42 @@ dialog .primary-button {
 }
 dialog .secondary-button {
   margin-top: 10px;
+}
+dialog .export-note {
+  font-size: 10px;
+  margin: 8px 0;
+}
+#color-gif-dialog {
+  width: min(900px, calc(100vw - 30px));
+  padding: 24px;
+}
+#color-gif-dialog h2 { margin-top: 0; padding-right: 30px; }
+.gif-preview-stage {
+  position: relative;
+  margin: 14px auto;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 9px;
+  background: #081112;
+}
+.gif-preview-stage canvas { width: 100%; height: auto; }
+.gif-preview-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.gif-preview-controls .secondary-button { width: auto; margin: 0; padding: 8px 10px; font-size: 10px; }
+.gif-preview-controls output { margin-left: auto; color: #a5b59a; font-size: 10px; font-variant-numeric: tabular-nums; }
+.animation-fields { margin-top: 14px; }
+.animation-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.animation-preview { position: sticky; top: 0; }
+.animation-settings > .switch-label:first-child { margin-top: 0; }
+@media (max-width: 700px) {
+  #color-gif-dialog { padding: 20px; }
+  .animation-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .animation-preview { position: static; }
 }
 .import-label {
   display: block;

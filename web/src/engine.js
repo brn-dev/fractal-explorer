@@ -5,7 +5,7 @@ import { validate, decimal, order } from './decimal.mjs';
 import { packWide } from './wide.mjs';
 import { renderLimits, validateDimensions } from './resolution.mjs';
 
-const kinds = ['mandelbrot', 'julia', 'burning-ship', 'tricorn', 'cubic'];
+import { kinds } from './fractals.mjs';
 const now = () => performance.now();
 const makeAbort = () => new DOMException('A newer view is ready.', 'AbortError');
 
@@ -166,6 +166,10 @@ export class BrowserEngine {
     tile.forEach((v, k) => uint(96 + k * 4, v)); uint(112, repair ? 1 : 0); uint(120, packet.offsets.length);
     float(128, Number.isFinite(packet.logDc) ? packet.logDc : -1e30); float(132, Math.log2(1e-7));
     packet.offsets.forEach((v, k) => uint(144 + k * 4, v));
+    float(208, view.power ?? 2);
+    for (const [offset, value] of [[212, view.memory ?? 0], [224, view.relaxation ?? 1]]) {
+      const hi = Math.fround(value); float(offset, hi); float(offset + 4, value - hi);
+    }
     return bytes;
   }
   ensureOutput(width, height) {
@@ -255,7 +259,7 @@ export class BrowserEngine {
       repairs = stats[0]; this.cpuField = values; repairMs = now() - repairStart;
     }
     const metadata = { width, height, backend: 'webgpu', arithmetic: options.arithmetic, range_mode: options.extended ? 'scaled' : 'standard', acceleration: options.acceleration, perturbation: options.perturb,
-      digits: packet.digits, repaired: repairs, reference_repairs: referenceRepairs, color_origin: Number.isFinite(minimum) && minimum < 1e30 ? minimum : 0,
+      digits: packet.digits, repaired: repairs, reference_repairs: referenceRepairs, color_origin: view.fractal === 'newton' ? 0 : Number.isFinite(minimum) && minimum < 1e30 ? minimum : 0,
       elapsed_ms: now() - start, reference_cache_hit: packet.referenceHit, preparation_cache_hit: packet.preparationHit, device_cache_hit: packet.uploadHit,
       mean_native_steps: nativeSteps / (width * height), mean_skipped_steps: skipped / (width * height), series_prefix: packet.seriesN,
       timings: { ...packet.timings, compile_ms: compilation, kernel_ms: kernel, repair_ms: repairMs }, experimental: options.arithmetic === 'fp32' };

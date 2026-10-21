@@ -1,9 +1,12 @@
 import { ZERO, wide, wa, wm, log, value, cz, ca, cm, cs, magnitude } from './wide.mjs';
 import { prepare, exactPixels } from './reference.mjs';
 import { decimal, order } from './decimal.mjs';
+import { iterateAdditional } from './formulas.mjs';
+import { parameterDefaults } from './fractals.mjs';
 
 function finish(n, mag, power = 2) { return Math.max(0, n + 1 - Math.log(Math.log(Math.sqrt(mag))) / Math.log(power)); }
 export async function softwareRender(view, width, height, mode = 'series') {
+  view = parameterDefaults(view);
   const start = performance.now();
   const perturb = ['mandelbrot', 'julia'].includes(view.fractal) && order(decimal(view.span)) < -7;
   const prepared = perturb ? await prepare(view, width, height, mode) : null;
@@ -16,21 +19,24 @@ export async function softwareRender(view, width, height, mode = 'series') {
       let answer = -1;
       if (!perturb) {
         const x = Number(view.x) + ux * Number(view.span), y = Number(view.y) + uy * Number(view.span);
-        const julia = ['julia', 'cubic'].includes(view.fractal);
-        const cr = julia ? Number(view.julia_x) : x, ci = julia ? Number(view.julia_y) : y;
-        let zr = julia ? x : 0, zi = julia ? y : 0;
-        if (view.fractal === 'mandelbrot') {
-          const q = (x - .25) ** 2 + y * y;
-          if (q * (q + x - .25) < .25 * y * y - 1e-14 || (x + 1) ** 2 + y * y < .0625 - 1e-14) { field[row * width + col] = -1; continue; }
-        }
-        for (let n = 1; n <= view.iterations; n++) {
-          if (view.fractal === 'tricorn') zi = -zi;
-          const a = zr * zr - zi * zi, b = 2 * zr * zi;
-          if (view.fractal === 'cubic') [zr, zi] = [a * zr - b * zi + cr, a * zi + b * zr + ci];
-          else [zr, zi] = [a + cr, b + ci];
-          if (view.fractal === 'burning-ship') [zr, zi] = [Math.abs(zr), Math.abs(zi)];
-          const mag = zr * zr + zi * zi;
-          if (mag > view.bailout ** 2) { answer = finish(n, mag, view.fractal === 'cubic' ? 3 : 2); break; }
+        if (['multibrot', 'multijulia', 'phoenix', 'ship-julia', 'newton'].includes(view.fractal)) answer = iterateAdditional(view, x, y);
+        else {
+          const julia = ['julia', 'cubic'].includes(view.fractal);
+          const cr = julia ? Number(view.julia_x) : x, ci = julia ? Number(view.julia_y) : y;
+          let zr = julia ? x : 0, zi = julia ? y : 0;
+          if (view.fractal === 'mandelbrot') {
+            const q = (x - .25) ** 2 + y * y;
+            if (q * (q + x - .25) < .25 * y * y - 1e-14 || (x + 1) ** 2 + y * y < .0625 - 1e-14) { field[row * width + col] = -1; continue; }
+          }
+          for (let n = 1; n <= view.iterations; n++) {
+            if (view.fractal === 'tricorn') zi = -zi;
+            const a = zr * zr - zi * zi, b = 2 * zr * zi;
+            if (view.fractal === 'cubic') [zr, zi] = [a * zr - b * zi + cr, a * zi + b * zr + ci];
+            else [zr, zi] = [a + cr, b + ci];
+            if (view.fractal === 'burning-ship') [zr, zi] = [Math.abs(zr), Math.abs(zi)];
+            const mag = zr * zr + zi * zi;
+            if (mag > view.bailout ** 2) { answer = finish(n, mag, view.fractal === 'cubic' ? 3 : 2); break; }
+          }
         }
       } else {
         const u = { r: wide(ux), i: wide(uy) };
@@ -65,5 +71,5 @@ export async function softwareRender(view, width, height, mode = 'series') {
     const exact = await exactPixels(view, glitches, width, height);
     glitches.forEach(([col, row], k) => { field[row * width + col] = exact.values[k]; if (exact.values[k] >= 0) minimum = Math.min(minimum, exact.values[k]); });
   }
-  return { field, metadata: { width, height, backend: 'cpu', arithmetic: 'fp64', range_mode: perturb ? 'floatexp' : 'standard', acceleration: approximation?.seriesN ? 'series' : 'none', perturbation: perturb, digits: orbit?.digits ?? 16, repaired: glitches.length, color_origin: Number.isFinite(minimum) ? minimum : 0, elapsed_ms: performance.now() - start, mean_skipped_steps: skipped / field.length, timings: prepared?.timings ?? {} } };
+  return { field, metadata: { width, height, backend: 'cpu', arithmetic: 'fp64', range_mode: perturb ? 'floatexp' : 'standard', acceleration: approximation?.seriesN ? 'series' : 'none', perturbation: perturb, digits: orbit?.digits ?? 16, repaired: glitches.length, color_origin: view.fractal === 'newton' ? 0 : Number.isFinite(minimum) ? minimum : 0, elapsed_ms: performance.now() - start, mean_skipped_steps: skipped / field.length, timings: prepared?.timings ?? {} } };
 }

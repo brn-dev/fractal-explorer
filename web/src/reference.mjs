@@ -80,6 +80,7 @@ export async function prepare(view, width, height, mode, anchor) {
 // This independent MPFR loop is also used as an oracle and final pixel repair.
 export async function exactPixels(view, points, width, height, extra = 80) {
   validate(view);
+  if (!['mandelbrot', 'julia', 'burning-ship', 'tricorn', 'cubic'].includes(view.fractal)) throw new Error('The MPFR pixel oracle supports the original five formulas; this formula uses direct iteration.');
   const lib = await mpfr(), b = lib.binding;
   const d = digitsFor(view);
   const ctx = lib.getContext({ precisionBits: Math.ceil((d * (view.fractal === 'julia' ? 2 : 1) + extra) * Math.LOG2E * Math.LN10), roundingMode: 0 });
