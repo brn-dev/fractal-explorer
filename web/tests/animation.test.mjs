@@ -111,6 +111,28 @@ test('decimal paths preserve tiny differences, exact targets, and integer powers
   for(let i=0;i<p.frames;i++)assert.ok(Number.isInteger(p.viewAt(i).power));
   assert.throws(()=>animationPlan(v,{power:{enabled:true,target:'3.5',speed:.25}}));
 });
+
+test('resuming at a new location preserves the held cycle position, direction, and independent parameter rates', () => {
+  for (const shape of Object.keys(cycleShapes)) {
+    const settings={julia_x:{enabled:true,target:'-.6',speed:.1,shape},julia_y:{enabled:true,target:'.4',speed:.2,shape}};
+    const original=animationPlan(base,settings), moved={...base,x:'.125',y:'-.05',span:'.4'};
+    for (const offset of [37,original.frames-37,original.frames+37]) {
+      const resumed=animationPlan(moved,settings,30,offset);
+      assert.equal(resumed.frameOffset,offset%original.frames);
+      assert.equal(resumed.frames,original.frames);
+      for (const index of [0,1,23,resumed.frames-1,resumed.frames]) {
+        const expected=original.viewAt(index+offset), actual=resumed.viewAt(index);
+        assert.equal(actual.julia_x,expected.julia_x);assert.equal(actual.julia_y,expected.julia_y);
+        assert.equal(actual.x,moved.x);assert.equal(actual.y,moved.y);assert.equal(actual.span,moved.span);
+      }
+      const movedAgain=animationPlan({...moved,x:'.25'},settings,30,resumed.frameOffset+23);
+      assert.equal(movedAgain.viewAt(0).julia_x,resumed.viewAt(23).julia_x);
+      assert.equal(movedAgain.viewAt(0).julia_y,resumed.viewAt(23).julia_y);
+      assert.deepEqual(resumed.viewAt(0),resumed.viewAt(resumed.frames));
+      assert.deepEqual(resumed.settings,original.settings);
+    }
+  }
+});
 test('a slow first pass skips missed deadlines and fills every remaining hole', () => {
   const schedule=new FrameSchedule(120);
   assert.equal(schedule.next(0),0);schedule.complete([0],1000);
@@ -174,6 +196,33 @@ test('a paused animation refreshes frame zero for a changed view without backfil
   player.configure(animationPlan({...base,x:'.1'},settings),{width:16,height:16});player.tick(time);await flush();player.tick(time+=100);
   assert.equal(renders,2);assert.deepEqual(shown,['0','.1']);
   for(let i=0;i<20;i++)player.tick(time+=100);assert.equal(renders,2);
+});
+
+test('pause holds the displayed values when an in-flight frame finishes, then resumes the existing cache', async () => {
+  let finish, time=0, renders=0; const shown=[];
+  const player=new ProgressiveAnimation({now:()=>time,
+    render:()=>{renders++;return new Promise(resolve=>{finish=resolve;});},
+    present:(frame,index)=>shown.push({frame,index})});
+  player.configure(animationPlan(base,settings),{width:16,height:16});
+  player.tick(time);await flush();finish({field:new Float32Array(256),metadata:{}});await flush();
+  player.tick(time);await flush();
+  assert.equal(renders,2);assert.equal(shown.length,1);
+  const held=player.lastShown, frames=player.frames;
+  time=40;player.setPaused(true);
+  const elapsed=player.schedule.elapsed(time);
+  time=1000;finish({field:new Float32Array(256),metadata:{}});await flush();
+  for(let i=0;i<10;i++)player.tick(time+=100);
+  assert.equal(player.lastShown,held);assert.equal(shown.length,1);assert.equal(renders,2);
+  assert.equal(player.schedule.elapsed(time),elapsed);
+  assert.ok(player.schedule.ready.has(1));
+  player.tick(time,false,true); // Recoloring can still repaint the held field.
+  assert.equal(shown.at(-1).frame,held);assert.equal(renders,2);
+  time+=500;player.setPaused(false);
+  assert.equal(player.schedule.elapsed(time),elapsed);assert.equal(player.frames,frames);
+  player.tick(time);await flush();
+  assert.equal(shown.at(-1).index,1);assert.equal(renders,3);
+  time+=100;finish({field:new Float32Array(256),metadata:{}});await flush();
+  assert.ok(player.schedule.ready.size>2);
 });
 test('a complete RAM cache plays at 30 fps without new renders', async () => {
   let renders=0,time=0;const shown=[];

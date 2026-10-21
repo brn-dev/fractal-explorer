@@ -5,7 +5,7 @@ import { renderDimensions, qualityScales } from './resolution.mjs';
 import { setupImageExports } from './export-ui.js';
 import { advancePhase } from './export-utils.mjs';
 import { fractals, defaultView, parameterDefaults } from './fractals.mjs';
-import { animationPlan, cacheDimensions, cacheMemoryOptionsMiB, cacheMemorySetting, cacheMemoryLabel, ProgressiveAnimation, validateAutomation } from './animation.mjs';
+import { LIVE_FPS, animationPlan, cacheDimensions, cacheMemoryOptionsMiB, cacheMemorySetting, cacheMemoryLabel, ProgressiveAnimation, validateAutomation } from './animation.mjs';
 import { setupAutomationControls } from './automation-ui.js';
 import { readShareURL } from './share.mjs';
 import { setupShareLinks } from './share-ui.js';
@@ -115,7 +115,7 @@ let lastPaint = 0,
   imageView = null,
   imageSettings = null;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-let automationSettings = {}, automationRenderer, automationRendererPromise;
+let automationSettings = {}, automationRenderer, automationRendererPromise, pausedStatic = null;
 const automationPlayer = new ProgressiveAnimation({
   cancel: () => {
     // MPFR preparation and CPU iteration cannot receive a cancel message while
@@ -140,7 +140,8 @@ const automationPlayer = new ProgressiveAnimation({
     field = frame.field; meta = frame.metadata; imageView = frame.view; imageSettings = { ...renderSettings };
     paintingReady = true; paint(); automationControls.showValues(frame.view);
     $('render-resolution').textContent = `${meta.width} × ${meta.height}`;
-    $('render-status').textContent = `${meta.backend.toUpperCase()} · ${automationPlayer.schedule.ready.size === automationPlayer.plan.frames ? '30 fps cached' : 'animation warming'}`;
+    $('render-status').textContent = `${meta.backend.toUpperCase()} · ${automationPlaybackLabel(automationPlayer)}`;
+    if (automationPlayer.paused) setRenderIndicator('ready', 'Parameter animations paused');
     $('precision-mode').textContent = meta.perturbation ? `${meta.digits}-digit reference orbit` : `${meta.arithmetic} direct iteration`;
     $('precision-detail').textContent = 'Parameter animation · cached scalar fields';
   },
@@ -149,12 +150,19 @@ const automationPlayer = new ProgressiveAnimation({
     $('automation-status').hidden = !player.plan;
     if (!player.plan) return;
     const count = player.schedule.ready.size, total = player.plan.frames;
-    $('automation-progress-text').textContent = count === total ? '30 fps · loop cached' : `${count} / ${total} frames cached`;
+    const paused = player.paused && player.lastShown;
+    setRenderIndicator(paused || count === total ? 'ready' : 'loading', paused ? 'Parameter animations paused' : count === total ? 'Animation loop ready' : `Caching animation · ${count} / ${total} frames`);
+    if (player.lastShown) $('render-status').textContent = `${player.lastShown.metadata.backend.toUpperCase()} · ${automationPlaybackLabel(player)}`;
+    $('automation-progress-text').textContent = `${player.paused ? 'Paused · ' : ''}${count === total ? '30 fps · loop cached' : `${count} / ${total} frames cached`}`;
     $('automation-progress').max = total; $('automation-progress').value = count;
     const d = player.dimensions;
     $('automation-cache-detail').textContent = `${player.plan.duration.toFixed(2)} s loop · ${d.width} × ${d.height} · up to ${cacheMemoryLabel(d.bytes / 1048576)} RAM · ${cacheMemoryLabel(cacheMemoryMiB)} limit${d.capped ? ' · resolution fitted to cache' : ''}`;
   },
-  error: error => { $('automation-progress-text').textContent = 'Animation stopped'; toast(error.message); },
+  error: error => {
+    setRenderIndicator('error', 'Animation could not complete');
+    $('render-status').textContent = $('automation-progress-text').textContent = 'Animation stopped';
+    toast(error.message);
+  },
 });
 const automationControls = setupAutomationControls({
   getView: () => view, getSettings: () => automationSettings,
@@ -168,14 +176,38 @@ document.addEventListener('visibilitychange', () => {
 function setAutomation(next) {
   try {
     automationSettings = validateAutomation(view, next);
+    pausedStatic = null;
     automationPlayer.paused = false; syncAutomationPause();
     syncView(); saveSession(); requestRender();
   } catch (error) { toast(error.message); automationControls.sync(); }
 }
 function syncAutomationPause() {
-  $('automation-pause').textContent = automationPlayer.paused ? '▶' : 'Ⅱ';
-  $('automation-pause').setAttribute('aria-pressed', String(automationPlayer.paused));
-  $('automation-pause').setAttribute('aria-label', automationPlayer.paused ? 'Resume parameter animation' : 'Pause parameter animation');
+  const button = $('automation-pause');
+  button.hidden = !Object.keys(automationSettings).length;
+  button.setAttribute('aria-pressed', String(automationPlayer.paused));
+  const label = automationPlayer.paused ? 'Resume parameter animations' : 'Pause parameter animations';
+  button.setAttribute('aria-label', label);
+  button.title = `${label} (Space)`;
+}
+function automationPlaybackLabel(player) {
+  return player.paused ? 'parameter animations paused' : player.schedule.ready.size === player.plan.frames ? '30 fps cached' : 'animation warming';
+}
+function toggleParameterAnimations() {
+  if (!Object.keys(automationSettings).length) return;
+  automationPlayer.setPaused(!automationPlayer.paused);
+  syncAutomationPause();
+  if (!automationPlayer.paused && pausedStatic) requestRender();
+}
+function currentRenderView() {
+  return { ...view, ...(automationPlayer.paused ? pausedStatic?.values : {}) };
+}
+function holdPausedParameters() {
+  if (!automationPlayer.paused || pausedStatic || !Object.keys(automationSettings).length) return;
+  const source = automationPlayer.lastShown?.view ?? automationPlayer.plan?.viewAt(0) ?? view;
+  pausedStatic = {
+    frameOffset: (automationPlayer.plan?.frameOffset ?? 0) + (automationPlayer.lastIndex ?? 0),
+    values: Object.fromEntries(Object.keys(automationSettings).map(key => [key, source[key]])),
+  };
 }
 
 function toast(message) {
@@ -316,6 +348,11 @@ function syncView() {
   }
   syncParameters();
   automationControls.sync();
+  syncAutomationPause();
+  if (automationPlayer.paused) {
+    const held = pausedStatic?.values ?? automationPlayer.lastShown?.view;
+    if (held) automationControls.showValues({ ...view, ...held });
+  }
   $("zoom-label").textContent = zoomLabel(view.span);
 }
 function syncParameters() {
@@ -412,6 +449,10 @@ function loadView(next, index = -1, preview = false) {
   clearTimeout(parameterPreviewTimer);
   parameterPreview = preview;
   viewEpoch++;
+  if (next.fractal !== view.fractal || Object.keys(automationSettings).some(key => next[key] !== undefined && next[key] !== view[key])) {
+    pausedStatic = null;
+    if (automationPlayer.paused) automationPlayer.configure(null);
+  }
   if (next.fractal !== view.fractal) automationSettings = {};
   view = parameterDefaults({ ...base, ...next });
   activeDestination = index;
@@ -438,11 +479,17 @@ async function validateAndLoad(next) {
     syncView();
   }
 }
+function setRenderIndicator(state, label) {
+  $('render-dot').dataset.state = state;
+  $('render-dot').title = label;
+}
 function requestRender(delay = 0) {
+  holdPausedParameters();
   engine.cancel();
   if (automationPlayer.plan) automationPlayer.configure(null);
   generation++;
   dirty = true;
+  setRenderIndicator('loading', 'Rendering view…');
   clearTimeout(scheduled);
   scheduled = setTimeout(render, delay);
 }
@@ -451,19 +498,19 @@ async function render() {
   dirty = false;
   rendering = true;
   paintingReady = false;
-  document.body.classList.add("busy");
   $("render-status").textContent = "Tracing the infinite…";
   const token = generation,
-    snapshot = { ...view },
+    snapshot = currentRenderView(),
     settingsSnapshot = { ...renderSettings };
   const quality = parameterPreview ? Math.min(1, Number($("quality").value)) : $("quality").value;
   const { width, height, capped } = renderDimensions(innerWidth, innerHeight, quality, { gpu: engine.gpu, mobile: engine.mobile, limits: engine.renderLimits });
   $("quality-note").textContent = `${parameterPreview ? 'Preview · ' : ''}${width.toLocaleString()} × ${height.toLocaleString()} pixels${capped ? ' · resolution limit reached' : ''}. Higher quality smooths fine edges; increase iterations for more fractal detail.`;
   try {
-    const plan = animationPlan(snapshot, automationSettings);
+    const plan = automationPlayer.paused && pausedStatic ? null : animationPlan(snapshot, automationSettings, LIVE_FPS, pausedStatic?.frameOffset ?? 0);
     if (plan) {
       const dimensions = cacheDimensions({ width, height, capped }, plan.frames, cacheMemoryMiB * 1048576);
       automationPlayer.configure(plan, { ...dimensions, settings: settingsSnapshot });
+      pausedStatic = null;
       $('quality-note').textContent = `${dimensions.width} × ${dimensions.height} animation frames. Resolution fits the ${cacheMemoryLabel(cacheMemoryMiB)} RAM cache; exports render at their selected resolution.`;
       $('render-status').textContent = 'Rendering first animation frame…';
       return;
@@ -478,9 +525,11 @@ async function render() {
       imageSettings = settingsSnapshot;
       paintingReady = true;
       paint();
+      if (automationPlayer.paused && pausedStatic) automationControls.showValues(snapshot);
       canvas.style.transform = "";
+      setRenderIndicator('ready', pausedStatic ? 'Static view · parameter animations paused' : 'View ready');
       $("render-status").textContent =
-        `${meta.backend.toUpperCase()} · ${meta.elapsed_ms.toLocaleString()} ms`;
+        `${meta.backend.toUpperCase()} · ${meta.elapsed_ms.toLocaleString()} ms${pausedStatic ? ' · parameters paused' : ''}`;
       $("render-resolution").textContent = `${width} × ${height}`;
       $("precision-mode").textContent =
         meta.perturbation
@@ -505,11 +554,11 @@ async function render() {
     if (token === generation && error.name !== "AbortError") {
       canvas.style.transform = "";
       $("render-status").textContent = "Render could not complete";
+      setRenderIndicator('error', 'Render could not complete');
       toast(error.message);
     }
   } finally {
     rendering = false;
-    document.body.classList.remove("busy");
     if (dirty) render();
   }
 }
@@ -535,7 +584,7 @@ function navigate(dx, dy, factor = 1) {
 }
 function isInput(event) {
   return (
-    ["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName) ||
+    ["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName) || event.target.isContentEditable ||
     !!document.querySelector("dialog[open]")
   );
 }
@@ -621,6 +670,11 @@ function setupNavigation() {
     });
   document.addEventListener("keydown", (e) => {
     if (isInput(e) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('dialog[open]')) return;
+    if (e.key === ' ' && (e.target.tagName !== 'BUTTON' || Object.keys(automationSettings).length)) {
+      e.preventDefault();
+      if (!e.repeat) toggleParameterAnimations();
+      return;
+    }
     if (e.target.tagName === "BUTTON" && [" ", "Enter"].includes(e.key)) return;
     const key = e.key.toLowerCase(),
       step = e.shiftKey ? 0.02 : 0.15;
@@ -629,7 +683,7 @@ function setupNavigation() {
     if (["s", "arrowdown"].includes(key)) action = () => navigate(0, -step);
     if (["a", "arrowleft"].includes(key)) action = () => navigate(-step, 0);
     if (["d", "arrowright"].includes(key)) action = () => navigate(step, 0);
-    if (["e", "+", "=", " "].includes(key))
+    if (["e", "+", "="].includes(key))
       action = () => navigate(0, 0, e.shiftKey ? 1.1 : 2);
     if (["q", "-", "_"].includes(key))
       action = () => navigate(0, 0, e.shiftKey ? 1 / 1.1 : 0.5);
@@ -679,6 +733,7 @@ function syncRenderSettings(settings) {
   }
 }
 function restoreSharedState(shared) {
+  automationPlayer.configure(null); pausedStatic = null;
   viewEpoch++; view = shared.view; automationSettings = shared.automation; activeDestination = -1;
   palette = shared.palette; density = shared.density; phase = shared.phase; wanderingSpeed = shared.wanderingSpeed;
   vignetteEnabled = shared.vignetteEnabled;
@@ -702,7 +757,7 @@ function setupControls() {
       saveSession(); requestRender(); toast('Shared view loaded.');
     } catch (error) { if (token === shareLoad) toast(error.message); }
   });
-  $('automation-pause').onclick = () => { automationPlayer.paused = !automationPlayer.paused; syncAutomationPause(); };
+  $('automation-pause').onclick = toggleParameterAnimations;
   $('toggle-ui').onclick = toggleUI;
   $('toggle-destinations').onclick = () => { setPlacesHidden(!placesHidden); saveSession(); };
   $('vignette-enabled').onchange = () => { setVignetteEnabled($('vignette-enabled').checked); saveSession(); };
@@ -748,6 +803,9 @@ function setupControls() {
       return;
     }
     if (n === view.iterations) return;
+    if (automationPlayer.paused && automationSettings.iterations) {
+      pausedStatic = null; automationPlayer.configure(null);
+    }
     view.iterations = n;
     $('iterations-slider').value = String(n);
     saveSession();
@@ -869,7 +927,7 @@ function setupControls() {
       return { view: { ...view }, visibleView: { ...(imageView ?? view) }, automation: structuredClone(automationSettings), settings: { ...renderSettings }, colors: { palette, density, phase }, speed: wanderingSpeed, wander: $('animate').checked };
     },
     getCurrentField: async () => {
-      if (rendering || !paintingReady || !field || (!automationPlayer.plan && JSON.stringify(imageView) !== JSON.stringify(view)) || JSON.stringify(imageSettings) !== JSON.stringify(renderSettings)) throw new Error('Wait for the current view to finish rendering.');
+      if (rendering || !paintingReady || !field || (!automationPlayer.plan && JSON.stringify(imageView) !== JSON.stringify(currentRenderView())) || JSON.stringify(imageSettings) !== JSON.stringify(renderSettings)) throw new Error('Wait for the current view to finish rendering.');
       const metadata = { ...meta };
       if (automationPlayer.lastShown) return { values: automationPlayer.lastShown.field, metadata };
       return { values: await engine.readField(), metadata };
@@ -985,6 +1043,7 @@ async function init() {
   } catch (error) {
     toast(error.message);
     $("render-status").textContent = "Browser renderer could not start";
+    setRenderIndicator('error', 'Browser renderer could not start');
   }
 }
 init();

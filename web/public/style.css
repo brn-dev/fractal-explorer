@@ -249,16 +249,29 @@ header {
   box-shadow: 0 18px 70px #0004;
   backdrop-filter: blur(25px);
   max-height: calc(100dvh - 170px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#panel-content {
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: #ffffff30 transparent;
 }
 .panel-heading {
+  flex-shrink: 0;
   padding: 6px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 6px;
 }
+#automation-pause .animation-resume,
+#automation-pause[aria-pressed="true"] .animation-pause,
+#panel.panel-collapsed #automation-pause { display: none; }
+#automation-pause[aria-pressed="true"] .animation-resume { display: block; }
 #toggle-panel .controls-expand,
 #toggle-panel[aria-expanded="false"] .controls-collapse {
   display: none;
@@ -781,10 +794,14 @@ kbd {
   padding: 2px 4px;
   margin-left: 7px;
 }
-.busy #render-dot {
+#render-dot[data-state="loading"] {
+  background: #f0cd72;
   animation: pulse 1s infinite;
 }
-.busy #render-status {
+#render-dot[data-state="error"] {
+  background: #ee9b89;
+}
+#render-dot[data-state="loading"] + #render-status {
   color: var(--lime);
 }
 @keyframes pulse {
@@ -1116,7 +1133,6 @@ dialog .export-note {
 #viewport { touch-action:none; }
 @media(max-width:700px) {
   #panel { left:14px;right:14px;bottom:91px;width:auto;max-height:62dvh; }
-  #panel-content { overflow:auto; }
   .coordinates-section { display:block; }
   #destinations { left:16px;bottom:163px;width:calc(100vw - 32px); }
   #destination-list { flex-direction:row;max-height:none;overflow-x:auto;overflow-y:hidden; }

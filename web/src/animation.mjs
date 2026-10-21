@@ -66,17 +66,18 @@ export function validateAutomation(view, settings = {}) {
   return out;
 }
 const gcd = (a, b) => b ? gcd(b, a % b) : a;
-export function animationPlan(view, settings, fps = LIVE_FPS) {
+export function animationPlan(view, settings, fps = LIVE_FPS, startFrame = 0) {
   const valid = validateAutomation(view, settings), parameters = animationParameters(view).filter(p => valid[p.key]);
   if (!parameters.length) return null;
   const divisor = parameters.map(p => Math.round(valid[p.key].speed * 20)).reduce(gcd);
   // Rates are multiples of 0.05 cycles/s: all parameters share a loop <=20 s.
   const frames = Math.max(2, Math.round(fps * 20 / divisor)), duration = frames / fps;
+  const frameOffset = ((Math.round(startFrame) % frames) + frames) % frames;
   const channels = parameters.map(p => ({ ...p, ...valid[p.key], cycles: Math.round(valid[p.key].speed * 20) / divisor }));
   const viewAt = (index, count = frames) => {
     const next = { ...view };
     for (const p of channels) {
-      const position = ((index * p.cycles) % count + count) % count;
+      const position = (((index + frameOffset * count / frames) * p.cycles) % count + count) % count;
       const distance = Math.min(position, count - position);
       // Fold integer frame positions before easing so return frames stay exact aliases.
       const amount = Math.max(0, Math.min(1, cycleShapes[p.shape].ease(2 * distance / count)));
@@ -94,7 +95,7 @@ export function animationPlan(view, settings, fps = LIVE_FPS) {
     }
     return validate(next);
   };
-  return { frames, fps, duration, channels, settings: valid, viewAt };
+  return { frames, fps, duration, channels, settings: valid, frameOffset, viewAt };
 }
 
 export function cacheDimensions(dimensions, frames, budget) {
@@ -161,11 +162,22 @@ export class ProgressiveAnimation {
     this.keys = this.views.map(v => JSON.stringify(v)); this.byKey = new Map();
     this.status(this);
   }
+  setPaused(paused, time = this.now()) {
+    this.paused = paused;
+    if (paused) this.schedule?.pause(time);
+    else this.schedule?.resume(time);
+    this.status(this);
+  }
   tick(time, suspended = false, recolor = false) {
     if (!this.plan || this.failed) return;
     if (this.paused || suspended) this.schedule.pause(time);
     else this.schedule.resume(time);
     if (suspended) return;
+    // Hold the frame the user actually saw, even if an in-flight render finishes.
+    if (this.paused && this.lastShown) {
+      if (recolor) this.present(this.lastShown, this.lastIndex);
+      return;
+    }
     const index = this.schedule.visible(time);
     if (index !== null && (index !== this.lastIndex || this.frames[index] !== this.lastShown || recolor)) {
       this.lastIndex = index; this.lastShown = this.frames[index];
