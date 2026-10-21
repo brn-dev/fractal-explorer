@@ -358,10 +358,12 @@ function showLocationIntro() {
   const intro = $('location-intro');
   intro.classList.remove('intro-hidden');
   intro.setAttribute('aria-hidden', 'false');
-  locationIntroTimer = setTimeout(() => {
-    intro.classList.add('intro-hidden');
-    intro.setAttribute('aria-hidden', 'true');
-  }, 3000);
+  locationIntroTimer = setTimeout(hideLocationIntro, 3000);
+}
+function hideLocationIntro() {
+  clearTimeout(locationIntroTimer);
+  $('location-intro').classList.add('intro-hidden');
+  $('location-intro').setAttribute('aria-hidden', 'true');
 }
 function saveSession() {
   try {
@@ -397,6 +399,14 @@ function setPlacesHidden(hidden) {
   button.setAttribute('aria-label', hidden ? 'Show places' : 'Hide places');
   button.title = `${hidden ? 'Show' : 'Hide'} preset location cards (P)`;
   button.setAttribute('aria-expanded', String(!hidden));
+}
+function setPanelCollapsed(collapsed) {
+  $('panel-content').hidden = collapsed;
+  $('panel').classList.toggle('panel-collapsed', collapsed);
+  const button = $('toggle-panel'), label = collapsed ? 'Expand controls' : 'Collapse controls';
+  button.setAttribute('aria-label', label);
+  button.setAttribute('aria-expanded', String(!collapsed));
+  button.title = label;
 }
 function loadView(next, index = -1, preview = false) {
   clearTimeout(parameterPreviewTimer);
@@ -674,6 +684,7 @@ function restoreSharedState(shared) {
   vignetteEnabled = shared.vignetteEnabled;
   automationPlayer.paused = shared.paused || reducedMotion;
   $('animate').checked = shared.wander && !reducedMotion;
+  setPlacesHidden(true); setPanelCollapsed(true); hideLocationIntro();
 }
 function setupControls() {
   setupShareLinks({ paletteCount: palettes.length, getState: () => ({
@@ -778,16 +789,7 @@ function setupControls() {
       y: $("center-y").value,
       span: $("span").value,
     });
-  $("toggle-panel").onclick = () => {
-    const hidden = !$("panel-content").hidden;
-    $("panel-content").hidden = hidden;
-    $('panel').classList.toggle('panel-collapsed', hidden);
-    const button = $('toggle-panel');
-    const label = hidden ? 'Expand controls' : 'Collapse controls';
-    button.setAttribute('aria-label', label);
-    button.setAttribute('aria-expanded', String(!hidden));
-    button.title = label;
-  };
+  $("toggle-panel").onclick = () => setPanelCollapsed(!$('panel-content').hidden);
   $("help").onclick = () => $("help-dialog").showModal();
   $("fullscreen").onclick = () => {
     if (document.fullscreenElement) document.exitFullscreen();
@@ -946,10 +948,10 @@ async function init() {
           automation: b.automation,
         });
   } catch {}
-  let shareError;
+  let shareError, openedShared = false;
   try {
     const shared = await readShareURL(location.href, palettes.length);
-    if (shared) restoreSharedState(shared);
+    if (shared) { restoreSharedState(shared); openedShared = true; }
   } catch (error) { shareError = error.message; }
   $('animation-cache-memory').replaceChildren(...cacheMemoryOptionsMiB.map(mib => {
     const option = document.createElement('option'); option.value = String(mib); option.textContent = cacheMemoryLabel(mib); return option;
@@ -961,11 +963,12 @@ async function init() {
   syncView();
   syncAutomationPause();
   syncColorControls();
-  showLocationIntro();
+  if (!openedShared) showLocationIntro();
   setupNavigation();
   setupControls();
   if (shareError) toast(shareError);
-  if (matchMedia('(max-width:700px)').matches) $("toggle-panel").click();
+  if (matchMedia('(max-width:700px)').matches) setPanelCollapsed(true);
+  document.documentElement.classList.remove('shared-view-loading');
   if (reducedMotion) {
     $("animate").disabled = true;
     $("animate").title = "Disabled by your reduced motion preference";

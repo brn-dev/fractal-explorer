@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#101515" />
+    <script>
+      if (new URLSearchParams(location.hash.slice(1)).has('s')) document.documentElement.classList.add('shared-view-loading');
+    </script>
     <title>Fractal Explorer Web — Into the infinite</title>
     <link
       rel="icon"

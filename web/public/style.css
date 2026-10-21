@@ -281,6 +281,10 @@ header {
   border: 0;
   background: transparent;
 }
+/* Keep expanded controls from flashing while a shared URL is decoded. */
+.shared-view-loading #panel,
+.shared-view-loading #destinations,
+.shared-view-loading #location-intro { visibility:hidden; }
 .control-section {
   padding: 17px 22px;
   border-top: 1px solid var(--line);
