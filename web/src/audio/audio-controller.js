@@ -3,6 +3,17 @@ import { MusicEngine } from './music-engine.mjs';
 import { extractFeatures, sampleField, ReactiveTracker } from './reactive-analysis.mjs';
 
 export const AUDIO_STORAGE_KEY = 'fractal-web-audio-v1';
+export const AUDIO_HINT_STORAGE_KEY = 'fractal-web-audio-hint-seen-v1';
+// Consume the invitation only when it can be shown. Existing listeners have
+// already discovered sound, even if their preference currently restores muted.
+export function takeAudioHint(storage, settings) {
+  const discovered = settings.enabled || settings.muted;
+  try {
+    const seen = storage?.getItem(AUDIO_HINT_STORAGE_KEY) === '1';
+    if (!seen) storage?.setItem(AUDIO_HINT_STORAGE_KEY,'1');
+    return !discovered && !seen;
+  } catch { return !discovered; }
+}
 export const majorSceneEvents = new Set(['initial','featured','bookmark','family','reset','import','shared']);
 export const isMajorSceneChange = reason => majorSceneEvents.has(reason);
 export const defaultAudioSettings = Object.freeze({ enabled: false, muted: false, mode: 'generative', selection: 'auto', manualId: 'celestial', volume: .32, intensity: .45 });
@@ -96,11 +107,26 @@ export class AudioController {
 export function setupAudioControls({ requestAnalysis }) {
   const $ = id => document.getElementById(id);
   const supported = !!(globalThis.AudioContext ?? globalThis.webkitAudioContext);
-  const controller = new AudioController({ storage: safeStorage(), requestAnalysis, onChange: sync });
+  const storage = safeStorage();
+  const controller = new AudioController({ storage, requestAnalysis, onChange: sync });
+  const hint = $('audio-hint'), mute = $('audio-mute');
+  let hintChecked = false, hintTimer;
+  function dismissHint() {
+    clearTimeout(hintTimer); hint.hidden = true; mute.removeAttribute('aria-describedby');
+  }
+  function showHint() {
+    if (hintChecked || document.hidden || !supported) return;
+    hintChecked = true;
+    if (takeAudioHint(storage,controller.settings)) {
+      hint.hidden = false; mute.setAttribute('aria-describedby',hint.id);
+      hintTimer = setTimeout(dismissHint,10000);
+    }
+  }
   const select = $('audio-soundscape');
   for (const d of soundscapes) select.add(new Option(d.name,d.id));
   function sync() {
     const s = controller.settings, reactive = s.mode === 'reactive';
+    if (s.enabled || s.muted) dismissHint();
     $('audio-enabled').checked = s.enabled;
     const silent = controller.state !== 'playing', mute = $('audio-mute');
     mute.setAttribute('aria-pressed',String(silent));
@@ -115,17 +141,20 @@ export function setupAudioControls({ requestAnalysis }) {
   }
   $('audio-enabled').disabled = !supported;
   $('audio-mute').disabled = !supported;
-  $('audio-mute').onclick = () => controller.toggleMute();
-  $('audio-enabled').onchange = () => $('audio-enabled').checked ? controller.start() : controller.stop();
-  $('audio-start').onclick = () => controller.start();
+  $('audio-mute').onclick = () => { dismissHint(); controller.toggleMute(); };
+  $('audio-enabled').onchange = () => { dismissHint(); $('audio-enabled').checked ? controller.start() : controller.stop(); };
+  $('audio-start').onclick = () => { dismissHint(); controller.start(); };
   $('audio-mode').onchange = () => controller.configure({ mode: $('audio-mode').value });
   select.onchange = () => controller.configure(select.value === 'auto' ? { selection: 'auto' } : { selection: 'manual', manualId: select.value });
   $('audio-shuffle').onclick = () => controller.shuffle();
   for (const key of ['volume','intensity']) $(`audio-${key}`).oninput = () => controller.configure({ [key]: Number($(`audio-${key}`).value) });
-  document.addEventListener('visibilitychange',() => controller.setVisible(!document.hidden));
-  addEventListener('pagehide',event => { if (!event.persisted) controller.destroy(); else controller.setVisible(false); });
+  document.addEventListener('visibilitychange',() => {
+    if (document.hidden) dismissHint(); else showHint();
+    controller.setVisible(!document.hidden);
+  });
+  addEventListener('pagehide',event => { dismissHint(); if (!event.persisted) controller.destroy(); else controller.setVisible(false); });
   addEventListener('pageshow',event => { if (event.persisted) controller.setVisible(!document.hidden); });
   controller.visible = !document.hidden; controller.player.visible = !document.hidden;
-  sync(); return controller;
+  sync(); showHint(); return controller;
 }
 function safeStorage() { try { return globalThis.localStorage; } catch { return undefined; } }

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { soundscapes, resonance, validateSoundscapes, seededRandom, chooseSoundscape, MusicalTimeline } from '../src/audio/soundscapes.mjs';
 import { SAMPLE_SIDE, REACTIVE_TIMING, sampleField, extractFeatures, compareFeatures, ReactiveTracker, smooth } from '../src/audio/reactive-analysis.mjs';
-import { AudioController, AUDIO_STORAGE_KEY, defaultAudioSettings, validateAudioSettings, isMajorSceneChange } from '../src/audio/audio-controller.js';
+import { AudioController, AUDIO_STORAGE_KEY, AUDIO_HINT_STORAGE_KEY, takeAudioHint, defaultAudioSettings, validateAudioSettings, isMajorSceneChange } from '../src/audio/audio-controller.js';
 import { MusicEngine } from '../src/audio/music-engine.mjs';
 import { newtonColor } from '../src/formulas.mjs';
 import { ProgressiveAnimation } from '../src/animation.mjs';
@@ -113,6 +113,40 @@ function controller(saved) {
   const storage={getItem:k=>entries.get(k),setItem:(k,v)=>entries.set(k,v)};
   return { audio:new AudioController({storage,engine:player,makeSeed:()=>++seed,random:()=>.3}),player,storage,entries };
 }
+
+test('the soundscape invitation appears once without enabling audio or changing saved preferences', () => {
+  const {audio,storage,entries,player}=controller();
+  assert.equal(audio.settings.enabled,false); assert.equal(player.state,'off');
+  assert.equal(takeAudioHint(storage,audio.settings),true);
+  assert.equal(entries.get(AUDIO_HINT_STORAGE_KEY),'1');
+  assert.equal(entries.has(AUDIO_STORAGE_KEY),false);
+  assert.equal(takeAudioHint(storage,audio.settings),false);
+  const returning=new AudioController({storage,engine:new Player()});
+  assert.equal(returning.settings.enabled,false);
+  assert.equal(takeAudioHint(storage,returning.settings),false);
+});
+
+test('previously enabled or muted sound skips the invitation and stays remembered after switching off', async () => {
+  for (const saved of [{enabled:true},{enabled:true,muted:true},{muted:true}]) {
+    const {audio,storage}=controller(saved);
+    assert.equal(takeAudioHint(storage,audio.settings),false);
+    audio.stop();
+    const returning=new AudioController({storage,engine:new Player()});
+    assert.equal(returning.settings.enabled,false);
+    assert.equal(returning.settings.muted,!!saved.muted);
+    assert.equal(takeAudioHint(storage,returning.settings),false);
+  }
+  const {audio,storage}=controller();
+  await audio.start();
+  assert.equal(new AudioController({storage,engine:new Player()}).settings.enabled,true);
+});
+
+test('unavailable hint storage still permits quiet first-use discovery', () => {
+  const broken={getItem(){throw Error('unavailable');},setItem(){throw Error('unavailable');}};
+  assert.equal(takeAudioHint(undefined,defaultAudioSettings),true);
+  assert.equal(takeAudioHint(broken,defaultAudioSettings),true);
+  assert.equal(takeAudioHint(broken,{...defaultAudioSettings,enabled:true}),false);
+});
 test('major navigation alone switches Auto once; manual selection survives every scene', () => {
   const {audio,player}=controller(); audio.majorSceneChange('initial'); const first=audio.id;
   for(const reason of ['pan','zoom','parameter','automation','animation-start','animation-stop','palette','quality','resize','cache','pause','resume']) {

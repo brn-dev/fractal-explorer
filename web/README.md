@@ -71,7 +71,7 @@ Ten formulas, palettes and color animation, arbitrary decimal coordinates, saved
 
 ### Soundscape
 
-**Soundscape**, just below Light & color, provides optional procedural ambient music using native Web Audio. Sound starts off. Turn **Sound** on to listen; a previously enabled preference opens paused with a **Start** button. Volume defaults to 32% and intensity to 45%. Browsers without Web Audio can still explore normally. Hidden tabs fade and suspend audio; returning resumes when browser policy permits, otherwise Start remains available.
+**Soundscape**, just below Light & color, provides optional procedural ambient music using native Web Audio. Sound starts off on the first visit, and the on/off and mute choices persist locally. A subtle **Try the soundscape** hint appears once beside the header speaker button, including when controls are collapsed. It disappears after ten seconds or when sound is enabled. Turn **Sound** on to listen; a previously enabled preference opens paused with a **Start** button. Volume defaults to 32% and intensity to 45%. Browsers without Web Audio can still explore normally. Hidden tabs fade and suspend audio; returning resumes when browser policy permits, otherwise Start remains available.
 
 The speaker button in the settings header mutes/unmutes with a short fade while preserving the soundscape, musical timeline and volume setting. It stays available with settings collapsed. When audio is off or awaiting a gesture, Unmute starts playback. Muted status and the speaker icon reflect the current state, and the mute preference is saved locally. Structural analysis pauses while muted; unmuting refreshes its baseline.
 
