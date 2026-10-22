@@ -507,27 +507,38 @@ select option {
   accent-color: var(--lime);
   cursor: pointer;
 }
-.automatable-slider { position:relative;display:flex;align-items:center;gap:8px; }
-.automatable-slider:has(> .automation-playhead:not([hidden])) { margin-top:10px; }
-.automatable-slider .parameter-slider { flex:1;min-width:0;width:0; }
-/* The diamond follows playback above the track, clear of the editable thumb. */
-.automation-playhead { position:absolute;top:0;left:8px;right:43px;height:6px;pointer-events:none; }
-.automation-playhead::before { content:"";position:absolute;left:var(--animation-position,0%);width:6px;height:6px;transform:translateX(-50%) rotate(45deg);background:var(--ink);box-shadow:0 0 0 1px #111a19; }
-.automation-toggle { position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 27px;width:27px;height:27px;padding:4px;border:0;border-radius:50%;background:transparent;color:var(--muted);cursor:pointer; }
-.automation-toggle::after { content:"";position:absolute;inset:-4px;border-radius:50%; }
-.automation-toggle svg { width:19px;height:19px; }
-.automation-toggle:hover,.automation-toggle[aria-pressed="true"] { color:var(--lime);background:#c7e99c12; }
-.automation-toggle:focus-visible { outline:1px solid var(--lime);outline-offset:2px; }
-.automation-fields { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:5px -10px 12px;padding:10px;background:#c7e99c08;border-radius:7px; }
-.automation-fields[hidden] { display:none; }
+.parameter-control { min-width:0; }
+.parameter-control:has(> .parameter-header) { margin-inline:-10px;padding:10px;background:#c7e99c08;border-radius:7px; }
+.parameter-header { display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:27px; }
+.parameter-values { display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin-top:4px; }
+.automation-enabled .parameter-values { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.parameter-endpoint { min-width:0; }
+.parameter-endpoint input { width:100%;min-width:0;text-align:right; }
+.parameter-endpoint > span[hidden] + input { margin-top:0; }
+.parameter-sliders { display:grid;grid-template-columns:minmax(0,1fr) 27px;column-gap:8px;align-items:center;margin-top:5px; }
+.parameter-sliders .parameter-slider { grid-column:1;grid-row:1;min-width:0;margin:0; }
+.parameter-sliders .automation-target-slider { grid-row:3; }
+/* The diamond sits midway between tracks, on the same axis as both thumbs. */
+.automation-playhead { position:relative;grid-column:1;grid-row:2;height:12px;margin:0 8px;pointer-events:none; }
+.automation-playhead::before { content:"";position:absolute;top:3px;left:var(--animation-position,0%);width:6px;height:6px;transform:translateX(-50%) rotate(45deg);background:var(--ink);box-shadow:0 0 0 1px #111a19; }
+.automation-toggle,.slider-precision { position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 27px;width:27px;height:27px;padding:4px;border:0;border-radius:50%;background:transparent;color:var(--muted);cursor:pointer; }
+.automation-toggle::after,.slider-precision::after { content:"";position:absolute;inset:-4px;border-radius:50%; }
+.automation-toggle svg,.slider-precision svg { width:19px;height:19px; }
+.automation-toggle:hover,.automation-toggle[aria-pressed="true"],.slider-precision:hover,.slider-precision[aria-pressed="true"] { color:var(--lime);background:#c7e99c12; }
+.automation-toggle:focus-visible,.slider-precision:focus-visible { outline:1px solid var(--lime);outline-offset:2px; }
+.slider-precision { grid-column:2;grid-row:1; }
+.automation-enabled .slider-precision { grid-row:1/4; }
+.slider-precision .precision-minus,.slider-precision[aria-pressed="true"] .precision-plus { display:none; }
+.slider-precision[aria-pressed="true"] .precision-minus { display:initial; }
+.automation-fields { display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin-top:9px; }
+.automation-fields[hidden],.parameter-sliders > [hidden],.parameter-values > [hidden] { display:none; }
 .automation-fields .field-label { margin:0;line-height:1.5; }
-.automation-fields input { width:100%;margin-top:4px;min-width:0; }
-.automation-shape { grid-column:1/-1; }
+.automation-speed { display:flex;align-items:center;justify-content:space-between;gap:8px; }
+.automation-speed input { width:84px;min-width:0;margin:0;text-align:right; }
 .automation-shape select { margin-top:4px; }
-.automation-target-slider { grid-column:1/-1;margin:0; }
-/* Match the main track's edges and reserve the same space as its loop button. */
-.automation-target-slider::after { content:"";flex:0 0 27px; }
 .automation-now { grid-column:1/-1;font-size:9px;color:var(--muted);font-variant-numeric:tabular-nums; }
+.two-fields:has(> .automation-enabled) { grid-template-columns:minmax(0,1fr); }
+.two-fields:has(> .parameter-control:not(.automation-enabled)) > .field-label { padding-top:12px; }
 .automation-status { margin-top:14px;font-size:10px;color:var(--muted); }
 .automation-status[hidden] { display:none; }
 .automation-status-heading { display:flex;align-items:center;justify-content:space-between;gap:8px; }

@@ -356,10 +356,6 @@ function syncView() {
   $("julia-y").value = view.julia_y;
   for (const axis of ['x', 'y']) {
     const slider = $(`julia-${axis}-slider`);
-    if (!parameterPreview) {
-      const extent = Math.max(2, Math.ceil(Math.abs(Number(view[`julia_${axis}`]))));
-      slider.min = String(-extent); slider.max = String(extent);
-    }
     // Updating a thumb must never round the stored decimal or its text field.
     slider.value = view[`julia_${axis}`];
   }
@@ -835,7 +831,7 @@ function setupControls() {
       pausedStatic = null; automationPlayer.configure(null);
     }
     view.iterations = n;
-    $('iterations-slider').value = String(n);
+    automationControls.sync();
     saveSession();
     requestRender();
   };

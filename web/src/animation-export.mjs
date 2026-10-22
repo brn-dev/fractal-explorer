@@ -10,7 +10,7 @@ export function animationExport(state, options) {
   if (![10, 15, 24, 30, 60].includes(fps) || (format === 'gif' && fps > 30)) throw new Error('GIF supports up to 30 fps; MP4 supports up to 60 fps.');
   if (!Number.isFinite(start) || start < 0 || start > 1 || !Number.isFinite(speed) || speed < .05 || speed > 2) throw new Error('Choose a phase from 0 to 1 and a speed from 0.05 to 2 cycles/s.');
   const parameters = mode === 'parameters' ? animationPlan(state.view, state.automation) : null;
-  if (mode === 'parameters' && !parameters) throw new Error('Enable automation beside a parameter slider in the main view first.');
+  if (mode === 'parameters' && !parameters) throw new Error('Enable automation in a parameter header in the main view first.');
   const duration = parameters ? parameters.duration : mode === 'colors' ? 1 / speed : Number(options.duration);
   if (!Number.isFinite(duration) || duration < .5 || duration > 20) throw new Error('Choose a duration from 0.5 to 20 seconds.');
   const frames = Math.max(2, Math.round(duration * fps));
