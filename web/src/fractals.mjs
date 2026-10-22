@@ -1,4 +1,5 @@
 // Order is also the GPU formula ID. Keep the original five IDs stable.
+import { customConstantParameters } from './custom-constants.mjs';
 const power = { key: 'power', label: 'Power', min: 2, max: 8, step: 1 };
 export const fractals = {
   mandelbrot: { name: 'Mandelbrot', title: 'The Mandelbrot set', description: 'An entire universe, hiding at the edge.', formula: 'z<sub>n+1</sub> = z<sub>n</sub>² + c', deep: true, defaults: { x: '-0.5' } },
@@ -22,9 +23,11 @@ export function parameterDefaults(view) {
   if (view.fractal === 'custom') {
     out.custom_formula ??= fractals.custom.defaults.custom_formula;
     out.custom_mode ??= fractals.custom.defaults.custom_mode;
+    for (const p of customConstantParameters(view)) out[p.key] ??= '1';
   }
   for (const p of fractals[view.fractal]?.parameters ?? []) out[p.key] ??= fractals[view.fractal].defaults[p.key];
   return out;
 }
-export function hasConstant(view) { return view.fractal === 'custom' ? view.custom_mode === 'julia' : !!fractals[view.fractal]?.constant; }
+export function hasConstant(view) { return view.fractal === 'custom' ? ['julia', 'advanced'].includes(view.custom_mode) : !!fractals[view.fractal]?.constant; }
+export function fractalParameters(view) { return view.fractal === 'custom' ? customConstantParameters(view) : fractals[view.fractal]?.parameters ?? []; }
 export function minimumSpan(fractal) { return fractals[fractal]?.deep ? '1e-10000' : '1e-10'; }

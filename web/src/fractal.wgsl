@@ -3,7 +3,7 @@ struct Params {
   bailout:f32,perturb:u32,series_n:u32,series_order:u32,
   span:Wide,center:vec4f,julia:vec4f,
   origin:vec2f,reserved:vec2u,tile:vec4u,
-  options:vec4u,logs:vec4f,offsets:array<vec4u,4>,extra:vec4f,relaxation:vec2f
+  options:vec4u,logs:vec4f,offsets:array<vec4u,4>,extra:vec4f,relaxation:vec2f,custom_constants:array<vec4f,8>
 }
 struct Reference {native:vec4f,z:Complex}
 struct Bilinear {a:Complex,b:Complex,logs:vec4f}
@@ -52,6 +52,8 @@ fn newton_color(z:Native,c:Native,degree:u32,n:u32)->f32 {
 }
 struct Jump {d:Complex,length:u32}
 fn custom_step(z:Native,z1:Native,z2:Native,z3:Native,z4:Native,c:Native)->Native {return na(nm(z,z),c);} // CUSTOM_FUNCTION
+struct CustomInitial {z:Native,c:Native,z1:Native,z2:Native,z3:Native,z4:Native,valid:bool}
+fn custom_initial(pixel:Native,constant:Native)->CustomInitial {return CustomInitial(nz(),pixel,nz(),nz(),nz(),nz(),true);} // CUSTOM_INPUTS
 fn try_jump(d:Complex,dc:Complex,j:u32,n:u32)->Jump {
   let ld=clog(d);let lt=log_add(ld,p.logs.x);
   for(var level=i32(p.options.z)-1;level>=5;level--) {
@@ -80,10 +82,13 @@ fn iterate(@builtin(global_invocation_id) gid:vec3u) {
   if(p.perturb==0u) {
     let s=wnative(p.span);
     let point=Native(ra(p.center.xy,rm(ux,s)),ra(p.center.zw,rm(uy,s)));
-    let is_julia=p.kind==1u || p.kind==4u || (p.kind>=6u && p.kind<=9u) || (p.kind==10u && p.options.w==1u);
+    let is_julia=p.kind==1u || p.kind==4u || (p.kind>=6u && p.kind<=9u);
     var c=point;var z=nz();if(is_julia){c=Native(p.julia.xy,p.julia.zw);z=point;}
     if(p.kind==10u) {
-      var z1=nz();var z2=nz();var z3=nz();var z4=nz();
+      let initial=custom_initial(point,Native(p.julia.xy,p.julia.zw));
+      if(!initial.valid){finish(id,1,steps,0);return;}
+      z=initial.z;c=initial.c;
+      var z1=initial.z1;var z2=initial.z2;var z3=initial.z3;var z4=initial.z4;
       for(var n=1u;n<=p.limit;n++) {
         let next=custom_step(z,z1,z2,z3,z4,c);
         z4=z3;z3=z2;z2=z1;z1=z;z=next;steps++;

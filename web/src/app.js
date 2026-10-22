@@ -4,12 +4,17 @@ import { BrowserEngine } from './engine.js';
 import { renderDimensions, qualityScales } from './resolution.mjs';
 import { setupImageExports } from './export-ui.js';
 import { advancePhase } from './export-utils.mjs';
-import { fractals, defaultView, parameterDefaults, hasConstant } from './fractals.mjs';
+import { fractals, defaultView, parameterDefaults, hasConstant, fractalParameters } from './fractals.mjs';
 import { LIVE_FPS, animationPlan, cacheDimensions, cacheMemoryOptionsMiB, cacheMemorySetting, cacheMemoryLabel, ProgressiveAnimation, validateAutomation } from './animation.mjs';
 import { setupAutomationControls } from './automation-ui.js';
 import { readShareURL } from './share.mjs';
 import { setupShareLinks } from './share-ui.js';
 import { setupAudioControls } from './audio/audio-controller.js';
+import { customInputFields, customInputExpressions, defaultCustomInputs, compileFormula, compileCustomInputs } from './custom-formula.mjs';
+import { MAX_CUSTOM_CONSTANTS } from './custom-constants.mjs';
+import { setupAppUpdates } from './update-ui.js';
+import { validateCustomPalette, customPaletteDefinition, paletteSelection } from './palettes.mjs';
+import { setupPaletteEditor } from './palette-ui.js';
 const $ = (id) => document.getElementById(id);
 const canvas = $("fractal-canvas");
 const base = {
@@ -23,6 +28,9 @@ const base = {
   julia_y: "0.1889",
 };
 const palettes = await (await fetch(new URL('./palettes.json', document.baseURI))).json();
+const builtinPaletteCount = palettes.length, customPaletteIndex = builtinPaletteCount;
+let customPalette = null;
+palettes.push({ name: 'My palette', colors: ['#160f32', '#d654bc', '#fff1df', '#160f32'] });
 const engine = new BrowserEngine(canvas, palettes);
 let cacheMemoryMiB = cacheMemorySetting(undefined, engine.mobile);
 let paintingReady = false;
@@ -247,7 +255,7 @@ function gradient(p) {
   return `linear-gradient(90deg, ${p.colors.join(",")})`;
 }
 function buildPalettes() {
-  palettes.forEach((p, i) => {
+  palettes.slice(0, builtinPaletteCount).forEach((p, i) => {
     const b = document.createElement("button");
     b.className = "palette";
     b.style.background = gradient(p);
@@ -264,12 +272,35 @@ function buildPalettes() {
   syncPalette();
 }
 function syncPalette() {
-  document.querySelectorAll(".palette").forEach((b, i) => {
+  document.querySelectorAll("#palettes .palette").forEach((b, i) => {
     b.classList.toggle("active", i === palette);
     b.setAttribute("aria-pressed", String(i === palette));
   });
   $("palette-name").textContent = palettes[palette].name;
   $("palette-preview").style.background = gradient(palettes[palette]);
+  const custom = $('select-custom-palette');
+  custom.hidden = !customPalette;
+  custom.classList.toggle('active', palette === customPaletteIndex);
+  custom.setAttribute('aria-pressed', String(palette === customPaletteIndex));
+  custom.querySelector('span').style.background = gradient(palettes[customPaletteIndex]);
+  custom.querySelector('strong').textContent = customPalette?.name ?? 'Custom';
+  custom.title = customPalette ? `Use custom palette: ${customPalette.name}` : '';
+  $('edit-palette').textContent = customPalette ? 'Edit…' : 'Create custom palette…';
+}
+function colorState() {
+  return { ...paletteSelection({ palette: palette === customPaletteIndex ? 'custom' : palette, customPalette }, builtinPaletteCount), density, phase };
+}
+function setCustomPalette(data) {
+  customPalette = validateCustomPalette(data);
+  palettes[customPaletteIndex] = customPaletteDefinition(customPalette);
+  try { localStorage.setItem('fractal-web-custom-palette-v1', JSON.stringify(customPalette)); } catch {}
+}
+function restoreColors(data) {
+  const selected = paletteSelection(data, builtinPaletteCount);
+  if (selected.customPalette) setCustomPalette(selected.customPalette);
+  palette = selected.palette === 'custom' ? customPaletteIndex : selected.palette;
+  density = Number.isFinite(data.density) ? Math.max(.2, Math.min(4, data.density)) : 1;
+  phase = Number.isFinite(data.phase) ? ((data.phase % 1) + 1) % 1 : 0;
 }
 function colorTable(index = palette) {
   const colors = palettes[index].colors.map((c) =>
@@ -335,7 +366,13 @@ function buildDestinations() {
     b.innerHTML = `<span class="card-top"><span>${String(i + 1).padStart(2, '0')}</span><span>↗</span></span><span><span class="card-name"></span><span class="card-level" style="display:block"></span></span>`;
     b.querySelector(".card-name").textContent = d.name;
     b.querySelector(".card-level").textContent = d.level;
-    b.onclick = () => { loadView(d.view, i, false, d.saved ? 'bookmark' : 'featured'); setAutomation(d.automation ?? {}); showLocationIntro(); };
+    b.onclick = () => {
+      if (d.colors) {
+        try { restoreColors(d.colors); syncPalette(); syncColorControls(); }
+        catch (error) { toast(error.message); }
+      }
+      loadView(d.view, i, false, d.saved ? 'bookmark' : 'featured'); setAutomation(d.automation ?? {}); showLocationIntro();
+    };
     $("destination-list").append(b);
   });
 }
@@ -352,7 +389,16 @@ function syncView() {
   if (view.fractal === 'custom') {
     $('custom-mode').value = view.custom_mode;
     $('custom-formula').value = view.custom_formula;
-    $('custom-initial').textContent = view.custom_mode === 'julia'
+    const advanced = view.custom_mode === 'advanced';
+    $('custom-inputs').hidden = !advanced;
+    $('apply-custom').textContent = advanced ? 'Apply formula & inputs' : 'Apply formula';
+    const inputs = view.custom_inputs ?? customInputExpressions(view);
+    for (const field of customInputFields) {
+      $(`custom-input-${field.key}`).value = inputs[field.key] ?? field.value;
+      $(`custom-input-${field.key}`).removeAttribute('aria-invalid');
+    }
+    $('custom-input-preset').value = '';
+    $('custom-initial').textContent = advanced ? 'Define the starting orbit, parameter, and memory below.' : view.custom_mode === 'julia'
       ? 'Starts at the pixel coordinate; c is the constant below.'
       : 'Starts at z = 0; c is the pixel coordinate.';
     $('custom-error').hidden = true;
@@ -373,11 +419,17 @@ function syncView() {
   $('iterations-slider').value = String(view.iterations);
   $("julia-controls").hidden = !hasConstant(view);
   for (const [axis, name] of [['x', 'real'], ['y', 'imaginary']]) {
-    const label = `${view.fractal === 'newton' ? 'Root target' : 'Constant'} · ${name}`;
+    const label = `${view.fractal === 'newton' ? 'Root target' : view.fractal === 'custom' && view.custom_mode === 'advanced' ? 'Constant k' : 'Constant'} · ${name}`;
     document.querySelector(`label[for="julia-${axis}"]`).textContent = label;
     $(`julia-${axis}-slider`).setAttribute('aria-label', `${label} slider`);
   }
   syncParameters();
+  const count = view.custom_constant_count ?? 0;
+  $('custom-constant-controls').hidden = view.fractal !== 'custom';
+  $('add-custom-constant').disabled = count >= MAX_CUSTOM_CONSTANTS;
+  $('add-custom-constant').textContent = count >= MAX_CUSTOM_CONSTANTS ? '16 constants added' : `+ Add x${count + 1}`;
+  $('remove-custom-constant').disabled = count === 0;
+  $('remove-custom-constant').textContent = count ? `Remove x${count}` : 'Remove last';
   automationControls.sync();
   syncAutomationPause();
   if (automationPlayer.paused) {
@@ -388,30 +440,31 @@ function syncView() {
 }
 function syncParameters() {
   const container = $('fractal-parameters');
-  const parameters = fractals[view.fractal].parameters ?? [];
+  const parameters = fractalParameters(view);
   // Keep slider nodes alive while dragging, including across preview renders.
-  if (container.dataset.fractal !== view.fractal) {
-    container.dataset.fractal = view.fractal;
+  const signature = JSON.stringify([view.fractal, parameters.map(p => p.key)]);
+  if (container.dataset.fractal !== signature) {
+    container.dataset.fractal = signature;
     container.replaceChildren();
     for (const p of parameters) {
       const group = document.createElement('div'); group.className = 'parameter-control';
       const label = document.createElement('label'); label.className = 'field-label';
       label.htmlFor = `parameter-${p.key}`; label.textContent = p.label;
       const input = document.createElement('input');
-      Object.assign(input, { id: `parameter-${p.key}`, type: 'number', min: p.min, max: p.max, step: p.step });
+      Object.assign(input, { id: `parameter-${p.key}`, type: p.decimal ? 'text' : 'number', min: p.min, max: p.max, step: p.step, spellcheck: false });
       const slider = document.createElement('input');
       Object.assign(slider, { id: `parameter-${p.key}-slider`, type: 'range', min: p.min, max: p.max, step: p.step, className: 'parameter-slider' });
       slider.setAttribute('aria-label', `${p.label} slider`); slider.setAttribute('aria-controls', input.id);
       const apply = () => {
         try {
           if (!input.value.trim()) throw new Error(`Enter a value for ${p.label}.`);
-          const next = validate({ ...view, [p.key]: Number(input.value) });
+          const next = validate({ ...view, [p.key]: p.decimal ? input.value.trim() : Number(input.value) });
           if (next[p.key] !== view[p.key]) loadView(next);
         } catch (error) { toast(error.message); syncView(); }
       };
       input.onchange = apply; input.onblur = apply;
       input.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); apply(); } };
-      slider.oninput = () => loadView({ ...view, [p.key]: Number(slider.value) }, -1, true);
+      slider.oninput = () => loadView({ ...view, [p.key]: p.decimal ? slider.value : Number(slider.value) }, -1, true);
       slider.onchange = finishParameterPreview;
       group.append(label, input, slider); container.append(group);
     }
@@ -437,7 +490,7 @@ function saveSession() {
   try {
     localStorage.setItem(
       "fractal-web-session",
-      JSON.stringify({ view, palette, density, phase, renderSettings, quality: Number($("quality").value), cacheMemoryMiB, placesHidden, vignetteEnabled, wanderingSpeed, automation: automationSettings }),
+      JSON.stringify({ view, ...colorState(), renderSettings, quality: Number($("quality").value), cacheMemoryMiB, placesHidden, vignetteEnabled, wanderingSpeed, automation: automationSettings }),
     );
   } catch {}
 }
@@ -480,7 +533,7 @@ function loadView(next, index = -1, preview = false, sceneReason = null) {
   clearTimeout(parameterPreviewTimer);
   parameterPreview = preview;
   viewEpoch++;
-  const customChanged = next.fractal === 'custom' && (next.custom_formula !== view.custom_formula || next.custom_mode !== view.custom_mode);
+  const customChanged = next.fractal === 'custom' && (next.custom_formula !== view.custom_formula || next.custom_mode !== view.custom_mode || next.custom_constant_count !== view.custom_constant_count || JSON.stringify(next.custom_inputs) !== JSON.stringify(view.custom_inputs));
   if (next.fractal !== view.fractal || customChanged || Object.keys(automationSettings).some(key => next[key] !== undefined && next[key] !== view[key])) {
     pausedStatic = null;
     if (automationPlayer.paused) automationPlayer.configure(null);
@@ -746,9 +799,7 @@ function locationData() {
   return {
     format: "fractal-explorer/v1",
     view,
-    palette,
-    density,
-    phase,
+    ...colorState(),
     renderSettings,
     automation: automationSettings,
   };
@@ -771,14 +822,19 @@ function syncRenderSettings(settings) {
 function restoreSharedState(shared) {
   automationPlayer.configure(null); pausedStatic = null;
   viewEpoch++; view = shared.view; automationSettings = shared.automation; activeDestination = -1;
-  palette = shared.palette; density = shared.density; phase = shared.phase; wanderingSpeed = shared.wanderingSpeed;
+  restoreColors(shared); wanderingSpeed = shared.wanderingSpeed;
   vignetteEnabled = shared.vignetteEnabled;
   automationPlayer.paused = shared.paused || reducedMotion;
   $('animate').checked = shared.wander && !reducedMotion;
   setPlacesHidden(true); setPanelCollapsed(true); hideLocationIntro();
 }
 function setupControls() {
-  setupShareLinks({ paletteCount: palettes.length, getState: () => ({
+  setupPaletteEditor({
+    palettes: palettes.slice(0, builtinPaletteCount), getCustom: () => customPalette, getSelected: () => palette,
+    apply: data => { setCustomPalette(data); palette = customPaletteIndex; syncPalette(); paint(); saveSession(); },
+  });
+  $('select-custom-palette').onclick = () => { palette = customPaletteIndex; syncPalette(); paint(); saveSession(); };
+  setupShareLinks({ paletteCount: builtinPaletteCount, getState: () => ({
     ...structuredClone(locationData()), wanderingSpeed, wander: $('animate').checked,
     vignetteEnabled, paused: automationPlayer.paused,
   }) });
@@ -786,7 +842,7 @@ function setupControls() {
   addEventListener('hashchange', async () => {
     const token = ++shareLoad;
     try {
-      const shared = await readShareURL(location.href, palettes.length);
+      const shared = await readShareURL(location.href, builtinPaletteCount);
       if (token !== shareLoad || !shared) return;
       restoreSharedState(shared); setVignetteEnabled(vignetteEnabled);
       majorSceneChange('shared');
@@ -820,24 +876,50 @@ function setupControls() {
     loadView(defaultView(base, fractal), -1, false, 'family');
     showLocationIntro();
   };
-  const applyCustom = () => {
+  const showCustomError = error => {
+    $('custom-error').textContent = error.message;
+    $('custom-error').hidden = false;
+    const field = customInputFields.find(field => error.message.startsWith(`${field.label}:`));
+    $(field ? `custom-input-${field.key}` : 'custom-formula').setAttribute('aria-invalid', 'true');
+  };
+  const readCustomInputs = () => Object.fromEntries(customInputFields.map(field => [field.key, $(`custom-input-${field.key}`).value.trim()]));
+  const applyCustom = (updates = {}) => {
     try {
-      const next = validate({ ...view, custom_mode: $('custom-mode').value, custom_formula: $('custom-formula').value.trim() });
+      const custom_mode = $('custom-mode').value;
+      const custom_inputs = custom_mode === 'advanced' ? readCustomInputs() : view.custom_inputs;
+      const next = validate({ ...view, custom_mode, custom_formula: $('custom-formula').value.trim(), ...(custom_inputs ? { custom_inputs } : {}), ...updates });
       loadView(next);
-    } catch (error) {
-      $('custom-error').textContent = error.message;
-      $('custom-error').hidden = false;
-      $('custom-formula').setAttribute('aria-invalid', 'true');
-    }
+    } catch (error) { showCustomError(error); }
   };
-  $('apply-custom').onclick = applyCustom;
-  $('custom-mode').onchange = applyCustom;
-  $('custom-formula').oninput = () => {
-    $('custom-error').hidden = true;
-    $('custom-formula').removeAttribute('aria-invalid');
+  $('apply-custom').onclick = () => applyCustom();
+  $('custom-mode').onchange = () => applyCustom();
+  $('add-custom-constant').onclick = () => {
+    const count = (view.custom_constant_count ?? 0) + 1;
+    if (count <= MAX_CUSTOM_CONSTANTS) applyCustom({ custom_constant_count: count, [`x${count}`]: '1' });
   };
-  $('custom-formula').onkeydown = event => {
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); applyCustom(); }
+  $('remove-custom-constant').onclick = () => {
+    const count = view.custom_constant_count ?? 0, name = `x${count}`;
+    if (!count) return;
+    try {
+      const used = [...compileFormula($('custom-formula').value).variables];
+      if ($('custom-mode').value === 'advanced') for (const step of Object.values(compileCustomInputs({ custom_mode: 'advanced', custom_inputs: readCustomInputs() }).steps)) used.push(...step.variables);
+      if (used.includes(name)) throw new Error(`${name} is in use. Remove it from the recurrence and inputs first.`);
+      applyCustom({ custom_constant_count: count - 1, [name]: undefined });
+    } catch (error) { showCustomError(error); }
+  };
+  for (const input of [$('custom-formula'), ...customInputFields.map(field => $(`custom-input-${field.key}`))]) {
+    input.oninput = () => { $('custom-error').hidden = true; input.removeAttribute('aria-invalid'); };
+    input.onkeydown = event => {
+      if (event.key === 'Enter' && (input.tagName === 'INPUT' || event.ctrlKey || event.metaKey)) { event.preventDefault(); applyCustom(); }
+    };
+  }
+  $('custom-input-preset').onchange = () => {
+    const presets = { mandelbrot: {}, julia: { z: 'p', c: 'k' }, mixed: { z: 'p', c: 'p + k' }, seeded: { z: 'k' }, transformed: { z: 'sin(p)', c: 'k' } };
+    const key = $('custom-input-preset').value;
+    if (!Object.hasOwn(presets, key)) return;
+    const inputs = { ...defaultCustomInputs, ...presets[key] };
+    for (const field of customInputFields) $(`custom-input-${field.key}`).value = inputs[field.key];
+    applyCustom();
   };
   for (const button of document.querySelectorAll('[data-formula]')) button.onclick = () => {
     $('custom-formula').value = button.dataset.formula;
@@ -931,6 +1013,7 @@ function setupControls() {
         level: "YOUR OWN CORNER OF INFINITY",
         view: { ...view },
         saved: true,
+        colors: structuredClone(colorState()),
         automation: structuredClone(automationSettings),
       });
       buildDestinations();
@@ -962,14 +1045,7 @@ function setupControls() {
         throw new Error("This is not a Fractal Explorer location.");
       const validated = await localNavigation({ view: data.view });
       const imported = await validated.json();
-      palette =
-        Number.isInteger(data.palette) && palettes[data.palette]
-          ? data.palette
-          : 0;
-      density = Number.isFinite(data.density)
-        ? Math.max(0.2, Math.min(4, data.density))
-        : 1;
-      phase = Number.isFinite(data.phase) ? data.phase % 1 : 0;
+      restoreColors(data);
       syncColorControls();
       syncPalette();
       syncRenderSettings(data.renderSettings);
@@ -1040,6 +1116,10 @@ function animate(time) {
 }
 async function init() {
   try {
+    const savedCustom = JSON.parse(localStorage.getItem('fractal-web-custom-palette-v1'));
+    if (savedCustom) setCustomPalette(savedCustom);
+  } catch {}
+  try {
     const saved = JSON.parse(localStorage.getItem("fractal-web-session"));
     cacheMemoryMiB = cacheMemorySetting(saved?.cacheMemoryMiB, engine.mobile);
     setPlacesHidden(saved?.placesHidden === true);
@@ -1049,9 +1129,7 @@ async function init() {
       view = validate({ ...base, ...saved.view });
       try { automationSettings = validateAutomation(view, saved.automation ?? {}); } catch { automationSettings = {}; }
       automationPlayer.paused = reducedMotion;
-      palette = palettes[saved.palette] ? saved.palette : 0;
-      density = Number(saved.density) || 1;
-      phase = Number(saved.phase) || 0;
+      try { restoreColors(saved); } catch { palette = 0; }
       if (qualityScales.includes(saved.quality)) $("quality").value = String(saved.quality);
       syncRenderSettings(saved.renderSettings);
       activeDestination = -1;
@@ -1066,12 +1144,13 @@ async function init() {
           level: "YOUR OWN CORNER OF INFINITY",
           view: b.view,
           saved: true,
+          colors: b.palette === undefined ? undefined : { palette: b.palette, customPalette: b.customPalette, density: b.density, phase: b.phase },
           automation: b.automation,
         });
   } catch {}
   let shareError, openedShared = false;
   try {
-    const shared = await readShareURL(location.href, palettes.length);
+    const shared = await readShareURL(location.href, builtinPaletteCount);
     if (shared) { restoreSharedState(shared); openedShared = true; }
   } catch (error) { shareError = error.message; }
   $('animation-cache-memory').replaceChildren(...cacheMemoryOptionsMiB.map(mib => {
@@ -1113,30 +1192,4 @@ async function init() {
 }
 init();
 
-async function offlineStatus() {
-  const status = $('offline-status');
-  if (!import.meta.env.PROD) return;
-  status.textContent = 'Checking offline cache…';
-  if (!('serviceWorker' in navigator)) { status.textContent = 'Offline caching is unavailable in this browser.'; return; }
-  const timeout = setTimeout(() => { status.textContent = 'Offline caching is unavailable in this browser. Static hosting is still required for reloads.'; }, 8000);
-  try {
-    const registration = await navigator.serviceWorker.register(new URL('./sw.js', document.baseURI));
-    const update = () => {
-      if (registration.waiting) {
-        clearTimeout(timeout); status.textContent = 'An offline update is ready.';
-        const button = $('update-offline'); button.hidden = false;
-        button.onclick = () => { saveSession(); navigator.serviceWorker.addEventListener('controllerchange',()=>location.reload(),{once:true});registration.waiting?.postMessage('activate'); };
-        return;
-      }
-      if (registration.active || registration.waiting || registration.installing?.state === 'installed') {
-        clearTimeout(timeout);
-        status.textContent = navigator.serviceWorker.controller ? 'Available offline on this device.' : 'Offline cache ready. Reload once to activate.';
-      }
-    };
-    registration.installing?.addEventListener('statechange', update);
-    registration.addEventListener('updatefound',()=>registration.installing?.addEventListener('statechange',update));
-    navigator.serviceWorker.addEventListener('controllerchange',update);
-    update();
-  } catch (error) { clearTimeout(timeout); status.textContent = 'Offline caching is unavailable in this browser.'; status.title = error.message; }
-}
-offlineStatus();
+if (import.meta.env.PROD) void setupAppUpdates({ saveSession });

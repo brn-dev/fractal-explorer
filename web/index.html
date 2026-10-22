@@ -123,8 +123,49 @@
             <select id="custom-mode" aria-describedby="custom-initial">
               <option value="mandelbrot">Mandelbrot · pixel → c</option>
               <option value="julia">Julia · pixel → initial z</option>
+              <option value="advanced">Advanced · expressions for every input</option>
             </select>
             <p id="custom-initial" class="custom-note">Starts at z = 0; c is the pixel coordinate.</p>
+            <div id="custom-inputs" hidden>
+              <p class="custom-note"><code>p</code> is the pixel coordinate; <code>k</code> is the adjustable constant below. Each input is evaluated independently before the recurrence starts.</p>
+              <label class="field-label" for="custom-input-preset">Start from a mapping</label>
+              <select id="custom-input-preset">
+                <option value="">Choose a starting point…</option>
+                <option value="mandelbrot">Mandelbrot · z = 0, c = p</option>
+                <option value="julia">Julia · z = p, c = k</option>
+                <option value="mixed">Mixed · z = p, c = p + k</option>
+                <option value="seeded">Seeded Mandelbrot · z = k, c = p</option>
+                <option value="transformed">Transformed Julia · z = sin(p), c = k</option>
+              </select>
+              <div class="custom-input-field">
+                <label class="field-label" for="custom-input-z">Initial z · z[0] =</label>
+                <input id="custom-input-z" type="text" value="0" maxlength="1024" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="custom-error" />
+              </div>
+              <div class="custom-input-field">
+                <label class="field-label" for="custom-input-c">Parameter · c =</label>
+                <input id="custom-input-c" type="text" value="p" maxlength="1024" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="custom-error" />
+              </div>
+              <details class="custom-help">
+                <summary>Initial memory · z[−1]…z[−4]</summary>
+                <p class="custom-note">These seed z1…z4 at the first step. They default to zero and shift back as the orbit advances.</p>
+                <div class="custom-input-field">
+                  <label class="field-label" for="custom-input-z1">Memory seed · z[−1] =</label>
+                  <input id="custom-input-z1" type="text" value="0" maxlength="1024" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="custom-error" />
+                </div>
+                <div class="custom-input-field">
+                  <label class="field-label" for="custom-input-z2">Memory seed · z[−2] =</label>
+                  <input id="custom-input-z2" type="text" value="0" maxlength="1024" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="custom-error" />
+                </div>
+                <div class="custom-input-field">
+                  <label class="field-label" for="custom-input-z3">Memory seed · z[−3] =</label>
+                  <input id="custom-input-z3" type="text" value="0" maxlength="1024" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="custom-error" />
+                </div>
+                <div class="custom-input-field">
+                  <label class="field-label" for="custom-input-z4">Memory seed · z[−4] =</label>
+                  <input id="custom-input-z4" type="text" value="0" maxlength="1024" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="custom-error" />
+                </div>
+              </details>
+            </div>
             <label class="field-label" for="custom-formula">Recurrence · z[n+1] =</label>
             <textarea id="custom-formula" rows="3" maxlength="1024" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="custom-syntax custom-error">z^2 + c</textarea>
             <p id="custom-error" class="custom-error" role="status" aria-live="polite" hidden></p>
@@ -132,9 +173,11 @@
             <details class="custom-help">
               <summary>Syntax & examples</summary>
               <div id="custom-syntax">
-                <p><code>z</code> is the current value. <code>z1</code>…<code>z4</code> are the previous four values, also written <code>z[n-1]</code>…<code>z[n-4]</code>. Earlier history starts at zero.</p>
+                <p><code>z</code> is the current value. <code>z1</code>…<code>z4</code> are the previous four values, also written <code>z[n-1]</code>…<code>z[n-4]</code>. Earlier history starts at zero unless you set memory seeds in Advanced input mapping.</p>
+                <p>Advanced input expressions use <code>p</code> (pixel) and <code>k</code> (adjustable constant), with the same operators and functions below. Try initial <code>z = k</code> with <code>c = p</code>, or <code>z = sin(p)</code> with <code>c = k</code>. Inputs cannot refer to the orbit or to each other.</p>
                 <p>Use <code>+ - * / ^</code> and parentheses. Functions: <code>ln</code> (or <code>log</code>), <code>exp</code>, <code>sqrt</code>, <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>sinh</code>, <code>cosh</code>, <code>abs</code>, <code>conj</code>, <code>re</code>, <code>im</code>, <code>pow</code>. Constants: <code>i</code>, <code>pi</code>, <code>e</code>. Write multiplication explicitly: <code>5*z</code>.</p>
                 <div class="custom-examples" role="group" aria-label="Example recurrences">
+                  <button type="button" data-formula="x1*z^2 + c + x2*z1">With constants</button>
                   <button type="button" data-formula="z^2 + c">Quadratic</button>
                   <button type="button" data-formula="z^3 + c">Cubic</button>
                   <button type="button" data-formula="z^2 + c - 0.5*z1">Memory</button>
@@ -157,6 +200,14 @@
               <input id="julia-y" type="text" value="0.1889" spellcheck="false" inputmode="decimal" />
               <input id="julia-y-slider" class="parameter-slider" type="range" min="-2" max="2" step="0.0001" value="0.1889" aria-label="Julia imaginary constant slider" aria-controls="julia-y" />
             </div>
+          </div>
+          <div id="custom-constant-controls" hidden>
+            <div class="custom-constant-heading">
+              <span class="field-label">Constants · x1, x2, …</span>
+              <button id="add-custom-constant" class="secondary-button" type="button">+ Add x1</button>
+              <button id="remove-custom-constant" class="secondary-button" type="button" disabled>Remove last</button>
+            </div>
+            <p class="custom-note">Use x1…x16 anywhere in the recurrence or input expressions. New constants start at 1. Referencing one creates its control automatically. Click its loop button to automate it.</p>
           </div>
           <div id="fractal-parameters"></div>
           <div id="automation-status" class="automation-status" hidden>
@@ -181,6 +232,10 @@
             role="group"
             aria-label="Color palettes"
           ></div>
+          <div class="custom-palette-actions">
+            <button id="select-custom-palette" class="custom-palette-choice" type="button" aria-pressed="false" hidden><span aria-hidden="true"></span><strong>Custom</strong></button>
+            <button id="edit-palette" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="palette-dialog">Create custom palette…</button>
+          </div>
           <label class="range-label"
             >Color density <output id="density-value">1.0</output
             ><input
@@ -304,6 +359,7 @@
             </p>
             <div id="stage-times" aria-live="polite"></div>
             <p id="offline-status" aria-live="polite">Offline caching is checked in the production build.</p>
+            <button id="check-updates" class="secondary-button" type="button" hidden>Check for updates ↻</button>
             <button id="update-offline" class="secondary-button" hidden>Update cached app ↗</button>
             <a class="web-benchmark" href="./benchmark.html">Benchmark this device ↗</a>
           </details>
@@ -386,6 +442,32 @@
       </div>
     </footer>
     <div id="toast" role="alert" hidden></div>
+    <dialog id="palette-dialog" aria-labelledby="palette-editor-title">
+      <form method="dialog"><button class="dialog-close icon-button" aria-label="Close palette editor">×</button></form>
+      <div class="eyebrow">YOUR OWN SPECTRUM</div>
+      <h2 id="palette-editor-title">Make it yours.</h2>
+      <p>Choose 2–12 colors. They blend in order, from left to right.</p>
+      <form id="palette-editor-form">
+        <label class="field-label" for="custom-palette-name">Palette name</label>
+        <input id="custom-palette-name" type="text" maxlength="40" value="My palette" autocomplete="off" />
+        <label class="field-label palette-start-label" for="palette-start">Start from a preset</label>
+        <select id="palette-start"><option value="">Choose a palette…</option></select>
+        <div id="custom-palette-preview" role="img" aria-label="Custom palette gradient preview"></div>
+        <div id="palette-stops" role="group" aria-label="Palette colors"></div>
+        <div class="palette-editor-tools">
+          <button id="add-palette-color" class="secondary-button" type="button">+ Add color</button>
+          <button id="reverse-palette" class="secondary-button" type="button">Reverse</button>
+          <output id="palette-color-count"></output>
+        </div>
+        <label class="switch-label"><span>Loop smoothly</span><input id="palette-loop" type="checkbox" role="switch" checked /><span class="switch"></span></label>
+        <p class="export-note">Blends the last color back into the first for wandering colors.</p>
+        <p id="palette-editor-error" class="custom-error" role="status" hidden>Enter six-digit hex colors, such as #a855f7.</p>
+        <div class="palette-editor-buttons">
+          <button id="cancel-palette" class="secondary-button" type="button">Cancel</button>
+          <button id="use-custom-palette" class="primary-button" type="submit">Use palette</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="share-dialog" aria-labelledby="share-title">
       <form method="dialog"><button class="dialog-close icon-button" aria-label="Close share dialog">×</button></form>
       <h2 id="share-title">Share this view.</h2>
@@ -478,6 +560,16 @@
       </section>
       </div>
     </dialog>
+    <aside id="app-update" class="app-update" aria-labelledby="app-update-title" hidden>
+      <div role="status" aria-live="polite" aria-atomic="true">
+        <strong id="app-update-title">A new version is ready</strong>
+        <p id="app-update-message">Reload to get the latest features. Your saved places will stay.</p>
+      </div>
+      <div class="app-update-actions">
+        <button id="app-update-now" class="primary-button" type="button">Update now</button>
+        <button id="app-update-later" class="secondary-button" type="button">Later</button>
+      </div>
+    </aside>
     <dialog id="help-dialog">
       <form method="dialog">
         <button class="dialog-close icon-button" aria-label="Close">×</button>

@@ -1,14 +1,27 @@
 // A small expression language shared by the CPU interpreter and WGSL generator.
 // User text is parsed into an allowlisted tree; it is never executed as JS/WGSL.
+import { customConstantNames } from './custom-constants.mjs';
 export const DEFAULT_FORMULA = 'z^2 + c';
 export const MAX_FORMULA_LENGTH = 1024;
 const functions = new Set(['ln', 'log', 'exp', 'sqrt', 'sin', 'cos', 'tan', 'sinh', 'cosh', 'abs', 'conj', 're', 'im', 'pow']);
 const cache = new Map();
+const orbitVariables = ['z', 'z1', 'z2', 'z3', 'z4', 'c'];
+const inputVariables = ['p', 'k'];
+export const customInputFields = [
+  { key: 'z', label: 'Initial z · z[0]', value: '0' },
+  { key: 'c', label: 'Parameter · c', value: 'p' },
+  { key: 'z1', label: 'Memory seed · z[−1]', value: '0' },
+  { key: 'z2', label: 'Memory seed · z[−2]', value: '0' },
+  { key: 'z3', label: 'Memory seed · z[−3]', value: '0' },
+  { key: 'z4', label: 'Memory seed · z[−4]', value: '0' },
+];
+export const defaultCustomInputs = Object.fromEntries(customInputFields.map(field => [field.key, field.value]));
 
-export function parseFormula(source) {
-  if (typeof source !== 'string' || !source.trim()) throw new Error('Enter a recurrence, for example z^2 + c.');
+export function parseFormula(source, { input = false } = {}) {
+  if (typeof source !== 'string' || !source.trim()) throw new Error(input ? 'Enter an input expression, for example p + k.' : 'Enter a recurrence, for example z^2 + c.');
   if (source.length > MAX_FORMULA_LENGTH) throw new Error(`Use at most ${MAX_FORMULA_LENGTH} characters in the recurrence.`);
   let position = 0, nodes = 0, depth = 0;
+  const variables = new Set([...(input ? inputVariables : orbitVariables), ...customConstantNames, 'i', 'e', 'pi']);
   const fail = message => { throw new Error(`${message} (column ${position + 1}).`); };
   const space = () => { while (/\s/.test(source[position] ?? '') && position < source.length) position++; };
   const take = token => { space(); if (source.startsWith(token, position)) { position += token.length; return true; } return false; };
@@ -40,7 +53,7 @@ export function parseFormula(source) {
           if (id === 'pow') { if (!take(',')) fail('pow needs two arguments'); result = node('^', a, expression()); }
           else result = node(id === 'log' ? 'ln' : id, a);
           if (!take(')')) fail('Expected )');
-        } else if (['z', 'z1', 'z2', 'z3', 'z4', 'c', 'i', 'e', 'pi'].includes(id)) {
+        } else if (variables.has(id)) {
           let variable = id;
           if (id === 'z' && take('[')) {
             if (!take('n')) fail('Use z[n] or z[n-1] through z[n-4]');
@@ -53,7 +66,7 @@ export function parseFormula(source) {
           }
           result = node('variable', variable);
         } else fail(`Unknown name ${name[0]}`);
-      } else fail('Expected a number, z, z1–z4, c, or a function');
+      } else fail(input ? 'Expected a number, p, k, or a function' : 'Expected a number, z, z1–z4, c, or a function');
     }
     depth--; return result;
   }
@@ -103,17 +116,27 @@ function divide([a, b], [c, d], out) {
 }
 function literal(node) { return node.op === 'number' ? node.args[0] : node.op === 'neg' && node.args[0].op === 'number' ? -node.args[0].args[0] : null; }
 function power(a, b, out) {
+  if (!b[1] && Number.isInteger(b[0]) && Math.abs(b[0]) <= 16) return integerPower(a, b[0], out);
   if (!b[0] && !b[1]) return put(out, 1, 0);
   if (!a[0] && !a[1] && b[0] > 0 && !b[1]) return put(out, 0, 0);
   return exp(mul(b, ln(a, out), out), out);
 }
-function compileCPU(tree) {
+function compileCPU(tree, checked = false) {
+  const step = compileCPUNode(tree, checked);
+  if (!checked) return step;
+  return env => {
+    const result = step(env);
+    if (!Number.isFinite(result[0]) || !Number.isFinite(result[1])) env.invalid = true;
+    return result;
+  };
+}
+function compileCPUNode(tree, checked) {
   if (tree.op === 'number') { const value = [tree.args[0], 0]; return () => value; }
   if (tree.op === 'variable') {
     const id = tree.args[0], constants = { i: [0, 1], e: [Math.E, 0], pi: [Math.PI, 0] };
     return Object.hasOwn(constants, id) ? () => constants[id] : env => env[id];
   }
-  const a = compileCPU(tree.args[0]), b = tree.args[1] && compileCPU(tree.args[1]);
+  const a = compileCPU(tree.args[0], checked), b = tree.args[1] && compileCPU(tree.args[1], checked);
   // Each syntax node owns reusable storage. No temporary arrays are allocated
   // in the iteration loop, including for complex powers and functions.
   const out = [0, 0], numerator = [0, 0], denominator = [0, 0];
@@ -152,7 +175,11 @@ function realLiteral(n) {
 }
 function compileWGSL(tree) {
   if (tree.op === 'number') return realLiteral(tree.args[0]);
-  if (tree.op === 'variable') return ({ i: 'Native(rf(0),rf(1))', e: realLiteral(Math.E), pi: realLiteral(Math.PI) })[tree.args[0]] ?? tree.args[0];
+  if (tree.op === 'variable') {
+    const id = tree.args[0], index = customConstantNames.indexOf(id);
+    if (index >= 0) return `custom_constant(${index}u)`;
+    return ({ i: 'Native(rf(0),rf(1))', e: realLiteral(Math.E), pi: realLiteral(Math.PI), p: 'pixel', k: 'constant' })[id] ?? id;
+  }
   const a = compileWGSL(tree.args[0]), b = tree.args[1] && compileWGSL(tree.args[1]);
   if (tree.op === '^') {
     const n = literal(tree.args[1]);
@@ -164,23 +191,62 @@ function compileWGSL(tree) {
 }
 
 export function compileFormula(source = DEFAULT_FORMULA) {
-  if (cache.has(source)) return cache.get(source);
-  const tree = parseFormula(source), step = compileCPU(tree);
-  const result = { step, evaluate: env => step(env).slice(), wgsl: `fn custom_step(z:Native,z1:Native,z2:Native,z3:Native,z4:Native,c:Native)->Native {return ${compileWGSL(tree)};}` };
-  cache.set(source, result);
+  return compileExpression(source, false);
+}
+export function compileInput(source) { return compileExpression(source, true); }
+function compileExpression(source, input) {
+  const key = JSON.stringify([input, source]);
+  if (cache.has(key)) return cache.get(key);
+  const tree = parseFormula(source, { input }), step = compileCPU(tree, input), expression = compileWGSL(tree);
+  const variables = new Set();
+  const visit = node => {
+    if (node.op === 'variable') variables.add(node.args[0]);
+    for (const child of node.args) if (child?.op) visit(child);
+  };
+  visit(tree);
+  const signature = input ? 'custom_input(pixel:Native,constant:Native)' : 'custom_step(z:Native,z1:Native,z2:Native,z3:Native,z4:Native,c:Native)';
+  const result = { step, expression, variables: [...variables], evaluate: env => step(env).slice(), wgsl: `fn ${signature}->Native {return ${expression};}` };
+  cache.set(key, result);
   while (cache.size > 32) cache.delete(cache.keys().next().value);
   return result;
 }
 
+export function customInputExpressions(view) {
+  if (view.custom_mode !== 'advanced') return { ...defaultCustomInputs, ...(view.custom_mode === 'julia' ? { z: 'p', c: 'k' } : {}) };
+  const inputs = view.custom_inputs ?? {};
+  if (typeof inputs !== 'object' || Array.isArray(inputs) || Object.keys(inputs).some(key => !Object.hasOwn(defaultCustomInputs, key))) throw new Error('Input mapping must contain only z, c, and z1–z4 expressions.');
+  return { ...defaultCustomInputs, ...inputs };
+}
+export function compileCustomInputs(view) {
+  const expressions = customInputExpressions(view), steps = {};
+  for (const field of customInputFields) {
+    try { steps[field.key] = compileInput(expressions[field.key]); }
+    catch (error) { throw new Error(`${field.label}: ${error.message}`); }
+  }
+  const names = customInputFields.map(field => field.key);
+  const wgsl = `fn custom_initial(pixel:Native,constant:Native)->CustomInitial {
+    custom_input_invalid=false;
+    ${names.map(key => `let ${key}=${steps[key].expression};`).join('\n')}
+    let valid=!custom_input_invalid && ${names.map(key => `custom_valid(${key})`).join(' && ')};
+    return CustomInitial(${names.join(',')},valid);
+  }`;
+  return { expressions, steps, wgsl };
+}
+
 export function createCustomIterator(view, compiled = compileFormula(view.custom_formula)) {
-  const julia = view.custom_mode === 'julia';
+  const inputs = compileCustomInputs(view);
   const env = { z: [0, 0], z1: [0, 0], z2: [0, 0], z3: [0, 0], z4: [0, 0], c: [0, 0] };
-  const keys = ['z', 'z1', 'z2', 'z3', 'z4'];
+  const seeds = { p: [0, 0], k: [0, 0], invalid: false };
+  for (const name of customConstantNames) env[name] = seeds[name] = [Number(view[name] ?? 1), 0];
   const cr = Number(view.julia_x), ci = Number(view.julia_y);
   return (x, y) => {
-    for (const key of keys) put(env[key], 0, 0);
-    if (julia) { put(env.z, x, y); put(env.c, cr, ci); }
-    else put(env.c, x, y);
+    put(seeds.p, x, y); put(seeds.k, cr, ci); seeds.invalid = false;
+    // Seeds are independent expressions of p and k; none observes another seed.
+    for (const field of customInputFields) {
+      const value = inputs.steps[field.key].step(seeds);
+      put(env[field.key], value[0], value[1]);
+    }
+    if (seeds.invalid) return 1;
     for (let n = 1; n <= view.iterations; n++) {
       const next = compiled.step(env), r = next[0], i = next[1], recycled = env.z4;
       env.z4 = env.z3; env.z3 = env.z2; env.z2 = env.z1; env.z1 = env.z; env.z = put(recycled, r, i);

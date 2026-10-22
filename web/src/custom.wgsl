@@ -1,8 +1,14 @@
 // Algebra uses paired arithmetic. Transcendental functions use native f32.
+var<private> custom_input_invalid:bool;
+fn custom_valid(z:Native)->bool {return all(abs(z.r)<=vec2f(3e38)) && all(abs(z.i)<=vec2f(3e38));}
 fn custom_real(hi:f32,lo:f32)->Native {return Native(vec2f(hi,select(0.0,lo,PAIRED)),rf(0));}
+fn custom_constant(index:u32)->Native {
+  let values=p.custom_constants[index/2u];
+  if(index%2u==0u){return custom_real(values.x,values.y);}return custom_real(values.z,values.w);
+}
 fn custom_value(z:Native)->vec2f {return vec2f(z.r.x+z.r.y,z.i.x+z.i.y);}
 fn custom_native(z:vec2f)->Native {return Native(rf(z.x),rf(z.y));}
-fn custom_bad()->Native {return custom_native(vec2f(1e30));}
+fn custom_bad()->Native {custom_input_invalid=true;return custom_native(vec2f(1e30));}
 fn custom_neg(z:Native)->Native {return Native(-z.r,-z.i);}
 fn custom_sub(a:Native,b:Native)->Native {return na(a,custom_neg(b));}
 fn custom_div(a:Native,b:Native)->Native {
@@ -26,6 +32,7 @@ fn custom_exp(z:Native)->Native {
 }
 fn custom_pow(a:Native,b:Native)->Native {
   let exponent=custom_value(b);
+  if(exponent.y==0 && abs(exponent.x)<=16 && exponent.x==floor(exponent.x)){return custom_ipow(a,i32(exponent.x));}
   if(all(exponent==vec2f(0))){return Native(rf(1),rf(0));}
   if(all(custom_value(a)==vec2f(0))){if(exponent.x>0 && exponent.y==0){return nz();}return custom_bad();}
   return custom_exp(nm(b,custom_ln(a)));

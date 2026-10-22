@@ -1,5 +1,6 @@
-import { fractals, minimumSpan, parameterDefaults } from './fractals.mjs';
-import { compileFormula } from './custom-formula.mjs';
+import { fractals, minimumSpan, parameterDefaults, fractalParameters } from './fractals.mjs';
+import { compileFormula, compileCustomInputs } from './custom-formula.mjs';
+import { MAX_CUSTOM_CONSTANTS, customConstantNames } from './custom-constants.mjs';
 // Decimal navigation uses integers throughout, including widths below Number's range.
 export function decimal(text) {
   text = String(text).trim();
@@ -51,17 +52,27 @@ export function validate(view) {
   if (!Object.hasOwn(fractals, view.fractal)) throw new Error('Unknown fractal.');
   const out = parameterDefaults(view);
   if (view.fractal === 'custom') {
-    if (!['mandelbrot', 'julia'].includes(out.custom_mode)) throw new Error('Choose Mandelbrot or Julia pixel input.');
-    compileFormula(out.custom_formula);
+    if (!['mandelbrot', 'julia', 'advanced'].includes(out.custom_mode)) throw new Error('Choose Mandelbrot, Julia, or Advanced pixel input.');
+    const formula = compileFormula(out.custom_formula), variables = [...formula.variables];
+    if (out.custom_mode === 'advanced') {
+      const inputs = compileCustomInputs(out); out.custom_inputs = inputs.expressions;
+      for (const step of Object.values(inputs.steps)) variables.push(...step.variables);
+    }
+    let count = out.custom_constant_count ?? 0;
+    if (!Number.isInteger(count) || count < 0 || count > MAX_CUSTOM_CONSTANTS) throw new Error(`Use up to ${MAX_CUSTOM_CONSTANTS} custom constants.`);
+    count = Math.max(count, ...variables.map(name => customConstantNames.indexOf(name) + 1));
+    if (count) out.custom_constant_count = count; else delete out.custom_constant_count;
+    customConstantNames.forEach((name, index) => { if (index < count) out[name] ??= '1'; else delete out[name]; });
   }
-  for (const p of fractals[view.fractal].parameters ?? []) {
+  for (const p of fractalParameters(out)) {
+    if (p.decimal) continue;
     const v = out[p.key];
     if (!Number.isFinite(v) || v < p.min || v > p.max || (p.step === 1 && !Number.isInteger(v))) throw new Error(`${p.label} must be ${p.min}–${p.max}${p.step === 1 ? ' (whole numbers)' : ''}.`);
   }
-  for (const key of ['x', 'y', 'julia_x', 'julia_y']) {
-    const value = decimal(view[key]);
-    if (compare({ n: value.n < 0n ? -value.n : value.n, e: value.e }, decimal('1e6')) > 0) throw new Error('Coordinates must stay within ±1,000,000.');
-    out[key] = String(view[key]);
+  for (const key of ['x', 'y', 'julia_x', 'julia_y', ...fractalParameters(out).filter(p => p.decimal).map(p => p.key)]) {
+    const value = decimal(out[key]);
+    if (compare({ n: value.n < 0n ? -value.n : value.n, e: value.e }, decimal('1e6')) > 0) throw new Error(`${customConstantNames.includes(key) ? key : 'Coordinates'} must stay within ±1,000,000.`);
+    out[key] = String(out[key]);
   }
   const min = minimumSpan(view.fractal);
   const span = decimal(view.span);

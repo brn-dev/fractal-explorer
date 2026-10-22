@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compileFormula, parseFormula, iterateCustom, createCustomIterator } from '../src/custom-formula.mjs';
+import { compileFormula, parseFormula, iterateCustom, createCustomIterator, compileInput, compileCustomInputs, defaultCustomInputs } from '../src/custom-formula.mjs';
 import { defaultView, hasConstant, kinds } from '../src/fractals.mjs';
 import { validate, navigate } from '../src/decimal.mjs';
 import { softwareRender } from '../src/software.mjs';
@@ -111,4 +111,163 @@ test('formula and mapping survive JSON, compressed shares, and constant animatio
   assert.equal(animationPlan(v, automation).viewAt(1).custom_formula, v.custom_formula);
   assert.equal(juliaView(v, { x: '0', y: '0' }, .5).custom_formula, v.custom_formula);
   assert.throws(() => juliaView(custom, { x: '0', y: '0' }, .5));
+});
+
+const advanced = (inputs = {}, formula = 'z^2+c') => validate({ ...custom, custom_mode: 'advanced', custom_formula: formula, custom_inputs: inputs });
+
+test('advanced inputs use p and k with complex expressions and scoped names', () => {
+  const env = { p: [1, 2], k: [.5, -.25] };
+  close(compileInput('p^2+k').evaluate(env), [-2.5, 3.75]);
+  close(compileInput('conj(p)/2 + re(k)*i').evaluate(env), [.5, -.5]);
+  close(compileInput('ln(-1)+exp(0)+sqrt(-4)+sin(0)').evaluate(env), [1, Math.PI + 2]);
+  for (const source of ['z', 'z1', 'c', 'z[n-1]', 'p.x', 'k; z', 'window']) assert.throws(() => compileInput(source));
+  assert.throws(() => compileFormula('p+k'), /Unknown name/);
+  assert.deepEqual(advanced().custom_inputs, defaultCustomInputs);
+  assert.equal(hasConstant(advanced()), true);
+  assert.throws(() => advanced({ z: 'c' }), /Initial z/);
+  assert.throws(() => advanced({ c: '' }), /Parameter/);
+  for (const inputs of ['p', [], { z5: 'p' }, { unrelated: 'k' }]) assert.throws(() => advanced(inputs), /Input mapping/);
+});
+
+test('advanced Mandelbrot and Julia inputs reproduce existing saved views exactly', async () => {
+  for (const mode of ['mandelbrot', 'julia']) {
+    const original = { ...custom, custom_mode: mode, custom_formula: 'z^2+c-0.5*z1+0.1*z2' };
+    const inputs = mode === 'julia' ? { z: 'p', c: 'k' } : {};
+    const mapped = advanced(inputs, original.custom_formula);
+    const a = await softwareRender(original, 25, 17), b = await softwareRender(mapped, 25, 17);
+    assert.deepEqual(a.field, b.field);
+  }
+});
+
+test('mixed, seeded and transformed mappings agree with independently initialized iteration', () => {
+  const k = [Number(custom.julia_x), Number(custom.julia_y)];
+  for (const [inputs, initialize] of [
+    [{ z: 'p', c: 'p+k' }, (x, y) => [x, y, x + k[0], y + k[1]]],
+    [{ z: 'k', c: 'p' }, (x, y) => [k[0], k[1], x, y]],
+    [{ z: 'sin(p)', c: 'k' }, (x, y) => [Math.sin(x) * Math.cosh(y), Math.cos(x) * Math.sinh(y), ...k]],
+  ]) {
+    const iterate = createCustomIterator(advanced(inputs));
+    for (const [x, y] of [[0, 0], [-.7, .2], [.5, -.6], [1, 1], [-1, 0]]) {
+      let [r, i, cr, ci] = initialize(x, y), expected = -1;
+      for (let n = 1; n <= custom.iterations; n++) {
+        const nextR = r * r - i * i + cr;
+        i = 2 * r * i + ci; r = nextR;
+        if (Math.hypot(r, i) > custom.bailout) { expected = n; break; }
+      }
+      assert.equal(iterate(x, y), expected, JSON.stringify(inputs));
+    }
+  }
+});
+
+test('every memory seed is independent and resets on each pixel', () => {
+  for (let lag = 1; lag <= 4; lag++) {
+    const v = advanced({ [`z${lag}`]: 'p+2*k', z: '0', c: '0' }, `z${lag}`);
+    const iterate = createCustomIterator(v);
+    for (const x of [100, 0, -100, 0, 100]) assert.equal(iterate(x, 0), Math.abs(x) > 64 ? 1 : -1, `lag ${lag}, pixel ${x}`);
+  }
+  const iterate = createCustomIterator(advanced({ z: 'p', z1: 'k', z2: '2*k', z3: '3*k', z4: '4*k', c: 'p+k' }, 'z+z1+z2+z3+z4+c'));
+  for (const [x, y] of [[0, 0], [1, 1], [-2, .5]]) {
+    let history = [[x, y], ...[1, 2, 3, 4].map(n => [n * Number(custom.julia_x), n * Number(custom.julia_y)])], expected = -1;
+    for (let n = 1; n <= custom.iterations; n++) {
+      const next = history.reduce(([r, i], [a, b]) => [r + a, i + b], [x + Number(custom.julia_x), y + Number(custom.julia_y)]);
+      history = [next, ...history.slice(0, 4)];
+      if (Math.hypot(...next) > custom.bailout) { expected = n; break; }
+    }
+    assert.equal(iterate(x, y), expected);
+  }
+});
+
+test('singular inputs stop at the first step even when the recurrence ignores them', () => {
+  for (const expression of ['1/(p-p)', 'ln(0)', 'im(ln(0))', '0*ln(0)', 'exp(1000)']) {
+    assert.equal(iterateCustom(advanced({ z4: expression }, '0'), 0, 0), 1, expression);
+  }
+  assert.equal(iterateCustom(advanced({ z: '100' }, '0'), 0, 0), -1);
+});
+
+test('advanced initialization compiles independently from recurrence and includes every seed', () => {
+  const compiled = compileCustomInputs(advanced({ z: 'sin(p)', c: 'p+k', z1: 'k', z4: 'p^2' }));
+  assert.match(compiled.wgsl, /custom_sin\(pixel\)/);
+  assert.match(compiled.wgsl, /let c=na\(pixel,constant\)/);
+  assert.match(compiled.wgsl, /let z1=constant/);
+  assert.match(compiled.wgsl, /let z4=custom_ipow\(pixel,2i\)/);
+});
+
+test('advanced inputs survive JSON, compressed shares, animations and exact constant edits', async () => {
+  const v = advanced({ z: 'sin(p)', c: 'p+k', z1: '0.1*k', z4: 'p/2' }, 'z^2+c+0.2*z1-0.1*z4');
+  const automation = { julia_x: { enabled: true, target: '-.7', speed: .25, shape: 'sine' } };
+  assert.deepEqual(validate(JSON.parse(JSON.stringify(v))), v);
+  for (const compress of [false, true]) {
+    const link = await createShareURL('https://example.com/', { view: v, automation }, 6, { compress });
+    const restored = await readShareURL(link, 6);
+    assert.deepEqual(restored.view, v);
+    assert.deepEqual(restored.automation, automation);
+  }
+  assert.deepEqual(animationPlan(v, automation).viewAt(1).custom_inputs, v.custom_inputs);
+  assert.deepEqual(juliaView(v, { x: '0', y: '0' }, .5).custom_inputs, v.custom_inputs);
+  const original = validate({ ...base, fractal: 'custom', custom_mode: 'julia', custom_formula: 'z^2+c' });
+  assert.equal(Object.hasOwn(original, 'custom_inputs'), false, 'Existing locations keep their original schema');
+});
+
+test('named constants are discovered in recurrences and inputs with bounded editable values', () => {
+  const v = validate({ ...custom, custom_formula: 'x3*z^2+c', x2: '.123456789012345678901' });
+  assert.equal(v.custom_constant_count, 3);
+  assert.equal(v.x1, '1'); assert.equal(v.x3, '1'); assert.equal(v.x2, '.123456789012345678901');
+  const seeded = advanced({ z: 'x4*p', c: 'p+x2', z3: 'x1*k' });
+  assert.equal(seeded.custom_constant_count, 4);
+  assert.equal(seeded.x4, '1');
+  assert.equal(Object.hasOwn(validate(custom), 'custom_constant_count'), false);
+  assert.equal(Object.hasOwn(validate({ ...custom, custom_constant_count: 0, x1: '2' }), 'x1'), false);
+  for (const count of [-1, 17, 1.5, '2', NaN]) assert.throws(() => validate({ ...custom, custom_constant_count: count }));
+  for (const value of ['NaN', 'Infinity', '1000001', '-1000001', '', '1;alert(1)']) assert.throws(() => validate({ ...custom, custom_formula: 'x1*z+c', x1: value }));
+  for (const expression of ['x0', 'x17', 'x01', 'x1.foo']) assert.throws(() => compileFormula(expression));
+});
+
+test('named constants support addition, multiplication, division, powers, and functions', () => {
+  const variables = { ...env, x1: [2, 0], x2: [3, 0], x3: [4, 0], x4: [-1, 0] };
+  close(compileFormula('(x1*z+x2)/x3+x4').evaluate(variables), [.25, 1]);
+  close(compileFormula('z^x1').evaluate(variables), [-3, 4]);
+  close(compileFormula('ln(x1)+exp(x4)').evaluate(variables), [Math.log(2) + Math.exp(-1), 0]);
+  close(compileInput('x1*p/x2+x4*k').evaluate({ ...variables, p: [3, 6], k: [1, 2] }), [1, 2]);
+  assert.match(compileFormula('x16*z/x1').wgsl, /custom_constant\(15u\)/);
+  assert.match(compileFormula('x16*z/x1').wgsl, /custom_constant\(0u\)/);
+});
+
+test('constant changes affect CPU rendering and integer variable powers preserve quadratic iteration', async () => {
+  const a = validate({ ...custom, custom_formula: 'z^x1+c/x2+x3', x1: '2', x2: '1', x3: '0' });
+  const direct = await softwareRender(custom, 25, 17), parametric = await softwareRender(a, 25, 17);
+  assert.deepEqual(parametric.field, direct.field);
+  const changed = await softwareRender({ ...a, x1: '3', x2: '2', x3: '.1' }, 25, 17);
+  assert.notDeepEqual(changed.field, parametric.field);
+  assert.equal(iterateCustom(validate({ ...custom, custom_formula: 'z/x1', x1: '0' }), 0, 0), 1);
+  assert.equal(iterateCustom(validate({ ...custom, custom_formula: 'x16', x16: '65' }), 0, 0), 1);
+});
+
+test('every named constant can automate with exact targets and independent rates', () => {
+  const v = validate({ ...custom, custom_formula: 'x1*z^2+c/x2', custom_constant_count: 16, x1: '1', x2: '2', x16: '.123456789012345678901' });
+  const parameters = animationParameters(v);
+  for (let n = 1; n <= 16; n++) assert.ok(parameters.some(p => p.key === `x${n}` && p.decimal));
+  const settings = {
+    x1: { enabled: true, target: '3', speed: .25, shape: 'smootherstep' },
+    x2: { enabled: true, target: '4', speed: .5, shape: 'sine' },
+    x16: { enabled: true, target: '.123456789012345678903', speed: .25, shape: 'smootherstep' },
+  };
+  const plan = animationPlan(v, settings);
+  assert.equal(plan.viewAt(plan.frames / 2).x1, '3');
+  assert.equal(plan.viewAt(plan.frames / 2).x2, '2');
+  assert.equal(plan.viewAt(plan.frames / 4).x2, '4');
+  assert.equal(plan.viewAt(plan.frames / 2).x16, settings.x16.target);
+  assert.equal(plan.viewAt(plan.frames).x16, v.x16);
+  assert.equal(plan.viewAt(1).custom_formula, v.custom_formula);
+});
+
+test('named constants and their automation survive JSON and both share formats', async () => {
+  const v = validate({ ...advanced({ z: 'sin(p)/x2', c: 'p+x1*k', z4: 'x3' }, 'x1*z^2+c/x2+x3*z1'), x1: '.75', x2: '2', x3: '-.123456789012345678901' });
+  const automation = { x3: { enabled: true, target: '.123456789012345678901', speed: .1, shape: 'pause-middle' } };
+  assert.deepEqual(validate(JSON.parse(JSON.stringify(v))), v);
+  for (const compress of [false, true]) {
+    const link = await createShareURL('https://example.com/', { view: v, automation }, 6, { compress });
+    const restored = await readShareURL(link, 6);
+    assert.deepEqual(restored.view, v);
+    assert.deepEqual(restored.automation, automation);
+  }
 });

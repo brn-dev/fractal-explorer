@@ -1,4 +1,4 @@
-import { fractals, hasConstant } from './fractals.mjs';
+import { hasConstant, fractalParameters } from './fractals.mjs';
 import { validate, decimal, add, multiply, text, plainText } from './decimal.mjs';
 
 export const LIVE_FPS = 30;
@@ -23,13 +23,13 @@ export function cacheMemoryLabel(mib) {
   return mib >= 1024 ? `${Number((mib / 1024).toFixed(2))} GB` : `${Math.ceil(mib)} MB`;
 }
 export function animationParameters(view) {
-  const constant = view.fractal === 'newton' ? 'Root target' : 'Constant';
+  const constant = view.fractal === 'newton' ? 'Root target' : view.fractal === 'custom' && view.custom_mode === 'advanced' ? 'Constant k' : 'Constant';
   return [
     ...(hasConstant(view) ? [
       { key: 'julia_x', label: `${constant} · real`, decimal: true, slider: 'julia-x-slider' },
       { key: 'julia_y', label: `${constant} · imaginary`, decimal: true, slider: 'julia-y-slider' },
     ] : []),
-    ...(fractals[view.fractal]?.parameters ?? []).map(p => ({ ...p, slider: `parameter-${p.key}-slider` })),
+    ...fractalParameters(view).map(p => ({ ...p, slider: `parameter-${p.key}-slider` })),
     { key: 'iterations', label: 'Iterations', min: 50, max: 50000, step: 1, slider: 'iterations-slider' },
   ];
 }

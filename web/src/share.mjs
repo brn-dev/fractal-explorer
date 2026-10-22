@@ -1,6 +1,7 @@
 import { validate } from './decimal.mjs';
-import { fractals } from './fractals.mjs';
+import { fractalParameters } from './fractals.mjs';
 import { validateAutomation } from './animation.mjs';
+import { paletteSelection } from './palettes.mjs';
 
 export const MAX_SHARE_BYTES = 128 * 1024;
 const MAX_TOKEN_LENGTH = 180000;
@@ -19,13 +20,13 @@ function boolean(value, fallback, name) {
 export function sharedState(data, paletteCount) {
   if (!data || data.version !== 1) throw new Error('Unsupported share-link version.');
   const validated = validate(data.view ?? {});
-  const keys = ['fractal', 'x', 'y', 'span', 'iterations', 'bailout', 'julia_x', 'julia_y', ...(fractals[validated.fractal].parameters ?? []).map(p => p.key)];
+  const keys = ['fractal', 'x', 'y', 'span', 'iterations', 'bailout', 'julia_x', 'julia_y', ...fractalParameters(validated).map(p => p.key)];
   if (validated.fractal === 'custom') keys.push('custom_formula', 'custom_mode');
+  if (validated.fractal === 'custom' && validated.custom_mode === 'advanced') keys.push('custom_inputs');
+  if (validated.fractal === 'custom' && validated.custom_constant_count) keys.push('custom_constant_count');
   const view = Object.fromEntries(keys.map(key => [key, validated[key]]));
-  const palette = number(data.palette ?? 0, 0, paletteCount - 1, 'palette');
-  if (!Number.isInteger(palette)) throw new Error('Invalid palette.');
   return {
-    version: 1, view, automation: validateAutomation(view, data.automation ?? {}), palette,
+    version: 1, view, automation: validateAutomation(view, data.automation ?? {}), ...paletteSelection(data, paletteCount),
     density: number(data.density ?? 1, .2, 4, 'color density'),
     phase: number(data.phase ?? 0, 0, 1, 'color phase'),
     wanderingSpeed: number(data.wanderingSpeed ?? .12, .05, 2, 'wandering speed'),

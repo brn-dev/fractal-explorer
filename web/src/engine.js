@@ -2,7 +2,8 @@ import arithmetic from './arithmetic.wgsl?raw';
 import fractal from './fractal.wgsl?raw';
 import color from './color.wgsl?raw';
 import customMath from './custom.wgsl?raw';
-import { compileFormula } from './custom-formula.mjs';
+import { compileFormula, compileCustomInputs, customInputExpressions } from './custom-formula.mjs';
+import { customConstantNames } from './custom-constants.mjs';
 import { validate, decimal, order } from './decimal.mjs';
 import { packWide } from './wide.mjs';
 import { renderLimits, validateDimensions } from './resolution.mjs';
@@ -132,12 +133,17 @@ export class BrowserEngine {
     const extended = perturb && (settings.range_mode === 'floatexp' || settings.range_mode === 'scaled' || depth < -15);
     if (settings.range_mode === 'standard' && perturb && depth < -15) throw new Error('Standard exponent range is unsafe here. Select Auto or extended range.');
     const acceleration = !perturb ? 'none' : settings.acceleration === 'auto' ? (depth < -15 ? 'series' : 'none') : settings.acceleration;
-    return { perturb, arithmetic, extended, acceleration, custom: view.fractal === 'custom' ? view.custom_formula : null };
+    return { perturb, arithmetic, extended, acceleration, custom: view.fractal === 'custom' ? { formula: view.custom_formula, inputs: customInputExpressions(view) } : null };
   }
   async pipeline(options) {
     const key = JSON.stringify([options.arithmetic, options.extended, options.custom]);
     if (!this.pipelines.has(key)) {
-      const module = options.custom ? await this.compile(arithmetic + '\n' + fractal.replace(/fn custom_step[^\n]+/, customMath + '\n' + compileFormula(options.custom).wgsl)) : this.module;
+      let module = this.module;
+      if (options.custom) {
+        const inputCode = compileCustomInputs({ custom_mode: 'advanced', custom_inputs: options.custom.inputs }).wgsl;
+        const code = fractal.replace(/fn custom_step[^\n]+/, customMath + '\n' + compileFormula(options.custom.formula).wgsl).replace(/fn custom_initial[^\n]+/, inputCode);
+        module = await this.compile(arithmetic + '\n' + code);
+      }
       this.pipelines.set(key, await this.device.createComputePipelineAsync({ layout: 'auto', compute: { module, entryPoint: 'iterate', constants: { PAIRED: options.arithmetic !== 'fp32', EXTENDED: options.extended } } }));
       while (this.pipelines.size > 16) this.pipelines.delete(this.pipelines.keys().next().value);
     }
@@ -173,20 +179,23 @@ export class BrowserEngine {
     const e = Math.floor(Math.log2(Math.abs(number))) + 1; return { m: number * 2 ** -e, e };
   }
   params(view, width, height, options, packet, tile, anchor, repair) {
-    const bytes = new ArrayBuffer(256), d = new DataView(bytes);
+    const bytes = new ArrayBuffer(384), d = new DataView(bytes);
     const uint = (offset, value) => d.setUint32(offset, value, true), float = (offset, value) => d.setFloat32(offset, value, true);
     uint(0, width); uint(4, height); uint(8, view.iterations); uint(12, kinds.indexOf(view.fractal)); float(16, view.bailout); uint(20, options.perturb ? 1 : 0); uint(24, packet.seriesN); uint(28, packet.seriesOrder);
     packWide(d, 32, packet.span);
     [view.x, view.y, view.julia_x, view.julia_y].forEach((v, k) => { const x = Number(v), hi = Math.fround(x); float(48 + k * 8, hi); float(52 + k * 8, x - hi); });
     float(80, anchor ? anchor.col + .5 : width / 2); float(84, anchor ? anchor.row + .5 : height / 2);
     tile.forEach((v, k) => uint(96 + k * 4, v)); uint(112, repair ? 1 : 0); uint(120, packet.offsets.length);
-    uint(124, view.custom_mode === 'julia' ? 1 : 0);
     float(128, Number.isFinite(packet.logDc) ? packet.logDc : -1e30); float(132, Math.log2(1e-7));
     packet.offsets.forEach((v, k) => uint(144 + k * 4, v));
     float(208, view.power ?? 2);
     for (const [offset, value] of [[212, view.memory ?? 0], [224, view.relaxation ?? 1]]) {
       const hi = Math.fround(value); float(offset, hi); float(offset + 4, value - hi);
     }
+    customConstantNames.forEach((name, index) => {
+      const value = Number(view[name] ?? 1), hi = Math.fround(value);
+      float(240 + index * 8, hi); float(244 + index * 8, value - hi);
+    });
     return bytes;
   }
   ensureOutput(width, height) {
@@ -196,7 +205,7 @@ export class BrowserEngine {
     this.output = this.buffer(width * height * 4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
     this.stats = this.buffer(32, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
     this.readStats = this.buffer(32, GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ);
-    this.uniform = this.buffer(256, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+    this.uniform = this.buffer(384, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
   }
   resetStats() {
     const initial = new Uint32Array(8); initial[1] = 0xffffffff; initial[2] = 0x7f7fffff;
@@ -353,7 +362,10 @@ export class BrowserEngine {
       }
       this.cpuContext.putImageData(image, 0, 0); return;
     }
-    if (this.paletteIndex !== palette) { this.device.queue.writeBuffer(this.paletteBuffer, 0, this.palette(palette)); this.paletteIndex = palette; }
+    if (this.paletteIndex !== palette || this.paletteDefinition !== this.palettes[palette]) {
+      this.device.queue.writeBuffer(this.paletteBuffer, 0, this.palette(palette));
+      this.paletteIndex = palette; this.paletteDefinition = this.palettes[palette];
+    }
     const bytes = new ArrayBuffer(48), d = new DataView(bytes);
     d.setUint32(0, meta.width, true); d.setUint32(4, meta.height, true); d.setFloat32(8, density, true); d.setFloat32(12, phase, true); d.setFloat32(16, meta.color_origin, true);
     this.device.queue.writeBuffer(this.colorUniform, 0, bytes);
