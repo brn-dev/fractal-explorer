@@ -20,6 +20,7 @@ export function sharedState(data, paletteCount) {
   if (!data || data.version !== 1) throw new Error('Unsupported share-link version.');
   const validated = validate(data.view ?? {});
   const keys = ['fractal', 'x', 'y', 'span', 'iterations', 'bailout', 'julia_x', 'julia_y', ...(fractals[validated.fractal].parameters ?? []).map(p => p.key)];
+  if (validated.fractal === 'custom') keys.push('custom_formula', 'custom_mode');
   const view = Object.fromEntries(keys.map(key => [key, validated[key]]));
   const palette = number(data.palette ?? 0, 0, paletteCount - 1, 'palette');
   if (!Number.isInteger(palette)) throw new Error('Invalid palette.');

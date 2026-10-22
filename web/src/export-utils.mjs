@@ -1,5 +1,5 @@
 import { decimal, add, multiply, text, validate } from './decimal.mjs';
-import { fractals } from './fractals.mjs';
+import { hasConstant } from './fractals.mjs';
 
 export const wrapPhase = phase => ((phase % 1) + 1) % 1;
 export const advancePhase = (phase, speed, seconds) => wrapPhase(phase + speed * Math.max(0, seconds));
@@ -22,7 +22,7 @@ export function colorCycle(startPhase, speed) {
 }
 
 export function juliaView(view, target, progress, returning = true) {
-  if (!fractals[view.fractal]?.constant) throw new Error('Choose a fractal with an adjustable complex constant.');
+  if (!hasConstant(view)) throw new Error('Choose a fractal with an adjustable complex constant.');
   if (!Number.isFinite(progress) || progress < 0 || progress > 1) throw new Error('Animation progress must be between 0 and 1.');
   const end = validate({ ...view, julia_x: target.x, julia_y: target.y });
   const amount = returning ? (1 - Math.cos(progress * Math.PI * 2)) / 2 : (1 - Math.cos(progress * Math.PI)) / 2;

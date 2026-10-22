@@ -3,10 +3,12 @@ import { prepare, exactPixels } from './reference.mjs';
 import { decimal, order } from './decimal.mjs';
 import { iterateAdditional } from './formulas.mjs';
 import { parameterDefaults } from './fractals.mjs';
+import { createCustomIterator } from './custom-formula.mjs';
 
 function finish(n, mag, power = 2) { return Math.max(0, n + 1 - Math.log(Math.log(Math.sqrt(mag))) / Math.log(power)); }
 export async function softwareRender(view, width, height, mode = 'series') {
   view = parameterDefaults(view);
+  const custom = view.fractal === 'custom' ? createCustomIterator(view) : null;
   const start = performance.now();
   const perturb = ['mandelbrot', 'julia'].includes(view.fractal) && order(decimal(view.span)) < -7;
   const prepared = perturb ? await prepare(view, width, height, mode) : null;
@@ -19,7 +21,8 @@ export async function softwareRender(view, width, height, mode = 'series') {
       let answer = -1;
       if (!perturb) {
         const x = Number(view.x) + ux * Number(view.span), y = Number(view.y) + uy * Number(view.span);
-        if (['multibrot', 'multijulia', 'phoenix', 'ship-julia', 'newton'].includes(view.fractal)) answer = iterateAdditional(view, x, y);
+        if (custom) answer = custom(x, y);
+        else if (['multibrot', 'multijulia', 'phoenix', 'ship-julia', 'newton'].includes(view.fractal)) answer = iterateAdditional(view, x, y);
         else {
           const julia = ['julia', 'cubic'].includes(view.fractal);
           const cr = julia ? Number(view.julia_x) : x, ci = julia ? Number(view.julia_y) : y;

@@ -51,6 +51,7 @@ fn newton_color(z:Native,c:Native,degree:u32,n:u32)->f32 {
   return exp(5*(f32(root)/f32(degree)+f32(min(n,50u))*.004))-1;
 }
 struct Jump {d:Complex,length:u32}
+fn custom_step(z:Native,z1:Native,z2:Native,z3:Native,z4:Native,c:Native)->Native {return na(nm(z,z),c);} // CUSTOM_FUNCTION
 fn try_jump(d:Complex,dc:Complex,j:u32,n:u32)->Jump {
   let ld=clog(d);let lt=log_add(ld,p.logs.x);
   for(var level=i32(p.options.z)-1;level>=5;level--) {
@@ -79,8 +80,18 @@ fn iterate(@builtin(global_invocation_id) gid:vec3u) {
   if(p.perturb==0u) {
     let s=wnative(p.span);
     let point=Native(ra(p.center.xy,rm(ux,s)),ra(p.center.zw,rm(uy,s)));
-    let is_julia=p.kind==1u || p.kind==4u || p.kind>=6u;
+    let is_julia=p.kind==1u || p.kind==4u || (p.kind>=6u && p.kind<=9u) || (p.kind==10u && p.options.w==1u);
     var c=point;var z=nz();if(is_julia){c=Native(p.julia.xy,p.julia.zw);z=point;}
+    if(p.kind==10u) {
+      var z1=nz();var z2=nz();var z3=nz();var z4=nz();
+      for(var n=1u;n<=p.limit;n++) {
+        let next=custom_step(z,z1,z2,z3,z4,c);
+        z4=z3;z3=z2;z2=z1;z1=z;z=next;steps++;
+        let mag=nmag(z);
+        if(!(mag<=p.bailout*p.bailout)){finish(id,f32(n),steps,0);return;}
+      }
+      finish(id,-1,steps,0);return;
+    }
     if(p.kind==9u) {
       let degree=u32(p.extra.x);
       for(var n=0u;n<=p.limit;n++) {

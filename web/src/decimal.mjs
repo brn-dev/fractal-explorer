@@ -1,4 +1,5 @@
 import { fractals, minimumSpan, parameterDefaults } from './fractals.mjs';
+import { compileFormula } from './custom-formula.mjs';
 // Decimal navigation uses integers throughout, including widths below Number's range.
 export function decimal(text) {
   text = String(text).trim();
@@ -49,6 +50,10 @@ export function compare(a, b) { const c = add(a, { n: -b.n, e: b.e }); return c.
 export function validate(view) {
   if (!Object.hasOwn(fractals, view.fractal)) throw new Error('Unknown fractal.');
   const out = parameterDefaults(view);
+  if (view.fractal === 'custom') {
+    if (!['mandelbrot', 'julia'].includes(out.custom_mode)) throw new Error('Choose Mandelbrot or Julia pixel input.');
+    compileFormula(out.custom_formula);
+  }
   for (const p of fractals[view.fractal].parameters ?? []) {
     const v = out[p.key];
     if (!Number.isFinite(v) || v < p.min || v > p.max || (p.step === 1 && !Number.isInteger(v))) throw new Error(`${p.label} must be ${p.min}–${p.max}${p.step === 1 ? ' (whole numbers)' : ''}.`);

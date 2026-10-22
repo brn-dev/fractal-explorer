@@ -1,4 +1,4 @@
-import { fractals } from './fractals.mjs';
+import { fractals, hasConstant } from './fractals.mjs';
 import { validate, decimal, add, multiply, text, plainText } from './decimal.mjs';
 
 export const LIVE_FPS = 30;
@@ -25,7 +25,7 @@ export function cacheMemoryLabel(mib) {
 export function animationParameters(view) {
   const constant = view.fractal === 'newton' ? 'Root target' : 'Constant';
   return [
-    ...(fractals[view.fractal]?.constant ? [
+    ...(hasConstant(view) ? [
       { key: 'julia_x', label: `${constant} · real`, decimal: true, slider: 'julia-x-slider' },
       { key: 'julia_y', label: `${constant} · imaginary`, decimal: true, slider: 'julia-y-slider' },
     ] : []),

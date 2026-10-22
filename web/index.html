@@ -112,10 +112,39 @@
               <option value="phoenix">Phoenix Julia</option>
               <option value="ship-julia">Burning Ship Julia</option>
               <option value="newton">Newton basins</option>
+              <option value="custom">Custom</option>
             </select></label
           >
           <div class="formula" id="formula">
             z<sub>n+1</sub> = z<sub>n</sub>² + c
+          </div>
+          <div id="custom-controls" hidden>
+            <label class="field-label" for="custom-mode">Pixel input</label>
+            <select id="custom-mode" aria-describedby="custom-initial">
+              <option value="mandelbrot">Mandelbrot · pixel → c</option>
+              <option value="julia">Julia · pixel → initial z</option>
+            </select>
+            <p id="custom-initial" class="custom-note">Starts at z = 0; c is the pixel coordinate.</p>
+            <label class="field-label" for="custom-formula">Recurrence · z[n+1] =</label>
+            <textarea id="custom-formula" rows="3" maxlength="1024" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="custom-syntax custom-error">z^2 + c</textarea>
+            <p id="custom-error" class="custom-error" role="status" aria-live="polite" hidden></p>
+            <button id="apply-custom" class="secondary-button" type="button">Apply formula</button>
+            <details class="custom-help">
+              <summary>Syntax & examples</summary>
+              <div id="custom-syntax">
+                <p><code>z</code> is the current value. <code>z1</code>…<code>z4</code> are the previous four values, also written <code>z[n-1]</code>…<code>z[n-4]</code>. Earlier history starts at zero.</p>
+                <p>Use <code>+ - * / ^</code> and parentheses. Functions: <code>ln</code> (or <code>log</code>), <code>exp</code>, <code>sqrt</code>, <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>sinh</code>, <code>cosh</code>, <code>abs</code>, <code>conj</code>, <code>re</code>, <code>im</code>, <code>pow</code>. Constants: <code>i</code>, <code>pi</code>, <code>e</code>. Write multiplication explicitly: <code>5*z</code>.</p>
+                <div class="custom-examples" role="group" aria-label="Example recurrences">
+                  <button type="button" data-formula="z^2 + c">Quadratic</button>
+                  <button type="button" data-formula="z^3 + c">Cubic</button>
+                  <button type="button" data-formula="z^2 + c - 0.5*z1">Memory</button>
+                  <button type="button" data-formula="z^2 + c + 0.2*z1 - 0.1*z2">Two lags</button>
+                  <button type="button" data-formula="e^z - 1 + c">Exponential</button>
+                  <button type="button" data-formula="ln(z^2 + 1) + c">Logarithmic</button>
+                </div>
+                <p>Functions use complex arithmetic and principal branches. Colors count iterations to escape; singularities and overflow count as escape. Custom formulas support view widths down to 10⁻¹⁰. GPU transcendental functions use native float precision.</p>
+              </div>
+            </details>
           </div>
           <div id="julia-controls" hidden>
             <div class="parameter-control">
@@ -489,6 +518,14 @@
         dark pixels have not converged. Try Power and Relaxation to reshape the basins.
       </p>
       <p class="attribution">
+        Source code:
+        <a
+          href="https://github.com/brn-dev/fractal-explorer"
+          target="_blank"
+          rel="noopener noreferrer"
+          >GitHub ↗</a
+        >
+        <br />
         Interface inspiration:
         <a
           href="https://fractalexplorer.org/"

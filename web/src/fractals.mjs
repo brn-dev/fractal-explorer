@@ -11,6 +11,7 @@ export const fractals = {
   phoenix: { name: 'Phoenix Julia', title: 'The Phoenix', description: 'Every orbit remembers where it came from.', formula: 'z<sub>n+1</sub> = z<sub>n</sub>² + c + p z<sub>n−1</sub>', constant: true, parameters: [{ key: 'memory', label: 'Memory · p', min: -2, max: 2, step: 0.001 }], defaults: { memory: -0.5, julia_x: '0.5667', julia_y: '0', span: '5.4' } },
   'ship-julia': { name: 'Burning Ship Julia', title: 'Folded Julia gardens', description: 'Fold each orbit before it takes its next step.', formula: 'z<sub>n+1</sub> = (|Re z<sub>n</sub>| + i|Im z<sub>n</sub>|)² + c', constant: true, defaults: { julia_x: '-1.76', julia_y: '-0.03' } },
   newton: { name: 'Newton basins', title: 'Islands of attraction', description: 'Which root will each point find?', formula: 'z<sub>n+1</sub> = z<sub>n</sub> − λ (z<sub>n</sub><sup>d</sup> − c) / (d z<sub>n</sub><sup>d−1</sup>)', constant: true, parameters: [{ ...power, min: 3 }, { key: 'relaxation', label: 'Relaxation · λ', min: 0.2, max: 1.8, step: 0.01 }], defaults: { power: 3, relaxation: 1, julia_x: '1', julia_y: '0', span: '5' } },
+  custom: { name: 'Custom', title: 'Your own universe', description: 'Write the rule. Follow it into infinity.', defaults: { x: '-0.5', custom_formula: 'z^2 + c', custom_mode: 'mandelbrot' } },
 };
 export const kinds = Object.keys(fractals);
 export function defaultView(base, fractal) {
@@ -18,7 +19,12 @@ export function defaultView(base, fractal) {
 }
 export function parameterDefaults(view) {
   const out = { ...view };
+  if (view.fractal === 'custom') {
+    out.custom_formula ??= fractals.custom.defaults.custom_formula;
+    out.custom_mode ??= fractals.custom.defaults.custom_mode;
+  }
   for (const p of fractals[view.fractal]?.parameters ?? []) out[p.key] ??= fractals[view.fractal].defaults[p.key];
   return out;
 }
+export function hasConstant(view) { return view.fractal === 'custom' ? view.custom_mode === 'julia' : !!fractals[view.fractal]?.constant; }
 export function minimumSpan(fractal) { return fractals[fractal]?.deep ? '1e-10000' : '1e-10'; }

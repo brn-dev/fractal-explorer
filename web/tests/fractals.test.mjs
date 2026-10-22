@@ -8,7 +8,7 @@ import { juliaView } from '../src/export-utils.mjs';
 import { readFile } from 'node:fs/promises';
 
 const base = { x: '-.5', y: '0', span: '3.6', fractal: 'mandelbrot', iterations: 800, bailout: 64, julia_x: '-.7269', julia_y: '.1889' };
-const added = kinds.slice(5);
+const added = kinds.slice(5, 10);
 const oracle = JSON.parse(await readFile(new URL('./families-oracle.json', import.meta.url), 'utf8'));
 
 test('formula IDs preserve existing shaders and every new default validates', () => {

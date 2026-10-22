@@ -365,6 +365,20 @@ select option {
 .formula sub {
   font-size: 10px;
 }
+#formula { overflow-wrap:anywhere; }
+#custom-controls { margin-top:16px; }
+#custom-mode, #custom-formula { margin-top:7px; }
+#custom-formula { display:block;width:100%;resize:vertical;min-height:76px;background:#101a16;color:#e8f0df;border:1px solid #c7e99c33;border-radius:6px;padding:10px;font:12px/1.6 monospace; }
+#custom-formula:focus { outline:1px solid #c7e99c; }
+#apply-custom { margin-top:10px; }
+#custom-formula[aria-invalid="true"] { border-color:#efa993; }
+.custom-note, .custom-help { color:#a5b29b;font-size:10px;line-height:1.6; }
+.custom-error { color:#efa993;font-size:11px;line-height:1.5; }
+.custom-help { margin-top:12px; }
+.custom-help summary { cursor:pointer; }
+.custom-help code { color:#d4e5bd;overflow-wrap:anywhere; }
+.custom-examples { display:flex;flex-wrap:wrap;gap:6px; }
+.custom-examples button { border:1px solid #c7e99c33;border-radius:4px;background:#c7e99c0a;color:#d4e5bd;padding:5px 8px;font-size:10px;cursor:pointer; }
 .palette-title {
   display: flex;
   justify-content: space-between;

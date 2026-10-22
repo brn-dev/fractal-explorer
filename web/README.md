@@ -49,7 +49,7 @@ All Julia families and Newton basins have real/imaginary constant sliders alongs
 
 ### Parameter playgrounds
 
-Five additional families bring the total to ten:
+Five additional preset families accompany the original five:
 
 | Family | Parameters | What to try |
 | --- | --- | --- |
@@ -68,6 +68,23 @@ Formula references: [Fractint's Phoenix implementation](https://user.xmission.co
 Quality offers Draft (½), Native (1×), Fine (1.5×), High (2×), Ultra (3×), and Extreme (4×), multiplying each viewport dimension. Extreme requests up to 16 times Native's pixel count. The selected quality persists across reloads. High/Ultra/Extreme remove the ordinary 2560-pixel width cap: desktop WebGPU can render up to 8192 pixels per side and 33,554,432 pixels in total, further limited by the device's texture and buffer capabilities. Higher modes on touch devices use up to 6 megapixels; the CPU fallback uses up to 960,000 pixels. Ordinary modes keep their existing budgets. The quality note shows the actual resolution and when a limit is reached. Higher quality changes spatial sampling, while the iteration control determines how long each sample is explored; it does not change arithmetic precision.
 
 Ten formulas, palettes and color animation, arbitrary decimal coordinates, saved places, JSON import/export, PNG export up to 4K, and local GIF/MP4 exports are included. **Wandering speed** in Light & color controls palette cycles per second (0.05–2, default 0.12) and persists across reloads. Animation advances with elapsed time, so its speed is independent of the display refresh rate.
+
+### Custom recurrences
+
+Choose **Custom** in the fractal picker, enter the right-hand side of `z[n+1] = …`, and click **Apply formula** (or Ctrl/Cmd+Enter). **Pixel input** selects Mandelbrot (`c = pixel`, `z[0] = 0`) or Julia (`z[0] = pixel`, editable constant `c`). The previous four values are `z1` through `z4`, also written `z[n-1]` through `z[n-4]`; history before the initial value is zero.
+
+Use explicit multiplication, parentheses, `+ - * / ^` (or `**`), and constants `i`, `pi`, `e`. Complex functions include `ln`/`log`, `exp`, `sqrt`, `sin`, `cos`, `tan`, `sinh`, `cosh`, `abs` (real magnitude), `conj`, `re`, `im`, and `pow(a,b)`. Powers associate to the right; `-z^2` means `-(z^2)`. Logarithms, square roots and noninteger powers use principal complex branches. Examples:
+
+```text
+z^3 + c
+z^2 + c - 0.5*z1
+z^2 + c + 0.2*z1 - 0.1*z2
+ln(z^2 + 1) + c
+e^z - 1 + c
+5*sin(z) + c
+```
+
+Custom expressions compile from an allowlisted parser to WebGPU, with an interpreter for the CPU worker. Algebra uses the selected GPU arithmetic; transcendental functions use native FP32 and can differ from CPU binary64 near sensitive boundaries. Colors use integer escape counts; non-finite results count as escape at that iteration. Custom zoom is limited to a view width of `1e-10`. Formulas are limited to 1,024 characters, 192 syntax nodes and 32 nesting levels. Julia constants work with parameter automation. Sessions, saved places, share links, location JSON and image/animation exports retain the expression and input mapping.
 
 ### Soundscape
 

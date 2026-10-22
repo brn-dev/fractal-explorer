@@ -25,13 +25,19 @@ document.querySelector('#run').onclick=async()=>{
         if(v.relaxation)cases.push({...v,power:5,relaxation:.75,julia_x:'.7',julia_y:'.4'});
       }
       cases.push({...defaultView(base,'newton'),julia_x:'0',julia_y:'0'});
+      for(const custom_mode of ['mandelbrot','julia'])for(const custom_formula of [
+        'z^2+c', 'z^3+c', 'z^2+c-0.5*z1', 'z^2+c+0.2*z1-0.1*z2+0.01*z3-0.005*z4',
+        'ln(z^2+1)+c', 'e^z-1+c', 'sin(z)+c', 'cos(z)+c', 'tan(z)+c',
+        'sinh(z)+c', 'cosh(z)+c', 'sqrt(z)+c', 'abs(z)+c', 'conj(z)^2+c',
+        're(z)^2+im(z)*i+c', 'z/2+c', 'pow(z,2.5)+c', 'z^-2+c', '1/z', 'ln(z)',
+      ])cases.push({...defaultView(base,'custom'),iterations:80,custom_mode,custom_formula});
       for(const v of cases){
         const gpu=await engine.render(v,33,25,{}), values=await engine.readField();
         const cpu=await softwareRender(v,33,25);
         let mismatch=0,error=0;
         values.forEach((value,i)=>{if(!Number.isFinite(value))bad++;if((value<0)!==(cpu.field[i]<0))mismatch++;else if(value>=0)error=Math.max(error,Math.abs(value-cpu.field[i]));});
         const row=document.createElement('tr');
-        const label=`${v.fractal} ${v.power?`d=${v.power}`:''} ${v.memory!==undefined?`p=${v.memory}`:''} ${v.relaxation?`λ=${v.relaxation}`:''}`;
+        const label=v.fractal==='custom'?`custom ${v.custom_mode}: ${v.custom_formula}`:`${v.fractal} ${v.power?`d=${v.power}`:''} ${v.memory!==undefined?`p=${v.memory}`:''} ${v.relaxation?`λ=${v.relaxation}`:''}`;
         for(const value of [label,`${mismatch} / ${values.length}`,error.toFixed(6),`${gpu.metadata.elapsed_ms.toFixed(1)} / ${cpu.metadata.elapsed_ms.toFixed(1)}`]){const td=document.createElement('td');td.textContent=value;row.append(td);}
         document.querySelector('#results').append(row);
         if(kinds.slice(5).includes(v.fractal)&&!document.querySelector(`#image-${v.fractal}`)){

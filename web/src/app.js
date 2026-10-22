@@ -4,7 +4,7 @@ import { BrowserEngine } from './engine.js';
 import { renderDimensions, qualityScales } from './resolution.mjs';
 import { setupImageExports } from './export-ui.js';
 import { advancePhase } from './export-utils.mjs';
-import { fractals, defaultView, parameterDefaults } from './fractals.mjs';
+import { fractals, defaultView, parameterDefaults, hasConstant } from './fractals.mjs';
 import { LIVE_FPS, animationPlan, cacheDimensions, cacheMemoryOptionsMiB, cacheMemorySetting, cacheMemoryLabel, ProgressiveAnimation, validateAutomation } from './animation.mjs';
 import { setupAutomationControls } from './automation-ui.js';
 import { readShareURL } from './share.mjs';
@@ -340,13 +340,24 @@ function buildDestinations() {
   });
 }
 function syncView() {
-  const { title, description, formula, constant } = fractals[view.fractal];
+  const { title, description, formula } = fractals[view.fractal];
   $("view-title").replaceChildren(
     document.createTextNode(title),
     Object.assign(document.createElement("span"), { textContent: "." }),
   );
   $("view-description").textContent = description;
-  $("formula").innerHTML = formula;
+  if (view.fractal === 'custom') $('formula').textContent = `z[n+1] = ${view.custom_formula}`;
+  else $("formula").innerHTML = formula;
+  $('custom-controls').hidden = view.fractal !== 'custom';
+  if (view.fractal === 'custom') {
+    $('custom-mode').value = view.custom_mode;
+    $('custom-formula').value = view.custom_formula;
+    $('custom-initial').textContent = view.custom_mode === 'julia'
+      ? 'Starts at the pixel coordinate; c is the constant below.'
+      : 'Starts at z = 0; c is the pixel coordinate.';
+    $('custom-error').hidden = true;
+    $('custom-formula').removeAttribute('aria-invalid');
+  }
   $("fractal").value = view.fractal;
   $("iterations").value = view.iterations;
   $("center-x").value = view.x;
@@ -360,7 +371,7 @@ function syncView() {
     slider.value = view[`julia_${axis}`];
   }
   $('iterations-slider').value = String(view.iterations);
-  $("julia-controls").hidden = !constant;
+  $("julia-controls").hidden = !hasConstant(view);
   for (const [axis, name] of [['x', 'real'], ['y', 'imaginary']]) {
     const label = `${view.fractal === 'newton' ? 'Root target' : 'Constant'} · ${name}`;
     document.querySelector(`label[for="julia-${axis}"]`).textContent = label;
@@ -469,11 +480,13 @@ function loadView(next, index = -1, preview = false, sceneReason = null) {
   clearTimeout(parameterPreviewTimer);
   parameterPreview = preview;
   viewEpoch++;
-  if (next.fractal !== view.fractal || Object.keys(automationSettings).some(key => next[key] !== undefined && next[key] !== view[key])) {
+  const customChanged = next.fractal === 'custom' && (next.custom_formula !== view.custom_formula || next.custom_mode !== view.custom_mode);
+  if (next.fractal !== view.fractal || customChanged || Object.keys(automationSettings).some(key => next[key] !== undefined && next[key] !== view[key])) {
     pausedStatic = null;
     if (automationPlayer.paused) automationPlayer.configure(null);
   }
   if (next.fractal !== view.fractal) automationSettings = {};
+  else if (customChanged) automationSettings = validateAutomation(next, automationSettings);
   view = parameterDefaults({ ...base, ...next });
   if (sceneReason) majorSceneChange(sceneReason);
   activeDestination = index;
@@ -806,6 +819,29 @@ function setupControls() {
     const fractal = $("fractal").value;
     loadView(defaultView(base, fractal), -1, false, 'family');
     showLocationIntro();
+  };
+  const applyCustom = () => {
+    try {
+      const next = validate({ ...view, custom_mode: $('custom-mode').value, custom_formula: $('custom-formula').value.trim() });
+      loadView(next);
+    } catch (error) {
+      $('custom-error').textContent = error.message;
+      $('custom-error').hidden = false;
+      $('custom-formula').setAttribute('aria-invalid', 'true');
+    }
+  };
+  $('apply-custom').onclick = applyCustom;
+  $('custom-mode').onchange = applyCustom;
+  $('custom-formula').oninput = () => {
+    $('custom-error').hidden = true;
+    $('custom-formula').removeAttribute('aria-invalid');
+  };
+  $('custom-formula').onkeydown = event => {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); applyCustom(); }
+  };
+  for (const button of document.querySelectorAll('[data-formula]')) button.onclick = () => {
+    $('custom-formula').value = button.dataset.formula;
+    applyCustom();
   };
   $("density").oninput = () => {
     density = Number($("density").value);

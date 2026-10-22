@@ -1,6 +1,8 @@
 import arithmetic from './arithmetic.wgsl?raw';
 import fractal from './fractal.wgsl?raw';
 import color from './color.wgsl?raw';
+import customMath from './custom.wgsl?raw';
+import { compileFormula } from './custom-formula.mjs';
 import { validate, decimal, order } from './decimal.mjs';
 import { packWide } from './wide.mjs';
 import { renderLimits, validateDimensions } from './resolution.mjs';
@@ -130,11 +132,15 @@ export class BrowserEngine {
     const extended = perturb && (settings.range_mode === 'floatexp' || settings.range_mode === 'scaled' || depth < -15);
     if (settings.range_mode === 'standard' && perturb && depth < -15) throw new Error('Standard exponent range is unsafe here. Select Auto or extended range.');
     const acceleration = !perturb ? 'none' : settings.acceleration === 'auto' ? (depth < -15 ? 'series' : 'none') : settings.acceleration;
-    return { perturb, arithmetic, extended, acceleration };
+    return { perturb, arithmetic, extended, acceleration, custom: view.fractal === 'custom' ? view.custom_formula : null };
   }
   async pipeline(options) {
-    const key = `${options.arithmetic}:${options.extended}`;
-    if (!this.pipelines.has(key)) this.pipelines.set(key, await this.device.createComputePipelineAsync({ layout: 'auto', compute: { module: this.module, entryPoint: 'iterate', constants: { PAIRED: options.arithmetic !== 'fp32', EXTENDED: options.extended } } }));
+    const key = JSON.stringify([options.arithmetic, options.extended, options.custom]);
+    if (!this.pipelines.has(key)) {
+      const module = options.custom ? await this.compile(arithmetic + '\n' + fractal.replace(/fn custom_step[^\n]+/, customMath + '\n' + compileFormula(options.custom).wgsl)) : this.module;
+      this.pipelines.set(key, await this.device.createComputePipelineAsync({ layout: 'auto', compute: { module, entryPoint: 'iterate', constants: { PAIRED: options.arithmetic !== 'fp32', EXTENDED: options.extended } } }));
+      while (this.pipelines.size > 16) this.pipelines.delete(this.pipelines.keys().next().value);
+    }
     return this.pipelines.get(key);
   }
   async packet(view, width, height, options, anchor) {
@@ -174,6 +180,7 @@ export class BrowserEngine {
     [view.x, view.y, view.julia_x, view.julia_y].forEach((v, k) => { const x = Number(v), hi = Math.fround(x); float(48 + k * 8, hi); float(52 + k * 8, x - hi); });
     float(80, anchor ? anchor.col + .5 : width / 2); float(84, anchor ? anchor.row + .5 : height / 2);
     tile.forEach((v, k) => uint(96 + k * 4, v)); uint(112, repair ? 1 : 0); uint(120, packet.offsets.length);
+    uint(124, view.custom_mode === 'julia' ? 1 : 0);
     float(128, Number.isFinite(packet.logDc) ? packet.logDc : -1e30); float(132, Math.log2(1e-7));
     packet.offsets.forEach((v, k) => uint(144 + k * 4, v));
     float(208, view.power ?? 2);
