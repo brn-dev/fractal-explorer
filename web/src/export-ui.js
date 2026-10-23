@@ -1,8 +1,8 @@
 import { BrowserEngine } from './engine.js';
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { animationPlan } from './animation.mjs';
-import { animationExport, ditherFrame } from './animation-export.mjs';
-import { drawVignette, gifPaletteSample, wrapPhase } from './export-utils.mjs';
+import { animationExport, ditherFrame, exportQualities } from './animation-export.mjs';
+import { drawVignette, exportDimensions, gifPaletteSample, wrapPhase } from './export-utils.mjs';
 
 const $ = id => document.getElementById(id);
 const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
@@ -20,7 +20,6 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
   const dialog = $('export-dialog'), animationDialog = $('color-gif-dialog');
   let job = null, preview = null, raf = null, program = null;
   const snapshot = () => ({ ...getState(), aspect: innerHeight / innerWidth, mobile: engine.mobile });
-  const dimensions = (state, longest) => ({ width: Math.max(16, 2 * Math.round(longest / Math.max(1, state.aspect) / 2)), height: Math.max(16, 2 * Math.round(longest * Math.min(1, state.aspect) / 2)) });
   function vignette(enabled) {
     $('export-vignette').checked = $('color-gif-vignette').checked = enabled;
     $('color-gif-preview-vignette').hidden = !enabled;
@@ -62,7 +61,7 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
       let values, metadata;
       if (selection === 'current') ({ values, metadata } = await abortable(getCurrentField(), signal));
       else {
-        renderer = await newRenderer(signal); const { width, height } = dimensions(state, Number(selection));
+        renderer = await newRenderer(signal); const { width, height } = exportDimensions(state.aspect, Number(selection));
         metadata = (await abortable(renderer.render(state.visibleView ?? state.view, width, height, state.settings), signal)).metadata;
         values = await abortable(renderer.readField(), signal);
       }
@@ -77,13 +76,17 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
 
   function readOptions() {
     return { mode: $('animation-motion').value, format: $('animation-format').value, quality: $('animation-quality').value,
-      longest: Number($('animation-size').value), fps: Number($('animation-fps').value), duration: Number($('gif-duration').value),
+      longest: Number($('animation-size').value), aspectRatio: $('animation-aspect').value, fps: Number($('animation-fps').value), duration: Number($('gif-duration').value),
       start: Number($('color-gif-phase').value), speed: Number($('color-gif-speed').value), wander: $('gif-wander-colors').checked };
   }
   async function updateOptions() {
     const current = preview; if (!current) return;
     const version = ++current.version; current.renderer?.cancel(); current.start = null; current.elapsed = 0; current.key = null; current.index = null;
     if (current.ready && !job) $('color-gif-status').textContent = 'Preview ready.';
+    const isGIF = $('animation-format').value === 'gif';
+    for (const option of $('animation-quality').options) option.disabled = isGIF && !!exportQualities[option.value].mp4Only;
+    if ($('animation-quality').selectedOptions[0].disabled) $('animation-quality').value = 'high';
+    $('animation-quality-note').textContent = isGIF ? 'High uses GIF’s maximum 256 colors. Ultra and Extreme require MP4.' : 'For fine fractal detail, choose Ultra or Extreme. Higher quality produces larger files.';
     $('animation-fps').querySelector('option[value="60"]').disabled = $('animation-format').value === 'gif';
     if ($('animation-format').value === 'gif' && $('animation-fps').value === '60') $('animation-fps').value = '30';
     $('animation-dither-row').hidden = $('animation-format').value !== 'gif';
@@ -91,6 +94,7 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
     try {
       program = animationExport(current.state, readOptions()); current.valid = true;
       const p = program;
+      $('color-gif-stage').style.maxWidth = `${220 / p.aspect}px`;
       $('color-gif-phase-slider').value = String(p.start); $('color-gif-speed-slider').value = String(p.speed);
       $('animation-source-note').textContent = p.mode === 'parameters'
         ? 'Targets, cycle shapes, and speeds come from the loop buttons beside the main-view sliders.' : p.mode === 'zoom' ? 'A single journey ending at 8× magnification.' : 'One complete palette cycle, using the current view.';
@@ -103,7 +107,7 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
         const { supportsMP4 } = await import('./video-export.js'); const supported = await supportsMP4(p);
         if (preview !== current || version !== current.version) return;
         current.mp4 = supported;
-        $('animation-codec-note').textContent = supported ? `H.264 · ${(p.bitrate / 1e6).toFixed(1)} Mbps · every frame is rendered before encoding.` : 'H.264 encoding is unavailable at these settings. Choose GIF or a smaller size.';
+        $('animation-codec-note').textContent = supported ? `H.264 · target ${(p.bitrate / 1e6).toFixed(1)} Mbps · ≈ ${(p.bitrate * p.duration / 8e6).toFixed(1)} MB · every frame is rendered before encoding.` : 'H.264 encoding is unavailable at these settings. Choose a lower quality, a smaller size, or GIF.';
       }
     } catch (error) { current.valid = false; $('color-gif-details').textContent = error.message; }
     setBusy(!!job);
@@ -115,7 +119,7 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
     const version = current.version, frameView = p.viewAt(index), key = JSON.stringify(frameView);
     current.rendering = (async () => {
       if (key !== current.key) {
-        const { width, height } = dimensions(current.state, Math.min(480, p.longest));
+        const { width, height } = exportDimensions(p.aspect, Math.min(480, p.longest));
         await abortable(current.renderer.render(frameView, width, height, current.state.settings), current.controller.signal);
         if (version === current.version) current.key = key;
       }
@@ -144,7 +148,7 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
   }
   $('color-gif-play').onclick = () => { if (!preview) return; preview.paused = !preview.paused; preview.start = null; syncPlay(); };
   $('color-gif-restart').onclick = updateOptions;
-  for (const id of ['animation-motion', 'animation-format', 'animation-size', 'animation-quality', 'animation-fps', 'gif-wander-colors', 'gif-duration']) $(id).onchange = updateOptions;
+  for (const id of ['animation-motion', 'animation-format', 'animation-size', 'animation-aspect', 'animation-quality', 'animation-fps', 'gif-wander-colors', 'gif-duration']) $(id).onchange = updateOptions;
   for (const name of ['phase', 'speed']) {
     $(`color-gif-${name}-slider`).oninput = () => { $(`color-gif-${name}`).value = $(`color-gif-${name}-slider`).value; updateOptions(); };
   }
@@ -171,7 +175,6 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
     const canvas = document.createElement('canvas'); canvas.id = 'color-gif-preview'; canvas.setAttribute('aria-label', 'Animation preview');
     $('color-gif-preview').replaceWith(canvas);
     syncPlay(); $('color-gif-status').textContent = 'Preparing your view…';
-    $('color-gif-stage').style.maxWidth = `${220 / state.aspect}px`;
     animationDialog.showModal(); updateOptions(); raf = requestAnimationFrame(tick);
     try {
       current.renderer = await newRenderer(controller.signal, canvas);

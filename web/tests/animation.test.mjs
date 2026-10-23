@@ -257,6 +257,66 @@ test('MP4 and GIF share the parameter path at independently chosen sizes and fra
   assert.throws(()=>animationExport(state,{...output,format:'gif',fps:60}));
 });
 
+test('Ultra and Extreme MP4 quality preserve detail with substantially higher bitrates',()=>{
+  const options={...output,longest:1920,aspectRatio:'16:9'};
+  const high=animationExport(state,options),ultra=animationExport(state,{...options,quality:'ultra'}),extreme=animationExport(state,{...options,quality:'extreme'});
+  assert.equal(high.bitrate,14929920);
+  assert.equal(ultra.bitrate,59719680);
+  assert.equal(extreme.bitrate,149299200);
+  for (const p of [ultra,extreme]) {
+    assert.equal(p.width,high.width);assert.equal(p.height,high.height);assert.equal(p.frames,high.frames);
+    assert.deepEqual(p.viewAt(30),high.viewAt(30));assert.equal(p.phaseAt(30),high.phaseAt(30));
+  }
+});
+
+test('high-resolution MP4 quality has distinct bitrate ceilings and GIF retains its palette limits',()=>{
+  const options={...output,longest:3840,aspectRatio:'1:1',fps:60};
+  for (const [quality,bitrate] of [['high',80e6],['ultra',240e6],['extreme',600e6]]) {
+    assert.equal(animationExport(state,{...options,quality}).bitrate,bitrate);
+  }
+  for (const [quality,paletteSize] of [['draft',64],['balanced',128],['high',256]]) {
+    assert.equal(animationExport(state,{...output,format:'gif',quality}).paletteSize,paletteSize);
+  }
+  for (const quality of ['ultra','extreme']) {
+    assert.throws(()=>animationExport(state,{...output,format:'gif',quality}),/require MP4/);
+  }
+});
+
+test('animation aspect defaults to the main view, including portrait views',()=>{
+  for (const [aspect, width, height] of [[9/16,720,406],[1,720,720],[1.5,480,720]]) {
+    const source={...state,aspect};
+    const implicit=animationExport(source,output),explicit=animationExport(source,{...output,aspectRatio:'view'});
+    assert.equal(implicit.width,width);assert.equal(implicit.height,height);
+    assert.equal(explicit.width,width);assert.equal(explicit.height,height);
+    assert.equal(source.aspect,aspect);
+  }
+});
+
+test('aspect overrides render all animation modes and formats at the selected shape',()=>{
+  const sizes=[['16:9',1920,1080],['1:1',1920,1920],['21:9',1920,822],['9:16',1080,1920],['4:3',1920,1440],['3:2',1920,1280]];
+  for (const format of ['gif','mp4']) for (const mode of ['parameters','colors','zoom']) {
+    const options={...output,format,mode,longest:1920,fps:10,speed:2};
+    const original=animationExport(state,options);
+    for (const [aspectRatio,width,height] of sizes) {
+      const p=animationExport(state,{...options,aspectRatio});
+      assert.equal(p.width,width);assert.equal(p.height,height);
+      assert.deepEqual(p.viewAt(0),original.viewAt(0));
+      assert.deepEqual(p.viewAt(p.frames-1),original.viewAt(original.frames-1));
+      assert.equal(p.frames,original.frames);
+    }
+  }
+  assert.equal(state.aspect,9/16);
+});
+
+test('aspect overrides respect the GIF memory budget and reject unknown ratios',()=>{
+  const options={...output,mode:'zoom',format:'gif',longest:1920,fps:15};
+  assert.doesNotThrow(()=>animationExport({...state,mobile:true},{...options,aspectRatio:'21:9'}));
+  assert.throws(()=>animationExport({...state,mobile:true},{...options,aspectRatio:'1:1'}),/too large/);
+  for (const aspectRatio of ['invalid','0:1','__proto__',null]) {
+    assert.throws(()=>animationExport(state,{...output,aspectRatio}),/aspect ratio/);
+  }
+});
+
 test('GIF and MP4 export use every selected cycle shape at matching timestamps',()=>{
   for(const shape of Object.keys(cycleShapes)) {
     const source={...state,automation:{julia_x:{...settings.julia_x,shape}}};

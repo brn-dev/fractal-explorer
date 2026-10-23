@@ -7,7 +7,7 @@ export async function supportsMP4(options) {
   return canEncodeVideo('avc', { width: options.width, height: options.height, frameRate: options.fps, quality: new Quality({ bitrate: options.bitrate }) });
 }
 export async function mp4Encoder(canvas, options) {
-  if (!await supportsMP4(options)) throw new Error('MP4 / H.264 encoding is unavailable at these settings in this browser. Choose GIF or a smaller size.');
+  if (!await supportsMP4(options)) throw new Error('MP4 / H.264 encoding is unavailable at these settings in this browser. Choose a lower quality, a smaller size, or GIF.');
   const target = new BufferTarget();
   const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
   const source = new CanvasSource(canvas, { codec: 'avc', quality: new Quality({ bitrate: options.bitrate }), keyFrameInterval: 2 });

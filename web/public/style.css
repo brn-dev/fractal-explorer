@@ -970,6 +970,7 @@ dialog .export-note {
 .animation-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .animation-preview { position: sticky; top: 0; }
 .animation-settings > .switch-label:first-child { margin-top: 0; }
+#animation-aspect { margin-bottom: 12px; }
 @media (max-width: 700px) {
   #color-gif-dialog { padding: 20px; }
   .animation-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }

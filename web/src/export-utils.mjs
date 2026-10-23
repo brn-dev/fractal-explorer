@@ -4,6 +4,13 @@ import { hasConstant } from './fractals.mjs';
 export const wrapPhase = phase => ((phase % 1) + 1) % 1;
 export const advancePhase = (phase, speed, seconds) => wrapPhase(phase + speed * Math.max(0, seconds));
 
+export function exportDimensions(aspect, longest) {
+  return {
+    width: Math.max(16, 2 * Math.round(longest / Math.max(1, aspect) / 2)),
+    height: Math.max(16, 2 * Math.round(longest * Math.min(1, aspect) / 2)),
+  };
+}
+
 export function animationFrames(duration) {
   if (!Number.isFinite(duration) || duration < .5 || duration > 20) throw new Error('Choose a duration from 0.5 to 20 seconds.');
   const ticks = Math.round(duration * 100), frames = Math.min(400, Math.max(10, Math.round(ticks / 5)));

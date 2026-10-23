@@ -1,11 +1,20 @@
 import { animationPlan } from './animation.mjs';
 import { navigate } from './decimal.mjs';
-import { wrapPhase } from './export-utils.mjs';
+import { exportDimensions, wrapPhase } from './export-utils.mjs';
 
-export const exportQualities = { draft: { colors: 64, bits: .06 }, balanced: { colors: 128, bits: .12 }, high: { colors: 256, bits: .24 } };
+export const exportQualities = {
+  draft: { colors: 64, bits: .06, maxBitrate: 80e6 },
+  balanced: { colors: 128, bits: .12, maxBitrate: 80e6 },
+  high: { colors: 256, bits: .24, maxBitrate: 80e6 },
+  ultra: { colors: 256, bits: .96, maxBitrate: 240e6, mp4Only: true },
+  extreme: { colors: 256, bits: 2.4, maxBitrate: 600e6, mp4Only: true },
+};
+const aspectRatios = { '16:9': 9 / 16, '1:1': 1, '21:9': 9 / 21, '9:16': 16 / 9, '4:3': 3 / 4, '3:2': 2 / 3 };
 export function animationExport(state, options) {
-  const { mode, format, quality, longest, fps, start, speed, wander } = options;
+  const { mode, format, quality, longest, fps, start, speed, wander, aspectRatio = 'view' } = options;
   if (!['parameters', 'colors', 'zoom'].includes(mode) || !['gif', 'mp4'].includes(format) || !Object.hasOwn(exportQualities, quality)) throw new Error('Choose valid animation export settings.');
+  if (format === 'gif' && exportQualities[quality].mp4Only) throw new Error('Ultra and Extreme quality require MP4. Choose High for GIF.');
+  if (aspectRatio !== 'view' && !Object.hasOwn(aspectRatios, aspectRatio)) throw new Error('Choose an export aspect ratio.');
   if (![480, 720, 1080, 1920, 2560, 3840].includes(longest)) throw new Error('Choose an export resolution.');
   if (![10, 15, 24, 30, 60].includes(fps) || (format === 'gif' && fps > 30)) throw new Error('GIF supports up to 30 fps; MP4 supports up to 60 fps.');
   if (!Number.isFinite(start) || start < 0 || start > 1 || !Number.isFinite(speed) || speed < .05 || speed > 2) throw new Error('Choose a phase from 0 to 1 and a speed from 0.05 to 2 cycles/s.');
@@ -14,13 +23,13 @@ export function animationExport(state, options) {
   const duration = parameters ? parameters.duration : mode === 'colors' ? 1 / speed : Number(options.duration);
   if (!Number.isFinite(duration) || duration < .5 || duration > 20) throw new Error('Choose a duration from 0.5 to 20 seconds.');
   const frames = Math.max(2, Math.round(duration * fps));
-  const width = Math.max(16, 2 * Math.round(longest / Math.max(1, state.aspect) / 2));
-  const height = Math.max(16, 2 * Math.round(longest * Math.min(1, state.aspect) / 2));
+  const aspect = aspectRatio === 'view' ? state.aspect : aspectRatios[aspectRatio];
+  const { width, height } = exportDimensions(aspect, longest);
   if (format === 'gif' && width * height * frames > (state.mobile ? 160e6 : 480e6)) throw new Error('This GIF would be too large to encode in memory. Choose MP4, a smaller size, or fewer frames.');
   const colorCycles = mode === 'colors' ? 1 : mode === 'zoom' ? speed * frames / fps : Math.max(1, Math.round(speed * frames / fps));
   return {
-    ...options, width, height, frames, duration: frames / fps, looping: mode !== 'zoom', parameters,
-    bitrate: Math.min(80e6, Math.max(500000, Math.round(width * height * fps * exportQualities[quality].bits))),
+    ...options, aspectRatio, aspect, width, height, frames, duration: frames / fps, looping: mode !== 'zoom', parameters,
+    bitrate: Math.min(exportQualities[quality].maxBitrate, Math.max(500000, Math.round(width * height * fps * exportQualities[quality].bits))),
     paletteSize: exportQualities[quality].colors,
     delay: index => 10 * (Math.round((index + 1) * 100 / fps) - Math.round(index * 100 / fps)),
     phaseAt: index => wrapPhase(start + (wander ? colorCycles * index / frames : 0)),
