@@ -14,6 +14,7 @@
     "verify:desktop": "node scripts/verify-desktop.mjs"
   },
   "dependencies": {
+    "@mediabunny/aac-encoder": "1.62.0",
     "gifenc": "1.0.3",
     "gmp-wasm": "1.3.2",
     "mediabunny": "1.62.0"

@@ -358,3 +358,23 @@ test('ordered GIF dithering preserves opacity and exact interior pixels',()=>{
   const bytes=new Uint8ClampedArray([8,17,18,255,128,128,128,255,128,128,128,255]);
   const out=ditherFrame(bytes,2);assert.deepEqual([...out.slice(0,4)],[8,17,18,255]);assert.equal(out[7],255);assert.notDeepEqual(out,bytes);
 });
+
+test('MP4 end hold freezes the exact final motion frame without stretching the path',()=>{
+  for (const mode of ['parameters','zoom','colors']) for (const fps of [10,24,30,60]) for (const endHold of [.5,1]) {
+    const plain=animationExport(state,{...output,mode,fps});
+    const held=animationExport(state,{...output,mode,fps,endHold});
+    assert.equal(held.motionFrames,plain.frames);
+    assert.equal(held.frames,plain.frames+Math.round(endHold*fps));
+    assert.equal(held.duration,plain.duration+endHold);
+    for (let index=0;index<plain.frames;index++) {
+      assert.deepEqual(held.viewAt(index),plain.viewAt(index));
+      assert.equal(held.phaseAt(index),plain.phaseAt(index));
+    }
+    for(let index=plain.frames;index<held.frames;index++) assert.deepEqual(held.viewAt(index),plain.viewAt(plain.frames-1));
+    assert.notEqual(held.phaseAt(plain.frames),held.phaseAt(plain.frames+1));
+    const still=animationExport(state,{...output,mode,fps,endHold,wander:false});
+    assert.equal(still.phaseAt(still.frames-1),still.phaseAt(0));
+  }
+  for (const endHold of [-1,2,NaN]) assert.throws(()=>animationExport(state,{...output,endHold}),/end hold/);
+  assert.throws(()=>animationExport(state,{...output,format:'gif',endHold:1}),/MP4 end hold/);
+});

@@ -24,3 +24,16 @@ License: MPL-2.0; see mediabunny-LICENSE.txt.
 The library is used unmodified. Exact source package (including the covered files):
 https://registry.npmjs.org/mediabunny/-/mediabunny-1.62.0.tgz
 Upstream source: https://github.com/Vanilagy/mediabunny
+
+@mediabunny/aac-encoder 1.62.0
+Copyright Vanilagy and contributors.
+License: MPL-2.0; see mediabunny-aac-encoder-LICENSE.txt.
+The extension is used unmodified. Exact source package (including the covered
+files, bundled WebAssembly and the FFmpeg build commands in README.md):
+https://registry.npmjs.org/@mediabunny/aac-encoder/-/aac-encoder-1.62.0.tgz
+Upstream source: https://github.com/Vanilagy/mediabunny/tree/v1.62.0/packages/aac-encoder
+Its embedded FFmpeg AAC encoder is LGPL-2.1-or-later; see FFmpeg-LICENSE.txt.
+FFmpeg source and license: https://ffmpeg.org/download.html
+https://github.com/FFmpeg/FFmpeg
+The worker is bundled separately and remains replaceable via the pinned npm
+dependency and normal rebuild; no proprietary app module is linked into it.

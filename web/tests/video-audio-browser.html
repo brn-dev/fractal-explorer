@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Video soundscape checks</title>
+<style>
+body { margin:24px;background:#142019;color:#e8f0df;font:15px/1.5 system-ui; }
+button { padding:12px;background:#243025;color:inherit;border:1px solid #9bb580;border-radius:6px; }
+video,canvas { width:min(640px,100%);height:auto; } a { display:block;color:inherit; } pre { white-space:pre-wrap; }
+</style>
+<h1>Video soundscape checks</h1>
+<p>Render warm-up, fades and reactive changes through the production audio engine and MP4 exporter. No real-time recording.</p>
+<button id="run">Run soundscape export checks</button>
+<pre id="results" role="status"></pre>
+<canvas id="source" width="320" height="180"></canvas>
+<div id="previews"></div>
+<script type="module" src="./video-audio-browser.mjs"></script>
+</html>

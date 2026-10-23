@@ -3,6 +3,8 @@ import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { animationPlan } from './animation.mjs';
 import { animationExport, ditherFrame, exportQualities } from './animation-export.mjs';
 import { drawVignette, exportAspect, exportDimensions, gifPaletteSample, wrapPhase } from './export-utils.mjs';
+import { getSoundscape } from './audio/soundscapes.mjs';
+import { soundscapeFrame, renderSoundscape, SOUNDSCAPE_WARMUP } from './audio/export-audio.mjs';
 
 const $ = id => document.getElementById(id);
 const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
@@ -32,6 +34,7 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
     for (const button of document.querySelectorAll('.image-export-action')) button.disabled = busy;
     for (const input of animationDialog.querySelectorAll('input, select')) input.disabled = busy;
     for (const input of imageDialog.querySelectorAll('input, select')) input.disabled = busy;
+    $('animation-soundscape').disabled = busy || $('animation-format').value === 'gif' || (!preview?.audioSupported && !$('animation-soundscape').checked);
     $('color-gif-speed').disabled = $('color-gif-speed-slider').disabled = busy || !$('gif-wander-colors').checked;
     $('color-gif-play').disabled = $('color-gif-restart').disabled = busy;
     $('download-color-gif').disabled = busy || !preview?.ready || !preview?.valid || preview?.mp4 === false || preview?.mp4 === null;
@@ -70,11 +73,10 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
     dialog.close(); updateImageOptions(); $('export-status').textContent = ''; imageDialog.showModal();
   };
   $('open-location-export').onclick = () => {
-    dialog.close(); locationDialog.returnValue = ''; $('location-export-status').textContent = ''; locationDialog.showModal();
+    $('location-export-status').textContent = ''; locationDialog.showModal();
   };
   dialog.addEventListener('close', () => { if (!imageDialog.open && !animationDialog.open && !locationDialog.open) job?.abort(); });
   imageDialog.addEventListener('close', () => { job?.abort(); returnToOptions('open-image-export'); });
-  locationDialog.addEventListener('close', () => { if (locationDialog.returnValue !== 'imported') returnToOptions('open-location-export'); });
   $('export-vignette').onchange = () => vignette($('export-vignette').checked);
   $('color-gif-vignette').onchange = () => vignette($('color-gif-vignette').checked);
   $('animation-cancel').onclick = () => job?.abort();
@@ -105,6 +107,8 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
   function readOptions() {
     return { mode: $('animation-motion').value, format: $('animation-format').value, quality: $('animation-quality').value,
       longest: Number($('animation-size').value), aspectRatio: $('animation-aspect').value, fps: Number($('animation-fps').value), duration: Number($('gif-duration').value),
+      endHold: $('animation-format').value === 'mp4' ? Number($('animation-end-hold').value) : 0,
+      includeSoundscape: $('animation-format').value === 'mp4' && $('animation-soundscape').checked,
       start: Number($('color-gif-phase').value), speed: Number($('color-gif-speed').value), wander: $('gif-wander-colors').checked };
   }
   async function updateOptions() {
@@ -112,6 +116,9 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
     const version = ++current.version; current.renderer?.cancel(); current.start = null; current.elapsed = 0; current.key = null; current.index = null;
     if (current.ready && !job) $('color-gif-status').textContent = 'Preview ready.';
     const isGIF = $('animation-format').value === 'gif';
+    if (isGIF) $('animation-soundscape').checked = false;
+    $('animation-end-hold-row').hidden = $('animation-end-hold-note').hidden = isGIF;
+    $('animation-soundscape-note').textContent = isGIF ? 'GIF has no audio. Choose MP4 to include the soundscape.' : 'Checking soundscape encoding on this device…';
     for (const option of $('animation-quality').options) option.disabled = isGIF && !!exportQualities[option.value].mp4Only;
     if ($('animation-quality').selectedOptions[0].disabled) $('animation-quality').value = 'high';
     $('animation-quality-note').textContent = isGIF ? 'High uses GIF’s maximum 256 colors. Higher quality modes require MP4.' : $('animation-quality').value === 'maximum'
@@ -128,15 +135,21 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
       $('color-gif-phase-slider').value = String(p.start); $('color-gif-speed-slider').value = String(p.speed);
       $('animation-source-note').textContent = p.mode === 'parameters'
         ? 'Targets, cycle shapes, and speeds come from the loop buttons beside the main-view sliders.' : p.mode === 'zoom' ? 'A single journey ending at 8× magnification.' : 'One complete palette cycle, using the current view.';
-      $('color-gif-details').textContent = `${p.duration.toFixed(2)} s · ${p.frames} frames · ${p.width} × ${p.height} · ${p.fps} fps · preview up to 480 px`;
+      $('color-gif-details').textContent = `${p.duration.toFixed(2)} s${p.holdFrames ? ` (includes ${p.endHold.toFixed(2)} s end hold)` : ''} · ${p.frames} frames · ${p.width} × ${p.height} · ${p.fps} fps · preview up to 480 px`;
       $('download-color-gif').innerHTML = `Download ${p.format.toUpperCase()} <span>↓</span>`;
       current.mp4 = p.format === 'mp4' ? null : true;
       $('animation-codec-note').textContent = p.format === 'gif' ? `${p.paletteSize} colors · GIF timing is rounded to hundredths of a second.` : 'Checking H.264 encoding on this device…';
       setBusy(!!job);
       if (p.format === 'mp4') {
-        const { supportsMP4 } = await import('./video-export.js'); const supported = await supportsMP4(p);
+        const { supportsMP4, supportsMP4Audio } = await import('./video-export.js');
+        const [supported, audioSupported] = await Promise.all([supportsMP4(p), supportsMP4Audio()]);
         if (preview !== current || version !== current.version) return;
-        current.mp4 = supported;
+        current.audioSupported = audioSupported && !!(globalThis.OfflineAudioContext ?? globalThis.webkitOfflineAudioContext);
+        current.mp4 = supported && (!p.includeSoundscape || current.audioSupported);
+        // A selected but unsupported soundtrack can always be unchecked.
+        $('animation-soundscape-note').textContent = current.audioSupported
+          ? `${getSoundscape(current.state.audio.id).name} · ${Math.round(current.state.audio.volume * 100)}% volume. ${SOUNDSCAPE_WARMUP} s warm-up trimmed off; 2 s fade-in, 1 s fade-out. Uses Soundscape settings; reactive audio follows exported frames. Preview has no exported audio.`
+          : 'Soundscape export is unavailable in this browser. You can export a silent MP4.';
         if (!supported) $('animation-codec-note').textContent = p.quantizer !== null
           ? 'Maximum quality is unavailable in this browser at this size. Choose Extreme or a smaller size.'
           : 'H.264 encoding is unavailable at these settings. Choose a lower quality, a smaller size, or GIF.';
@@ -182,7 +195,7 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
   }
   $('color-gif-play').onclick = () => { if (!preview) return; preview.paused = !preview.paused; preview.start = null; syncPlay(); };
   $('color-gif-restart').onclick = updateOptions;
-  for (const id of ['animation-motion', 'animation-format', 'animation-size', 'animation-aspect', 'animation-quality', 'animation-fps', 'gif-wander-colors', 'gif-duration']) $(id).onchange = updateOptions;
+  for (const id of ['animation-motion', 'animation-format', 'animation-size', 'animation-aspect', 'animation-quality', 'animation-fps', 'animation-end-hold', 'animation-soundscape', 'gif-wander-colors', 'gif-duration']) $(id).onchange = updateOptions;
   for (const name of ['phase', 'speed']) {
     $(`color-gif-${name}-slider`).oninput = () => { $(`color-gif-${name}`).value = $(`color-gif-${name}-slider`).value; updateOptions(); };
   }
@@ -229,11 +242,12 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
     const current = preview; if (!current?.ready || !current.valid) throw new Error('Wait for a valid preview.');
     const p = animationExport(current.state, readOptions()), shade = $('color-gif-vignette').checked;
     const dither = $('animation-dither').checked;
+    const audioFrames = p.includeSoundscape && current.state.audio.id === 'resonance' ? [] : null;
     if (current.rendering) await abortable(current.rendering, signal);
     const output = document.createElement('canvas'); output.width = p.width; output.height = p.height;
     const gif = p.format === 'gif' ? GIFEncoder() : null;
     const gifPalette = gif ? quantize(gifPaletteSample(colorTable(current.state.colors.palette), shade), p.paletteSize) : null;
-    let video, finished = false, key = null, values, metadata;
+    let video, finished = false, key = null, values, metadata, features;
     const cancel = () => { video?.cancel().catch(() => {}); current.renderer.cancel(); };
     signal.addEventListener('abort', cancel, { once: true });
     try {
@@ -250,7 +264,9 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
           // Drain a cancelled render/read before reusing this engine for preview.
           metadata = (await current.renderer.render(view, p.width, p.height, current.state.settings)).metadata;
           check(signal); values = await current.renderer.readField(); check(signal); key = next;
+          if (audioFrames) features = soundscapeFrame(values, metadata, view);
         }
+        if (audioFrames) audioFrames.push(features);
         paintExport(output, values, metadata, { ...current.state.colors, phase: p.phaseAt(index) }, shade);
         if (gif) {
           let rgba = output.getContext('2d').getImageData(0, 0, p.width, p.height).data;
@@ -263,7 +279,14 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
       check(signal);
       let blob;
       if (gif) { gif.finish(); blob = new Blob([gif.bytes()], { type: 'image/gif' }); }
-      else blob = await abortable(video.finish(), signal);
+      else {
+        const audioBuffer = p.includeSoundscape ? await renderSoundscape({
+          selection: current.state.audio, duration: p.duration, fps: p.fps, features: audioFrames ?? [], phaseAt: p.phaseAt, signal,
+          onProgress: (time, warming) => { $('color-gif-status').textContent = warming ? 'Warming up the soundscape…' : `Rendering soundscape ${time.toFixed(1)} / ${p.duration.toFixed(1)} s…`; },
+        }) : null;
+        check(signal); $('color-gif-status').textContent = 'Finishing MP4…';
+        blob = await abortable(video.finish(audioBuffer), signal);
+      }
       check(signal); finished = true;
       await downloadBlob(blob, `fractal-web-${current.state.view.fractal}-${p.mode}.${p.format}`);
       $('color-gif-status').textContent = `Your ${p.duration.toFixed(2)} s ${p.format.toUpperCase()} is ready.`;

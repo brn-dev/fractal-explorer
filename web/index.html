@@ -392,10 +392,12 @@
         <div class="panel-actions">
           <button id="share-location" class="secondary-button">Share link <span>↗</span></button>
           <button id="save-location" class="secondary-button">
-            ⌖ Save location</button
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 3h12v18l-6-4-6 4Z" /></svg>
+            Bookmark location</button
           ><button id="export" class="primary-button">
             Export <span>↗</span>
           </button>
+          <button id="open-location-export" class="secondary-button" aria-haspopup="dialog" aria-controls="location-export-dialog">Download / upload location <span>↗</span></button>
         </div>
       </div>
     </aside>
@@ -483,11 +485,10 @@
         <button class="dialog-close icon-button" aria-label="Close export options">×</button>
       </form>
       <h2 id="export-title">Export</h2>
-      <p>Choose what to save, or open a saved location.</p>
+      <p>Choose what to save.</p>
       <div class="export-choices">
         <button id="open-image-export" class="secondary-button" aria-haspopup="dialog" aria-controls="image-export-dialog">Export image <span>↗</span></button>
         <button id="open-video-export" class="secondary-button" aria-haspopup="dialog" aria-controls="color-gif-dialog">Export video <span>↗</span></button>
-        <button id="open-location-export" class="secondary-button" aria-haspopup="dialog" aria-controls="location-export-dialog">Export / import location <span>↗</span></button>
       </div>
       <p id="export-menu-status" role="status"></p>
     </dialog>
@@ -511,11 +512,11 @@
       <p id="export-status" role="status"></p>
     </dialog>
     <dialog id="location-export-dialog" aria-labelledby="location-export-title">
-      <form method="dialog"><button class="dialog-close icon-button" aria-label="Back to export options">×</button></form>
-      <h2 id="location-export-title">Export / import location</h2>
+      <form method="dialog"><button class="dialog-close icon-button" aria-label="Close location dialog">×</button></form>
+      <h2 id="location-export-title">Download / upload location</h2>
       <p>Save this view’s coordinates and settings, or open a saved location.</p>
-      <button id="download-location" class="primary-button">Export location · JSON <span>↓</span></button>
-      <button id="choose-location" class="secondary-button">Import location · JSON <span>↑</span></button>
+      <button id="download-location" class="primary-button">Download location · JSON <span>↓</span></button>
+      <button id="choose-location" class="secondary-button">Upload location · JSON <span>↑</span></button>
       <input id="import-location" type="file" accept="application/json,.json" hidden />
       <p id="location-export-status" role="status"></p>
     </dialog>
@@ -546,6 +547,8 @@
         <label class="field-label">Frame rate<select id="animation-fps"><option value="10">10 fps</option><option value="15">15 fps</option><option value="24">24 fps</option><option value="30" selected>30 fps</option><option value="60">60 fps · MP4</option></select></label>
       </div>
       <p id="animation-quality-note" class="export-note"></p>
+      <label id="animation-end-hold-row" class="field-label">Hold final frame<select id="animation-end-hold" aria-describedby="animation-end-hold-note"><option value="0">None</option><option value="0.5">½ second</option><option value="1" selected>1 second</option></select></label>
+      <p id="animation-end-hold-note" class="export-note">Added after the animation. Color wandering can continue.</p>
       <label id="animation-duration-row" class="field-label" hidden>Duration · seconds<input id="gif-duration" type="number" min="0.5" max="20" step="0.5" value="4" /></label>
       <label class="switch-label"><span>Wander colors</span><input id="gif-wander-colors" type="checkbox" role="switch" checked /><span class="switch"></span></label>
       <div class="two-fields animation-fields">
@@ -562,6 +565,8 @@
       </div>
       <label id="animation-dither-row" class="switch-label" hidden><span>Smooth GIF gradients</span><input id="animation-dither" type="checkbox" role="switch" checked /><span class="switch"></span></label>
       <label class="switch-label"><span>Include vignette</span><input id="color-gif-vignette" type="checkbox" role="switch" /><span class="switch"></span></label>
+      <label class="switch-label"><span>Include soundscape · MP4</span><input id="animation-soundscape" type="checkbox" role="switch" aria-describedby="animation-soundscape-note" /><span class="switch"></span></label>
+      <p id="animation-soundscape-note" class="export-note"></p>
       <p id="color-gif-details" class="export-note"></p>
       <p id="animation-codec-note" class="export-note"></p>
       <button id="download-color-gif" class="primary-button image-export-action" disabled>Download animation <span>↓</span></button>

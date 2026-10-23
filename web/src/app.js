@@ -1017,10 +1017,10 @@ function setupControls() {
         automation: structuredClone(automationSettings),
       });
       buildDestinations();
-      toast(placesHidden ? "Location saved. Tap the places arrow to see it." : "Location saved. Find it in your destinations.");
+      toast(placesHidden ? "Location bookmarked. Tap the places arrow to see it." : "Location bookmarked. Find it in your destinations.");
     } catch {
       toast(
-        "Browser storage is unavailable. Export the location as JSON instead.",
+        "Browser storage is unavailable. Download the location as JSON instead.",
       );
     }
   };
@@ -1055,8 +1055,7 @@ function setupControls() {
       syncRenderSettings(data.renderSettings);
       loadView(imported, -1, false, 'import');
       setAutomation(data.automation ?? {});
-      $('location-export-dialog').close('imported');
-      $('export-dialog').close();
+      $('location-export-dialog').close();
     } catch (error) {
       $('location-export-status').textContent = error.message;
     }
@@ -1066,7 +1065,8 @@ function setupControls() {
     engine, palettes, paint, colorTable, downloadBlob,
     getState: () => {
       if (!engineReady) throw new Error('Wait for the browser renderer to start.');
-      return { view: { ...view }, visibleView: { ...(imageView ?? view) }, automation: structuredClone(automationSettings), settings: { ...renderSettings }, colors: { palette, density, phase }, speed: wanderingSpeed, wander: $('animate').checked };
+      return { view: { ...view }, visibleView: { ...(imageView ?? view) }, automation: structuredClone(automationSettings), settings: { ...renderSettings }, colors: { palette, density, phase }, speed: wanderingSpeed, wander: $('animate').checked,
+        audio: { ...audio.selection, volume: audio.settings.volume, intensity: audio.settings.intensity } };
     },
     getCurrentField: async () => {
       if (rendering || !paintingReady || !field || (!automationPlayer.plan && JSON.stringify(imageView) !== JSON.stringify(currentRenderView())) || JSON.stringify(imageSettings) !== JSON.stringify(renderSettings)) throw new Error('Wait for the current view to finish rendering.');

@@ -158,8 +158,9 @@ export class MusicEngine {
     this.tick(); this.interval = this.timers.setInterval(() => this.tick(),100);
   }
   clearScheduler() { if (this.interval != null) this.timers.clearInterval(this.interval); this.interval = null; }
-  tick() {
-    if (!this.active || !this.visible || this.context.state !== 'running') return;
+  tick({ offline = false } = {}) {
+    // An export advances this same scheduler at offline suspension checkpoints.
+    if (!this.active || !this.visible || (!offline && this.context.state !== 'running')) return;
     const c = this.context, now = c.currentTime, dt = Math.min(.5,Math.max(0,now - (this.lastTick ?? now))); this.lastTick = now;
     for (const scene of [...this.scenes]) if (scene.retiring && scene.retireAt <= now) this.disposeScene(scene);
     if (this.pendingSelection && this.scenes.length < 2) { this.scenes.push(this.createScene(this.pendingSelection)); this.pendingSelection = null; }
