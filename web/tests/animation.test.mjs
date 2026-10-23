@@ -252,7 +252,8 @@ test('MP4 and GIF share the parameter path at independently chosen sizes and fra
   const p=animationExport(state,output),g=animationExport(state,{...output,format:'gif',quality:'draft',fps:15,longest:1080});
   assert.equal(p.frames,120);assert.equal(g.frames,60);assert.equal(g.paletteSize,64);
   assert.equal(p.width%2,0);assert.equal(p.height%2,0);assert.equal(g.width,1080);
-  assert.deepEqual(p.viewAt(30),g.viewAt(15));assert.equal(p.phaseAt(120),p.phaseAt(0));
+  assert.deepEqual(p.viewAt(30),g.viewAt(15));assert.equal(g.phaseAt(g.frames),g.phaseAt(0));
+  assert.ok(Math.abs(p.phaseAt(120)-(.2+.12*4))<1e-12);
   assert.ok(animationExport(state,{...output,quality:'draft'}).bitrate<p.bitrate);
   assert.throws(()=>animationExport(state,{...output,format:'gif',fps:60}));
 });
@@ -388,10 +389,13 @@ test('repeated MP4 cycles preserve the path, keep color moving, and add the hold
     assert.ok(Math.abs(p.duration-(once.duration*repeats+1))<1e-12);
     for(let cycle=0;cycle<repeats;cycle++) for(let i=0;i<once.frames;i++) {
       assert.deepEqual(p.viewAt(cycle*once.frames+i),once.viewAt(i));
-      assert.ok(Math.abs(p.phaseAt(cycle*once.frames+i)-once.phaseAt(i))<1e-12);
+      const expected=mode==='parameters'?(output.start+output.speed*(cycle*once.frames+i)/output.fps)%1:once.phaseAt(i);
+      const delta=Math.abs(p.phaseAt(cycle*once.frames+i)-expected);
+      assert.ok(Math.min(delta,Math.abs(1-delta))<1e-12);
     }
     const seam=p.cycleFrames;
     assert.notEqual(p.phaseAt(seam-1),p.phaseAt(seam));
+    if(mode==='parameters')assert.notEqual(p.phaseAt(seam),p.phaseAt(0));
     assert.deepEqual(p.viewAt(p.frames-1),once.viewAt(once.frames-1));
   }
   for(const repeats of [0,6,1.5,NaN]) assert.throws(()=>animationExport(state,{...output,repeats}),/repeats/);

@@ -1,6 +1,7 @@
 import { renderSoundscape, soundscapeFrame, SOUNDSCAPE_SAMPLE_RATE } from '../src/audio/export-audio.mjs';
 import { mp4Encoder, supportsMP4Audio, supportsMP4 } from '../src/video-export.js';
 import { animationExport } from '../src/animation-export.mjs';
+import { SoundscapePreview } from '../src/audio/preview-audio.mjs';
 import { Input, BlobSource, ALL_FORMATS, AudioBufferSink } from 'mediabunny';
 
 const $=id=>document.getElementById(id), report=text=>{$('results').textContent+=`${text}\n`;};
@@ -17,8 +18,9 @@ const urls=[];
 $('run').onclick=async()=>{
   $('run').disabled=true;$('results').textContent='';for(const url of urls)URL.revokeObjectURL(url);urls.length=0;$('previews').replaceChildren();
   let encoder,input;
+  const transport=new SoundscapePreview(),unlocked=transport.unlock();
   try {
-    const options=animationExport({view:{fractal:'julia',center_x:'0',center_y:'0',span:'3'},aspect:9/16}, {mode:'zoom',format:'mp4',quality:'high',longest:480,fps:10,duration:10,endHold:1,start:0,speed:.2,wander:true,includeSoundscape:true});
+    const options=animationExport({view:{fractal:'julia',x:'0',y:'0',span:'3.6',julia_x:'-.8',julia_y:'.156',iterations:800,bailout:64},automation:{julia_x:{enabled:true,target:'-.7',speed:.25}},aspect:9/16}, {mode:'parameters',format:'mp4',quality:'high',longest:480,fps:10,repeats:3,endHold:1,start:0,speed:.2,wander:true,includeSoundscape:true});
     // Keep fixture encoding small while preserving the production plan's times.
     Object.assign(options,{width:source.width,height:source.height});
     const videoSupport=await supportsMP4(options),audioSupport=await supportsMP4Audio();
@@ -26,15 +28,30 @@ $('run').onclick=async()=>{
     const selection={id:'resonance',seed:52719,volume:.32,intensity:.65};
     const frames=Array.from({length:options.frames},(_,i)=>features[i<options.motionFrames&&(i%8>=2&&i%8<4)?1:0]);
     const audio=await renderSoundscape({selection,duration:options.duration,fps:options.fps,features:frames,phaseAt:options.phaseAt});
-    assert(audio.length===11*SOUNDSCAPE_SAMPLE_RATE,'Warm-up changed soundtrack duration');
+    assert(audio.length===13*SOUNDSCAPE_SAMPLE_RATE,'Warm-up/repeats changed soundtrack duration');
     for(let channel=0;channel<2;channel++) {
       const data=audio.getChannelData(channel);assert(data.every(Number.isFinite),'Nonfinite output');
       assert(data[0]===0&&data.at(-1)===0,'Fade endpoints are not silent');
     }
     assert(rms(audio,.4,1)>rms(audio,0,.1)*2,'Fade-in did not ramp up');
     assert(rms(audio,2,3)>.0001,'Warm-up did not produce established music');
-    assert(rms(audio,10.8,10.99)<rms(audio,9,10),'Fade-out did not reduce the tail');
+    assert(rms(audio,12.8,12.99)<rms(audio,11,12),'Fade-out did not reduce the tail');
+    for(const at of [4,8])assert(rms(audio,at-.1,at+.1)>.0001,'Music faded at an animation repeat');
     report(`PASS reactive warm-up trimmed to ${audio.duration}s; 2s fade-in / 1s fade-out, RMS at 2s ${rms(audio,2,3).toFixed(5)}`);
+    report('PASS three animation repeats share continuous music, with only one final hold/fade');
+    assert(await unlocked,'Preview AudioContext could not start from the Run gesture');
+    transport.setBuffer(audio);assert(transport.play(),'Preview playback did not start');
+    const analyser=transport.context.createAnalyser();transport.gain.connect(analyser);
+    await new Promise(resolve=>setTimeout(resolve,1000));
+    const samples=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(samples);
+    const level=Math.sqrt(samples.reduce((sum,v)=>sum+v*v,0)/samples.length);
+    assert(level>.00001,'Preview output is silent');
+    assert(transport.position>.5&&transport.position<2,'Preview clock is not advancing in audio time');
+    transport.pause();const held=transport.position;await new Promise(resolve=>setTimeout(resolve,100));
+    assert(transport.position===held,'Pause did not hold audio time');
+    transport.play();assert(transport.buffer===audio,'Preview changed the buffer used by the MP4 encoder');
+    transport.reset();assert(transport.position===0,'Restart did not reset the faded soundtrack');
+    report(`PASS audible preview uses the identical MP4 buffer; RMS ${level.toFixed(5)}, audio-clock pause/resume/restart`);
     const still=await renderSoundscape({selection,duration:options.duration,fps:options.fps,features:Array(options.frames).fill(features[0]),phaseAt:options.phaseAt});
     let delta=0;for(let i=2*SOUNDSCAPE_SAMPLE_RATE;i<9*SOUNDSCAPE_SAMPLE_RATE;i++)delta+=(audio.getChannelData(0)[i]-still.getChannelData(0)[i])**2;
     assert(Math.sqrt(delta/(7*SOUNDSCAPE_SAMPLE_RATE))>.0001,'Reactive changes did not affect rendered audio');
@@ -42,11 +59,11 @@ $('run').onclick=async()=>{
     const generative=await renderSoundscape({selection:{...selection,id:'celestial'},duration:3,fps:10});
     assert(rms(generative,1,2)>.0001,'Generative soundscape is silent');report('PASS generative soundscape');
     const controller=new AbortController();let cancelled=false;
-    try{await renderSoundscape({selection,duration:11,fps:10,features:frames,signal:controller.signal,onProgress:()=>controller.abort()});}catch(error){cancelled=error.name==='AbortError';}
+    try{await renderSoundscape({selection,duration:options.duration,fps:10,features:frames,signal:controller.signal,onProgress:()=>controller.abort()});}catch(error){cancelled=error.name==='AbortError';}
     assert(cancelled,'Offline render cancellation failed');report('PASS soundscape rendering cancellation');
     encoder=await mp4Encoder(source,options);
     for(let i=0;i<options.frames;i++){
-      const position=Math.min(i,options.motionFrames-1)/options.motionFrames;
+      const position=(Math.min(i,options.motionFrames-1)%options.cycleFrames)/options.cycleFrames;
       ctx.fillStyle=`hsl(${options.phaseAt(i)*360} 40% 15%)`;ctx.fillRect(0,0,source.width,source.height);
       ctx.fillStyle='#d5efa3';ctx.fillRect(20+position*230,45,35,80);await encoder.add(i);
     }
@@ -69,5 +86,5 @@ $('run').onclick=async()=>{
     assert(Math.abs(await input.computeDuration()-.5)<.001,'Silent MP4 duration changed');
     report('PASS soundscape off produces a video-only MP4');
     report('ALL CHECKS PASSED');
-  } catch(error){report(`FAIL ${error.stack}`);}finally{if(encoder)await encoder.cancel().catch(()=>{});input?.dispose();$('run').disabled=false;}
+  } catch(error){report(`FAIL ${error.stack}`);}finally{await transport.dispose();if(encoder)await encoder.cancel().catch(()=>{});input?.dispose();$('run').disabled=false;}
 };

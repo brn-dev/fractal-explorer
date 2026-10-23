@@ -186,7 +186,6 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
     const includeSoundscape = !isGIF && $('animation-soundscape').checked;
     if (includeSoundscape) unlockPreview(current);
     else { clearSoundtrack(current); $('animation-preview-status').textContent = ''; }
-    Promise.resolve(setAudioPreview(includeSoundscape)).catch(() => {});
     $('animation-end-hold-row').hidden = $('animation-end-hold-note').hidden = isGIF;
     $('animation-repeats-row').hidden = $('animation-repeats-note').hidden = isGIF || $('animation-motion').value === 'zoom';
     $('animation-soundscape-note').textContent = isGIF ? 'GIF has no audio. Choose MP4 to include the soundscape.' : 'Checking soundscape encoding on this device…';
@@ -307,6 +306,7 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
     try { state = snapshot(); } catch (error) { $('export-menu-status').textContent = error.message; return; }
     dialog.close();
     const controller = new AbortController(), current = preview = { state, controller, sound: new SoundscapePreview(), ready: false, version: 0, elapsed: 0, paused: matchMedia('(prefers-reduced-motion: reduce)').matches };
+    Promise.resolve(setAudioPreview(true)).catch(() => {});
     const hasParameters = !!animationPlan(state.view, state.automation);
     $('animation-motion').querySelector('option[value="parameters"]').disabled = !hasParameters;
     $('animation-motion').value = hasParameters ? 'parameters' : 'colors';

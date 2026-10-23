@@ -27,7 +27,7 @@ export function animationExport(state, options) {
   const cycleFrames = Math.max(2, Math.round(duration * fps)), motionFrames = cycleFrames * repeats, holdFrames = Math.round(endHold * fps), frames = motionFrames + holdFrames;
   const { width, height } = exportDimensions(aspect, longest);
   if (format === 'gif' && width * height * frames > (state.mobile ? 160e6 : 480e6)) throw new Error('This GIF would be too large to encode in memory. Choose MP4, a smaller size, or fewer frames.');
-  const colorCycles = mode === 'colors' ? 1 : mode === 'zoom' ? speed * cycleFrames / fps : Math.max(1, Math.round(speed * cycleFrames / fps));
+  const colorCycles = mode === 'colors' ? 1 : format === 'mp4' || mode === 'zoom' ? speed * cycleFrames / fps : Math.max(1, Math.round(speed * cycleFrames / fps));
   return {
     ...options, repeats, aspectRatio, aspect, width, height, frames, cycleFrames, motionFrames, holdFrames, endHold: holdFrames / fps, motionDuration: motionFrames / fps, duration: frames / fps, looping: mode !== 'zoom', parameters,
     bitrate: exportQualities[quality].quantizer === undefined ? Math.min(exportQualities[quality].maxBitrate, Math.max(500000, Math.round(width * height * fps * exportQualities[quality].bits))) : null,
