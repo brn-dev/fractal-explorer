@@ -1063,6 +1063,7 @@ function setupControls() {
   };
   setupExports({
     engine, palettes, paint, colorTable, downloadBlob,
+    setAudioPreview: active => audio.setPreviewing(active),
     getState: () => {
       if (!engineReady) throw new Error('Wait for the browser renderer to start.');
       return { view: { ...view }, visibleView: { ...(imageView ?? view) }, automation: structuredClone(automationSettings), settings: { ...renderSettings }, colors: { palette, density, phase }, speed: wanderingSpeed, wander: $('animate').checked,

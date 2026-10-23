@@ -43,7 +43,7 @@ export class AudioController {
   }
   get id() { return this.settings.mode === 'reactive' ? 'resonance' : this.settings.selection === 'manual' ? this.settings.manualId : this.autoId ?? 'celestial'; }
   get selection() { return { id: this.id, seed: this.seed }; }
-  get analyzing() { return this.settings.enabled && !this.settings.muted && this.settings.mode === 'reactive' && this.visible && this.player.state === 'playing'; }
+  get analyzing() { return this.settings.enabled && !this.settings.muted && this.settings.mode === 'reactive' && this.visible && !this.previewing && this.player.state === 'playing'; }
   get state() { return !this.settings.enabled ? 'off' : this.player.state === 'playing' ? this.settings.muted ? 'muted' : 'playing' : 'paused'; }
   notify() { this.onChange(this); }
   persist() { try { this.storage?.setItem(AUDIO_STORAGE_KEY,JSON.stringify({ ...this.settings, lastAutoId: this.autoId })); } catch {} }
@@ -86,7 +86,9 @@ export class AudioController {
     if (!this.settings.enabled || this.player.state !== 'playing') return this.start();
     this.configure({ muted: !this.settings.muted });
   }
-  async setVisible(visible) { this.visible = visible; this.resetAnalysis(); await this.player.setVisible(visible); this.notify(); if (this.analyzing) this.requestAnalysis(); }
+  async setVisible(visible) { this.visible = visible; await this.syncVisibility(); }
+  async setPreviewing(previewing) { this.previewing = previewing; await this.syncVisibility(); }
+  async syncVisibility() { this.resetAnalysis(); await this.player.setVisible(this.visible && !this.previewing); this.notify(); if (this.analyzing) this.requestAnalysis(); }
   present(frame, time = performance.now() / 1000) {
     if (!this.analyzing || !frame?.field || typeof frame.field !== 'object') return;
     let features = this.samples.get(frame);

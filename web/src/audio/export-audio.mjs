@@ -20,7 +20,7 @@ export function soundscapeEnvelope(index, length, sampleRate) {
 // are retained, never another copy of their full-resolution scalar fields.
 export async function renderSoundscape({ selection, duration, fps, features = [], phaseAt = () => 0, signal, onProgress = () => {} }) {
   check(signal);
-  if (!Number.isFinite(duration) || duration <= 0 || duration > 21 || !Number.isFinite(fps) || fps <= 0) throw new Error('Invalid soundscape duration or frame rate.');
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 101 || !Number.isFinite(fps) || fps <= 0) throw new Error('Invalid soundscape duration or frame rate.');
   if (selection.id === 'resonance' && features.length !== Math.round(duration * fps)) throw new Error('Reactive sound requires every exported frame.');
   const OfflineContext = globalThis.OfflineAudioContext ?? globalThis.webkitOfflineAudioContext;
   if (!OfflineContext) throw new Error('Offline soundscape rendering is unavailable in this browser.');

@@ -13,6 +13,18 @@ test('eight distinct, bounded soundscapes plus resonance validate', () => {
   for (const patch of [{id:''},{root:NaN},{chords:[[Infinity]]},{events:[0,1]},{feedback:.99},{harmony:30},{timbre:'saw'},{cutoff:Infinity}]) assert.throws(()=>validateSoundscapes([{...soundscapes[0],...patch}]));
   assert.throws(()=>validateSoundscapes([soundscapes[0],soundscapes[0]]));
 });
+
+test('noise stays far behind pitched voices, with a larger reduction in reactive mode', () => {
+  for(const d of [...soundscapes,resonance]) {
+    const events=new MusicalTimeline(d,52719).until(40), pitched=events.filter(e=>e.timbre!=='noise');
+    assert.deepEqual(pitched,new MusicalTimeline({...d,texture:0},52719).until(40));
+    for(const event of events.filter(e=>e.timbre==='noise')) {
+      assert.ok(event.level<=d.texture*(d.id==='resonance'?.081:.151));
+      assert.ok(event.level<.004);
+    }
+    assert.ok(pitched.some(e=>e.layer==='foundation'&&e.level===.046));
+  }
+});
 test('seeded randomness and the musical sequence are deterministic across scheduler chunk sizes', () => {
   const a=seededRandom(42), b=seededRandom(42), c=seededRandom(43);
   const first=Array.from({length:100},a); assert.deepEqual(first,Array.from({length:100},b)); assert.notDeepEqual(first,Array.from({length:100},c));
@@ -168,6 +180,15 @@ test('settings are local, validated, tolerant of old/malformed/unavailable stora
   audio.configure({volume:.19}); const next=new AudioController({storage,engine:new Player()}); assert.equal(next.settings.volume,.19); assert.equal(next.settings.manualId,'void');
   const broken=new AudioController({storage:{getItem(){throw Error();},setItem(){throw Error();}},engine:new Player()}); broken.configure({volume:.1});
   assert.equal(broken.state,'off');
+});
+
+test('export preview suppresses live sound without changing saved preferences or resuming in a hidden tab', async () => {
+  const {audio,player}=controller({enabled:true,mode:'reactive'});await audio.start();
+  const settings={...audio.settings};
+  await audio.setPreviewing(true);assert.equal(player.state,'paused');assert.equal(audio.analyzing,false);
+  await audio.setVisible(false);await audio.setPreviewing(false);assert.equal(player.state,'paused');
+  await audio.setVisible(true);assert.equal(player.state,'playing');assert.equal(audio.analyzing,true);
+  assert.deepEqual(audio.settings,settings);
 });
 test('Auto remembers its previous choice across visits without starting audio', () => {
   const {audio,storage}=controller();audio.majorSceneChange('initial');const previous=audio.id;

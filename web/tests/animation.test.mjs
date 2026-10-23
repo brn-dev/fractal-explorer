@@ -378,3 +378,23 @@ test('MP4 end hold freezes the exact final motion frame without stretching the p
   for (const endHold of [-1,2,NaN]) assert.throws(()=>animationExport(state,{...output,endHold}),/end hold/);
   assert.throws(()=>animationExport(state,{...output,format:'gif',endHold:1}),/MP4 end hold/);
 });
+
+test('repeated MP4 cycles preserve the path, keep color moving, and add the hold only once',()=>{
+  for(const mode of ['parameters','colors']) for(const repeats of [2,3,5]) {
+    const once=animationExport(state,{...output,mode});
+    const p=animationExport(state,{...output,mode,repeats,endHold:1});
+    assert.equal(p.cycleFrames,once.frames);assert.equal(p.motionFrames,once.frames*repeats);
+    assert.equal(p.frames,once.frames*repeats+output.fps);
+    assert.ok(Math.abs(p.duration-(once.duration*repeats+1))<1e-12);
+    for(let cycle=0;cycle<repeats;cycle++) for(let i=0;i<once.frames;i++) {
+      assert.deepEqual(p.viewAt(cycle*once.frames+i),once.viewAt(i));
+      assert.ok(Math.abs(p.phaseAt(cycle*once.frames+i)-once.phaseAt(i))<1e-12);
+    }
+    const seam=p.cycleFrames;
+    assert.notEqual(p.phaseAt(seam-1),p.phaseAt(seam));
+    assert.deepEqual(p.viewAt(p.frames-1),once.viewAt(once.frames-1));
+  }
+  for(const repeats of [0,6,1.5,NaN]) assert.throws(()=>animationExport(state,{...output,repeats}),/repeats/);
+  assert.throws(()=>animationExport(state,{...output,mode:'zoom',repeats:2}),/repeats/);
+  assert.throws(()=>animationExport(state,{...output,format:'gif',repeats:2}),/repeats/);
+});

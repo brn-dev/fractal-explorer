@@ -11,7 +11,7 @@ export const exportQualities = {
   maximum: { colors: 256, quantizer: 0, mp4Only: true },
 };
 export function animationExport(state, options) {
-  const { mode, format, quality, longest, fps, start, speed, wander, aspectRatio = 'view', endHold = 0 } = options;
+  const { mode, format, quality, longest, fps, start, speed, wander, aspectRatio = 'view', endHold = 0, repeats = 1 } = options;
   if (!['parameters', 'colors', 'zoom'].includes(mode) || !['gif', 'mp4'].includes(format) || !Object.hasOwn(exportQualities, quality)) throw new Error('Choose valid animation export settings.');
   if (format === 'gif' && exportQualities[quality].mp4Only) throw new Error('Ultra, Extreme, and Maximum quality require MP4. Choose High for GIF.');
   const aspect = exportAspect(state.aspect, aspectRatio);
@@ -23,18 +23,19 @@ export function animationExport(state, options) {
   const duration = parameters ? parameters.duration : mode === 'colors' ? 1 / speed : Number(options.duration);
   if (!Number.isFinite(duration) || duration < .5 || duration > 20) throw new Error('Choose a duration from 0.5 to 20 seconds.');
   if (![0, .5, 1].includes(endHold) || (format === 'gif' && endHold !== 0)) throw new Error('Choose an MP4 end hold of 0, 0.5, or 1 second.');
-  const motionFrames = Math.max(2, Math.round(duration * fps)), holdFrames = Math.round(endHold * fps), frames = motionFrames + holdFrames;
+  if (!Number.isInteger(repeats) || repeats < 1 || repeats > 5 || ((format === 'gif' || mode === 'zoom') && repeats !== 1)) throw new Error('Choose 1–5 repeats for an MP4 parameter or color loop.');
+  const cycleFrames = Math.max(2, Math.round(duration * fps)), motionFrames = cycleFrames * repeats, holdFrames = Math.round(endHold * fps), frames = motionFrames + holdFrames;
   const { width, height } = exportDimensions(aspect, longest);
   if (format === 'gif' && width * height * frames > (state.mobile ? 160e6 : 480e6)) throw new Error('This GIF would be too large to encode in memory. Choose MP4, a smaller size, or fewer frames.');
-  const colorCycles = mode === 'colors' ? 1 : mode === 'zoom' ? speed * motionFrames / fps : Math.max(1, Math.round(speed * motionFrames / fps));
+  const colorCycles = mode === 'colors' ? 1 : mode === 'zoom' ? speed * cycleFrames / fps : Math.max(1, Math.round(speed * cycleFrames / fps));
   return {
-    ...options, aspectRatio, aspect, width, height, frames, motionFrames, holdFrames, endHold: holdFrames / fps, motionDuration: motionFrames / fps, duration: frames / fps, looping: mode !== 'zoom', parameters,
+    ...options, repeats, aspectRatio, aspect, width, height, frames, cycleFrames, motionFrames, holdFrames, endHold: holdFrames / fps, motionDuration: motionFrames / fps, duration: frames / fps, looping: mode !== 'zoom', parameters,
     bitrate: exportQualities[quality].quantizer === undefined ? Math.min(exportQualities[quality].maxBitrate, Math.max(500000, Math.round(width * height * fps * exportQualities[quality].bits))) : null,
     quantizer: exportQualities[quality].quantizer ?? null,
     paletteSize: exportQualities[quality].colors,
     delay: index => 10 * (Math.round((index + 1) * 100 / fps) - Math.round(index * 100 / fps)),
-    phaseAt: index => wrapPhase(start + (wander ? colorCycles * index / motionFrames : 0)),
-    viewAt: index => parameters ? parameters.viewAt(Math.min(index, motionFrames - 1), motionFrames) : mode === 'zoom'
+    phaseAt: index => wrapPhase(start + (wander ? colorCycles * index / cycleFrames : 0)),
+    viewAt: index => parameters ? parameters.viewAt(Math.min(index, motionFrames - 1) % cycleFrames, cycleFrames) : mode === 'zoom'
       ? navigate({ view: state.visibleView ?? state.view, factor: 8 ** (Math.min(index, motionFrames - 1) / (motionFrames - 1)) })
       : state.visibleView ?? state.view,
   };

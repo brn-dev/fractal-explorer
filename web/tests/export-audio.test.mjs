@@ -35,5 +35,5 @@ test('cancelled sound rendering and missing reactive frames fail before allocati
   const controller=new AbortController();controller.abort();
   await assert.rejects(renderSoundscape({signal:controller.signal}),{name:'AbortError'});
   await assert.rejects(renderSoundscape({selection:{id:'resonance'},duration:2,fps:30,features:[]}),/every exported frame/);
-  await assert.rejects(renderSoundscape({selection:{id:'celestial'},duration:22,fps:30}),/duration/);
+  await assert.rejects(renderSoundscape({selection:{id:'celestial'},duration:102,fps:30}),/duration/);
 });

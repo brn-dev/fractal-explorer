@@ -40,6 +40,11 @@ export function chooseSoundscape(previous, random = Math.random, definitions = s
 }
 export const getSoundscape = id => id === resonance.id ? resonance : soundscapes.find(d => d.id === id) ?? soundscapes[0];
 
+// Keep atmospheric hiss well behind pitched voices, especially when reactive
+// brightness opens the scene filter. Harmonic and melodic levels stay intact.
+export const TEXTURE_LEVEL = .15;
+export const REACTIVE_TEXTURE_LEVEL = .08;
+
 // Each layer has its own clock. All random draws are deterministic in timeline
 // order; render frames never advance this state in generative mode.
 export class MusicalTimeline {
@@ -70,7 +75,7 @@ export class MusicalTimeline {
         for (let i = 0; i < d.harmony; i++) events.push({ ...common, at: at + i * .7, midi: d.root + chord[(i + this.step) % chord.length], timbre: d.timbre, duration: this.range(d.duration), attack: d.attack, level: .026 / Math.sqrt(Math.max(1,d.harmony)), upper: i > 0 });
         this.next[layer] += this.range(d.interval);
       } else if (layer === 'texture') {
-        if (d.texture) events.push({ ...common, midi: d.root + 24, timbre: 'noise', duration: 32, attack: 10, level: d.texture });
+        if (d.texture) events.push({ ...common, midi: d.root + 24, timbre: 'noise', duration: 32, attack: 10, level: d.texture * (d.id === 'resonance' ? REACTIVE_TEXTURE_LEVEL : TEXTURE_LEVEL) });
         this.next[layer] += 25;
       } else {
         const index = this.motif[this.step++ % this.motif.length] % chord.length;

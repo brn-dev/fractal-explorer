@@ -535,6 +535,7 @@
         <button id="color-gif-restart" class="secondary-button" type="button">Restart preview</button>
         <output id="color-gif-live-phase">Phase 0.000</output>
       </div>
+      <p id="animation-preview-status" class="export-note" role="status"></p>
       </section>
       <section class="animation-settings" aria-label="Animation settings">
       <label class="field-label">Animation<select id="animation-motion"><option value="parameters">Main-view parameter loop</option><option value="colors">Wandering colors</option><option value="zoom">8× zoom journey</option></select></label>
@@ -547,6 +548,8 @@
         <label class="field-label">Frame rate<select id="animation-fps"><option value="10">10 fps</option><option value="15">15 fps</option><option value="24">24 fps</option><option value="30" selected>30 fps</option><option value="60">60 fps · MP4</option></select></label>
       </div>
       <p id="animation-quality-note" class="export-note"></p>
+      <label id="animation-repeats-row" class="field-label">Animation repeats<select id="animation-repeats"><option value="1" selected>1 time</option><option value="2">2 times</option><option value="3">3 times</option><option value="4">4 times</option><option value="5">5 times</option></select></label>
+      <p id="animation-repeats-note" class="export-note">Music and color wandering continue across repeats. The final hold is added once.</p>
       <label id="animation-end-hold-row" class="field-label">Hold final frame<select id="animation-end-hold" aria-describedby="animation-end-hold-note"><option value="0">None</option><option value="0.5">½ second</option><option value="1" selected>1 second</option></select></label>
       <p id="animation-end-hold-note" class="export-note">Added after the animation. Color wandering can continue.</p>
       <label id="animation-duration-row" class="field-label" hidden>Duration · seconds<input id="gif-duration" type="number" min="0.5" max="20" step="0.5" value="4" /></label>
