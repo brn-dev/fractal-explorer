@@ -6,6 +6,7 @@ import { drawVignette, exportAspect, exportDimensions, gifPaletteSample, wrapPha
 import { getSoundscape } from './audio/soundscapes.mjs';
 import { soundscapeFrame, renderSoundscape, SOUNDSCAPE_WARMUP } from './audio/export-audio.mjs';
 import { SoundscapePreview } from './audio/preview-audio.mjs';
+import { ExportFieldCache, exportCacheBudget } from './export-field-cache.mjs';
 
 const $ = id => document.getElementById(id);
 const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
@@ -344,7 +345,8 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
     const output = document.createElement('canvas'); output.width = p.width; output.height = p.height;
     const gif = p.format === 'gif' ? GIFEncoder() : null;
     const gifPalette = gif ? quantize(gifPaletteSample(colorTable(current.state.colors.palette), shade), p.paletteSize) : null;
-    let video, finished = false, key = null, values, metadata;
+    const fields = p.repeats > 1 ? new ExportFieldCache({ memoryBudget: exportCacheBudget(engine.mobile), signal }) : null;
+    let video, finished = false, key = null, values, metadata, computed = 0, reused = 0;
     const cancel = () => { video?.cancel().catch(() => {}); current.renderer.cancel(); };
     signal.addEventListener('abort', cancel, { once: true });
     try {
@@ -357,11 +359,22 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
       for (let index = 0; index < p.frames; index++) {
         check(signal); $('color-gif-status').textContent = `Rendering & encoding ${index + 1} / ${p.frames}…`;
         const view = p.viewAt(index), next = JSON.stringify(view);
+        let cached = next === key;
         if (next !== key) {
-          // Drain a cancelled render/read before reusing this engine for preview.
-          metadata = (await current.renderer.render(view, p.width, p.height, current.state.settings)).metadata;
-          check(signal); values = await current.renderer.readField(); check(signal); key = next;
+          let frame = await fields?.get(next);
+          check(signal);
+          const prepared = current.soundtrack?.fields.get(next);
+          if (!frame && prepared?.metadata.width === p.width && prepared.metadata.height === p.height) frame = prepared;
+          if (frame) {
+            ({ values, metadata } = frame); current.renderer.presentCached(values, metadata); cached = true;
+          } else {
+            // Drain a cancelled render/read before reusing this engine for preview.
+            metadata = (await current.renderer.render(view, p.width, p.height, current.state.settings)).metadata;
+            check(signal); values = await current.renderer.readField(); check(signal); computed++;
+          }
+          await fields?.put(next, { values, metadata }); key = next;
         }
+        if (cached) { reused++; $('color-gif-status').textContent = `Recoloring cached state & encoding ${index + 1} / ${p.frames}…`; }
         paintExport(output, values, metadata, { ...current.state.colors, phase: p.phaseAt(index) }, shade);
         if (gif) {
           let rgba = output.getContext('2d').getImageData(0, 0, p.width, p.height).data;
@@ -380,12 +393,15 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
       }
       check(signal); finished = true;
       await downloadBlob(blob, `fractal-web-${current.state.view.fractal}-${p.mode}.${p.format}`);
-      $('color-gif-status').textContent = `Your ${p.duration.toFixed(2)} s ${p.format.toUpperCase()} is ready.`;
+      $('color-gif-status').textContent = `Your ${p.duration.toFixed(2)} s ${p.format.toUpperCase()} is ready.${fields ? ` ${computed} new states computed · ${reused} cached frames.${fields.limited ? ' Temporary storage was limited; some states were recomputed.' : ''}` : ''}`;
     } finally {
       signal.removeEventListener('abort', cancel);
       if (video && !finished) await video.cancel().catch(() => {});
-      current.key = null; current.index = null; current.start = null; current.elapsed = 0;
-      current.sound.reset();
+      try { await fields?.dispose(); }
+      finally {
+        current.key = null; current.index = null; current.start = null; current.elapsed = 0;
+        current.sound.reset();
+      }
     }
   });
 }
