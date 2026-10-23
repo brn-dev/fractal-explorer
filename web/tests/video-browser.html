@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Video quality checks</title>
+<style>
+  body { margin:24px; background:#142019; color:#e8f0df; font:15px/1.5 system-ui; }
+  button,a { color:inherit; } button { padding:12px; background:#243025; border:1px solid #9bb580; border-radius:6px; }
+  .frames { display:flex;flex-wrap:wrap;gap:20px; } canvas,video { width:min(640px,100%);height:auto;image-rendering:auto; }
+  pre { white-space:pre-wrap; } a { display:block;margin:8px 0; }
+</style>
+<h1>Video export quality checks</h1>
+<p>Encode and decode a detailed Julia animation through the app’s MP4 exporter. Compare the first decoded frame with the source pixels.</p>
+<button id="run">Run encoding checks</button>
+<pre id="results" role="status"></pre>
+<div class="frames"><section><h2>Source frame</h2><canvas id="source" width="640" height="360"></canvas></section><section><h2>Decoded frame</h2><canvas id="decoded" width="640" height="360"></canvas></section></div>
+<div id="downloads"></div>
+<script type="module" src="./video-browser.mjs"></script>
+</html>

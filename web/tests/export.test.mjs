@@ -1,7 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { advancePhase, animationFrames, colorCycle, juliaView, wrapPhase } from '../src/export-utils.mjs';
+import { advancePhase, animationFrames, colorCycle, exportAspect, exportDimensions, juliaView, wrapPhase } from '../src/export-utils.mjs';
 import { add, compare, decimal, text } from '../src/decimal.mjs';
+
+test('PNG aspect presets fit both output sizes independently of the main view orientation', () => {
+  const sizes = [
+    ['16:9', [1920, 1080], [3840, 2160]], ['1:1', [1920, 1920], [3840, 3840]],
+    ['21:9', [1920, 822], [3840, 1646]], ['9:16', [1080, 1920], [2160, 3840]],
+    ['4:3', [1920, 1440], [3840, 2880]], ['3:2', [1920, 1280], [3840, 2560]],
+  ];
+  for (const viewAspect of [9 / 16, 1, 1.5]) {
+    for (const [ratio, small, large] of sizes) {
+      const aspect = exportAspect(viewAspect, ratio);
+      assert.deepEqual(exportDimensions(aspect, 1920), { width: small[0], height: small[1] });
+      assert.deepEqual(exportDimensions(aspect, 3840), { width: large[0], height: large[1] });
+    }
+    assert.equal(exportAspect(viewAspect), viewAspect);
+  }
+});
 
 test('normal-view wandering speed keeps the same phase at different frame rates', () => {
   for (const fps of [5, 30, 60, 144]) {

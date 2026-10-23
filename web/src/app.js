@@ -2,7 +2,7 @@ import { zoomLabel } from './numbers.mjs';
 import { navigate as navigateLocal, validate } from './decimal.mjs';
 import { BrowserEngine } from './engine.js';
 import { renderDimensions, qualityScales } from './resolution.mjs';
-import { setupImageExports } from './export-ui.js';
+import { setupExports } from './export-ui.js';
 import { advancePhase } from './export-utils.mjs';
 import { fractals, defaultView, parameterDefaults, hasConstant, fractalParameters } from './fractals.mjs';
 import { LIVE_FPS, animationPlan, cacheDimensions, cacheMemoryOptionsMiB, cacheMemorySetting, cacheMemoryLabel, ProgressiveAnimation, validateAutomation } from './animation.mjs';
@@ -1024,16 +1024,20 @@ function setupControls() {
       );
     }
   };
-  $("download-location").onclick = () =>
-    downloadBlob(
-      new Blob([JSON.stringify(locationData(), null, 2)], {
-        type: "application/json",
-      }),
-      "fractal-location.json",
-    );
+  $("download-location").onclick = async () => {
+    try {
+      await downloadBlob(
+        new Blob([JSON.stringify(locationData(), null, 2)], { type: "application/json" }),
+        "fractal-location.json",
+      );
+      $('location-export-status').textContent = 'Your location is ready.';
+    } catch (error) { $('location-export-status').textContent = error.message; }
+  };
+  $('choose-location').onclick = () => $('import-location').click();
   $("import-location").onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    $('location-export-status').textContent = 'Opening location…';
     try {
       if (file.size > 256000) throw new Error("Location file is too large.");
       const data = JSON.parse(await file.text());
@@ -1051,13 +1055,14 @@ function setupControls() {
       syncRenderSettings(data.renderSettings);
       loadView(imported, -1, false, 'import');
       setAutomation(data.automation ?? {});
-      $("export-dialog").close();
+      $('location-export-dialog').close('imported');
+      $('export-dialog').close();
     } catch (error) {
-      toast(error.message);
+      $('location-export-status').textContent = error.message;
     }
     e.target.value = "";
   };
-  setupImageExports({
+  setupExports({
     engine, palettes, paint, colorTable, downloadBlob,
     getState: () => {
       if (!engineReady) throw new Error('Wait for the browser renderer to start.');

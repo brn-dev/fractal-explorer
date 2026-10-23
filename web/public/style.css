@@ -941,6 +941,9 @@ dialog .export-note {
   font-size: 10px;
   margin: 8px 0;
 }
+.export-choices { display:grid;gap:10px;margin-top:20px; }
+.export-choices .secondary-button { margin:0;justify-content:space-between; }
+#export-title, #image-export-title, #location-export-title { padding-right:24px; }
 #share-dialog h2 { padding-right:20px; }
 #share-link { display:block;width:100%;margin-top:7px;min-height:94px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:6px;background:#ffffff05;color:var(--ink);font:11px/1.6 ui-monospace,monospace;overflow-wrap:anywhere; }
 #color-gif-dialog {
@@ -975,20 +978,6 @@ dialog .export-note {
   #color-gif-dialog { padding: 20px; }
   .animation-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .animation-preview { position: static; }
-}
-.import-label {
-  display: block;
-  text-align: center;
-  margin-top: 18px;
-  color: #b7ce9e;
-  font-size: 11px;
-  cursor: pointer;
-}
-.import-label input {
-  display: block;
-  margin-top: 10px;
-  font-size: 10px;
-  width: 100%;
 }
 .shortcut {
   display: flex;

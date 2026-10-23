@@ -394,7 +394,7 @@
           <button id="save-location" class="secondary-button">
             ⌖ Save location</button
           ><button id="export" class="primary-button">
-            Export image <span>↗</span>
+            Export <span>↗</span>
           </button>
         </div>
       </div>
@@ -480,39 +480,47 @@
     </dialog>
     <dialog id="export-dialog" aria-labelledby="export-title">
       <form method="dialog">
-        <button class="dialog-close icon-button" aria-label="Close">×</button>
+        <button class="dialog-close icon-button" aria-label="Close export options">×</button>
       </form>
-      <div class="eyebrow">TAKE A PIECE OF INFINITY</div>
-      <h2 id="export-title">Made to be kept.</h2>
-      <p>
-        Export the current view with its colors, or save its exact coordinates
-        for another day.
-      </p>
+      <h2 id="export-title">Export</h2>
+      <p>Choose what to save, or open a saved location.</p>
+      <div class="export-choices">
+        <button id="open-image-export" class="secondary-button" aria-haspopup="dialog" aria-controls="image-export-dialog">Export image <span>↗</span></button>
+        <button id="open-video-export" class="secondary-button" aria-haspopup="dialog" aria-controls="color-gif-dialog">Export video <span>↗</span></button>
+        <button id="open-location-export" class="secondary-button" aria-haspopup="dialog" aria-controls="location-export-dialog">Export / import location <span>↗</span></button>
+      </div>
+      <p id="export-menu-status" role="status"></p>
+    </dialog>
+    <dialog id="image-export-dialog" aria-labelledby="image-export-title">
+      <form method="dialog"><button class="dialog-close icon-button" aria-label="Back to export options">×</button></form>
+      <h2 id="image-export-title">Export image</h2>
+      <p>Save the current view as a PNG.</p>
+      <div class="two-fields">
       <label class="field-label"
-        >PNG size<select id="export-size">
+        >Size · longest edge<select id="export-size">
           <option value="1920">Fit to 1920 px</option>
           <option value="3840" selected>Fit to 3840 px · 4K</option>
-          <option value="current">Current render</option>
+          <option value="current">Current render size</option>
         </select></label>
-      <label class="switch-label"><span>Include vignette in exports</span><input id="export-vignette" type="checkbox" role="switch" /><span class="switch"></span></label>
-      <p class="export-note">Applies to PNG, GIF, and MP4.</p>
+      <label class="field-label">Aspect ratio<select id="export-aspect" aria-describedby="export-aspect-note"><option value="view" selected>Main view</option><option value="16:9">Widescreen · 16:9</option><option value="1:1">Square · 1:1</option><option value="21:9">Ultrawide · 21:9</option><option value="9:16">Portrait · 9:16</option><option value="4:3">Classic · 4:3</option><option value="3:2">Photo · 3:2</option></select></label>
+      </div>
+      <p id="export-aspect-note" class="export-note"></p>
+      <label class="switch-label"><span>Include vignette</span><input id="export-vignette" type="checkbox" role="switch" /><span class="switch"></span></label>
       <button id="download-png" class="primary-button image-export-action">
-        Download PNG <span>↓</span></button
-      ><button id="download-gif" class="secondary-button image-export-action">
-        Zoom animation · 8× journey</button
-      ><button id="open-color-gif" class="secondary-button image-export-action">Animation · GIF / MP4 <span>↗</span></button>
-      <button id="download-location" class="secondary-button">
-        Download location · JSON</button
-      ><label class="import-label"
-        >Import a saved location<input
-          id="import-location"
-          type="file"
-          accept="application/json,.json"
-      /></label>
+        Download PNG <span>↓</span></button>
       <p id="export-status" role="status"></p>
     </dialog>
+    <dialog id="location-export-dialog" aria-labelledby="location-export-title">
+      <form method="dialog"><button class="dialog-close icon-button" aria-label="Back to export options">×</button></form>
+      <h2 id="location-export-title">Export / import location</h2>
+      <p>Save this view’s coordinates and settings, or open a saved location.</p>
+      <button id="download-location" class="primary-button">Export location · JSON <span>↓</span></button>
+      <button id="choose-location" class="secondary-button">Import location · JSON <span>↑</span></button>
+      <input id="import-location" type="file" accept="application/json,.json" hidden />
+      <p id="location-export-status" role="status"></p>
+    </dialog>
     <dialog id="color-gif-dialog" aria-labelledby="color-gif-title">
-      <form method="dialog"><button class="dialog-close icon-button" aria-label="Back to download options">×</button></form>
+      <form method="dialog"><button class="dialog-close icon-button" aria-label="Back to export options">×</button></form>
       <h2 id="color-gif-title">Make it move.</h2>
       <p>Export your parameter loop, wandering colors, or a zoom journey.</p>
       <div class="animation-layout">
@@ -534,7 +542,7 @@
       <div class="two-fields">
         <label class="field-label">Format<select id="animation-format"><option value="mp4">MP4 · H.264</option><option value="gif">GIF</option></select></label>
         <label class="field-label">Size · longest edge<select id="animation-size"><option value="480">480 px</option><option value="720" selected>720 px</option><option value="1080">1080 px</option><option value="1920">1920 px</option><option value="2560">2560 px</option><option value="3840">3840 px · 4K</option></select></label>
-        <label class="field-label">Quality<select id="animation-quality" aria-describedby="animation-quality-note"><option value="draft">Draft</option><option value="balanced">Balanced</option><option value="high" selected>High</option><option value="ultra">Ultra · MP4</option><option value="extreme">Extreme · MP4</option></select></label>
+        <label class="field-label">Quality<select id="animation-quality" aria-describedby="animation-quality-note"><option value="draft">Draft</option><option value="balanced">Balanced</option><option value="high" selected>High</option><option value="ultra">Ultra · MP4</option><option value="extreme">Extreme · MP4</option><option value="maximum">Maximum · MP4</option></select></label>
         <label class="field-label">Frame rate<select id="animation-fps"><option value="10">10 fps</option><option value="15">15 fps</option><option value="24">24 fps</option><option value="30" selected>30 fps</option><option value="60">60 fps · MP4</option></select></label>
       </div>
       <p id="animation-quality-note" class="export-note"></p>

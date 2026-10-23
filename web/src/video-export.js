@@ -2,15 +2,23 @@
 // in real time: timestamps are explicit, so slow fractal frames are never lost.
 import { Output, Mp4OutputFormat, BufferTarget, CanvasSource, Quality, canEncodeVideo } from 'mediabunny';
 
+function encodingOptions(options) {
+  return {
+    codec: 'avc', latencyMode: 'quality', contentHint: 'detail',
+    // Maximum must use the requested quantizer: no silent bitrate fallback.
+    quality: new Quality(options.quantizer != null ? { quantizer: options.quantizer } : { bitrate: options.bitrate }),
+  };
+}
 export async function supportsMP4(options) {
   if (typeof VideoEncoder === 'undefined') return false;
-  return canEncodeVideo('avc', { width: options.width, height: options.height, frameRate: options.fps, quality: new Quality({ bitrate: options.bitrate }) });
+  const { codec, ...encoding } = encodingOptions(options);
+  return canEncodeVideo(codec, { width: options.width, height: options.height, frameRate: options.fps, ...encoding });
 }
 export async function mp4Encoder(canvas, options) {
   if (!await supportsMP4(options)) throw new Error('MP4 / H.264 encoding is unavailable at these settings in this browser. Choose a lower quality, a smaller size, or GIF.');
   const target = new BufferTarget();
   const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
-  const source = new CanvasSource(canvas, { codec: 'avc', quality: new Quality({ bitrate: options.bitrate }), keyFrameInterval: 2 });
+  const source = new CanvasSource(canvas, { ...encodingOptions(options), keyFrameInterval: 2 });
   output.addVideoTrack(source, { frameRate: options.fps });
   try { await output.start(); } catch (error) { await output.cancel(); throw error; }
   return {

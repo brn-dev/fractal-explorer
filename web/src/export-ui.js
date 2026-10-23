@@ -2,7 +2,7 @@ import { BrowserEngine } from './engine.js';
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { animationPlan } from './animation.mjs';
 import { animationExport, ditherFrame, exportQualities } from './animation-export.mjs';
-import { drawVignette, exportDimensions, gifPaletteSample, wrapPhase } from './export-utils.mjs';
+import { drawVignette, exportAspect, exportDimensions, gifPaletteSample, wrapPhase } from './export-utils.mjs';
 
 const $ = id => document.getElementById(id);
 const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
@@ -16,9 +16,9 @@ function abortable(promise, signal) {
   });
 }
 
-export function setupImageExports({ engine, palettes, getState, getCurrentField, paint, colorTable, downloadBlob }) {
-  const dialog = $('export-dialog'), animationDialog = $('color-gif-dialog');
-  let job = null, preview = null, raf = null, program = null;
+export function setupExports({ engine, palettes, getState, getCurrentField, paint, colorTable, downloadBlob }) {
+  const dialog = $('export-dialog'), imageDialog = $('image-export-dialog'), animationDialog = $('color-gif-dialog'), locationDialog = $('location-export-dialog');
+  let job = null, preview = null, raf = null, program = null, animationOpened = false;
   const snapshot = () => ({ ...getState(), aspect: innerHeight / innerWidth, mobile: engine.mobile });
   function vignette(enabled) {
     $('export-vignette').checked = $('color-gif-vignette').checked = enabled;
@@ -31,6 +31,7 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
   function setBusy(busy) {
     for (const button of document.querySelectorAll('.image-export-action')) button.disabled = busy;
     for (const input of animationDialog.querySelectorAll('input, select')) input.disabled = busy;
+    for (const input of imageDialog.querySelectorAll('input, select')) input.disabled = busy;
     $('color-gif-speed').disabled = $('color-gif-speed-slider').disabled = busy || !$('gif-wander-colors').checked;
     $('color-gif-play').disabled = $('color-gif-restart').disabled = busy;
     $('download-color-gif').disabled = busy || !preview?.ready || !preview?.valid || preview?.mp4 === false || preview?.mp4 === null;
@@ -48,20 +49,47 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
     try { await abortable(renderer.init({ forceCPU: !engine.gpu }), signal); return renderer; }
     catch (error) { renderer.destroy(); throw error; }
   }
-  $('export').onclick = () => { vignette(false); $('export-status').textContent = ''; dialog.showModal(); };
-  dialog.addEventListener('close', () => { if (!animationDialog.open) job?.abort(); });
+  function updateImageOptions() {
+    const selection = $('export-size').value, aspectRatio = $('export-aspect').value;
+    if (selection === 'current') {
+      $('export-aspect-note').textContent = aspectRatio === 'view' ? 'Keeps the current render’s exact size and framing.' : 'Keeps the current render’s longest edge with the selected framing.';
+    } else {
+      const { width, height } = exportDimensions(exportAspect(innerHeight / innerWidth, aspectRatio), Number(selection));
+      $('export-aspect-note').textContent = `${width} × ${height} px · keeps the current center and view width.`;
+    }
+  }
+  $('export-size').onchange = $('export-aspect').onchange = updateImageOptions;
+  function returnToOptions(opener) {
+    if (!document.body.classList.contains('ui-hidden') && !dialog.open && !imageDialog.open && !animationDialog.open && !locationDialog.open) {
+      dialog.showModal(); $(opener).focus();
+    }
+  }
+  addEventListener('resize', () => { if (imageDialog.open) updateImageOptions(); });
+  $('export').onclick = () => { vignette(false); $('export-menu-status').textContent = ''; dialog.showModal(); };
+  $('open-image-export').onclick = () => {
+    dialog.close(); updateImageOptions(); $('export-status').textContent = ''; imageDialog.showModal();
+  };
+  $('open-location-export').onclick = () => {
+    dialog.close(); locationDialog.returnValue = ''; $('location-export-status').textContent = ''; locationDialog.showModal();
+  };
+  dialog.addEventListener('close', () => { if (!imageDialog.open && !animationDialog.open && !locationDialog.open) job?.abort(); });
+  imageDialog.addEventListener('close', () => { job?.abort(); returnToOptions('open-image-export'); });
+  locationDialog.addEventListener('close', () => { if (locationDialog.returnValue !== 'imported') returnToOptions('open-location-export'); });
   $('export-vignette').onchange = () => vignette($('export-vignette').checked);
   $('color-gif-vignette').onchange = () => vignette($('color-gif-vignette').checked);
   $('animation-cancel').onclick = () => job?.abort();
   $('download-png').onclick = () => runJob('export-status', async signal => {
-    const state = snapshot(), selection = $('export-size').value, shade = $('export-vignette').checked;
+    const state = snapshot(), selection = $('export-size').value, aspectRatio = $('export-aspect').value, shade = $('export-vignette').checked;
     $('export-status').textContent = 'Rendering on your device…';
     let renderer;
     try {
       let values, metadata;
-      if (selection === 'current') ({ values, metadata } = await abortable(getCurrentField(), signal));
+      const current = selection === 'current' ? await abortable(getCurrentField(), signal) : null;
+      if (current && aspectRatio === 'view') ({ values, metadata } = current);
       else {
-        renderer = await newRenderer(signal); const { width, height } = exportDimensions(state.aspect, Number(selection));
+        const longest = current ? Math.max(current.metadata.width, current.metadata.height) : Number(selection);
+        const { width, height } = exportDimensions(exportAspect(state.aspect, aspectRatio), longest);
+        renderer = await newRenderer(signal);
         metadata = (await abortable(renderer.render(state.visibleView ?? state.view, width, height, state.settings), signal)).metadata;
         values = await abortable(renderer.readField(), signal);
       }
@@ -86,7 +114,9 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
     const isGIF = $('animation-format').value === 'gif';
     for (const option of $('animation-quality').options) option.disabled = isGIF && !!exportQualities[option.value].mp4Only;
     if ($('animation-quality').selectedOptions[0].disabled) $('animation-quality').value = 'high';
-    $('animation-quality-note').textContent = isGIF ? 'High uses GIF’s maximum 256 colors. Ultra and Extreme require MP4.' : 'For fine fractal detail, choose Ultra or Extreme. Higher quality produces larger files.';
+    $('animation-quality-note').textContent = isGIF ? 'High uses GIF’s maximum 256 colors. Higher quality modes require MP4.' : $('animation-quality').value === 'maximum'
+      ? 'Maximum minimizes compression at the selected size. Files can be very large.'
+      : 'Use 1920 or 3840 px for fine detail. Quality controls compression; size controls sharpness.';
     $('animation-fps').querySelector('option[value="60"]').disabled = $('animation-format').value === 'gif';
     if ($('animation-format').value === 'gif' && $('animation-fps').value === '60') $('animation-fps').value = '30';
     $('animation-dither-row').hidden = $('animation-format').value !== 'gif';
@@ -107,7 +137,11 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
         const { supportsMP4 } = await import('./video-export.js'); const supported = await supportsMP4(p);
         if (preview !== current || version !== current.version) return;
         current.mp4 = supported;
-        $('animation-codec-note').textContent = supported ? `H.264 · target ${(p.bitrate / 1e6).toFixed(1)} Mbps · ≈ ${(p.bitrate * p.duration / 8e6).toFixed(1)} MB · every frame is rendered before encoding.` : 'H.264 encoding is unavailable at these settings. Choose a lower quality, a smaller size, or GIF.';
+        if (!supported) $('animation-codec-note').textContent = p.quantizer !== null
+          ? 'Maximum quality is unavailable in this browser at this size. Choose Extreme or a smaller size.'
+          : 'H.264 encoding is unavailable at these settings. Choose a lower quality, a smaller size, or GIF.';
+        else if (p.quantizer !== null) $('animation-codec-note').textContent = 'H.264 · maximum detail · variable file size · every frame is rendered before encoding.';
+        else $('animation-codec-note').textContent = `H.264 · target ${(p.bitrate / 1e6).toFixed(1)} Mbps · ≈ ${(p.bitrate * p.duration / 8e6).toFixed(1)} MB · every frame is rendered before encoding.`;
       }
     } catch (error) { current.valid = false; $('color-gif-details').textContent = error.message; }
     setBusy(!!job);
@@ -159,17 +193,21 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
     input.oninput = () => { clearTimeout(timer); timer = setTimeout(apply, 180); };
     input.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); apply(); } };
   }
-  async function openAnimation(mode) {
+  async function openAnimation() {
     let state;
-    try { state = snapshot(); } catch (error) { $('export-status').textContent = error.message; return; }
+    try { state = snapshot(); } catch (error) { $('export-menu-status').textContent = error.message; return; }
     dialog.close();
     const controller = new AbortController(), current = preview = { state, controller, ready: false, version: 0, elapsed: 0, paused: matchMedia('(prefers-reduced-motion: reduce)').matches };
     const hasParameters = !!animationPlan(state.view, state.automation);
     $('animation-motion').querySelector('option[value="parameters"]').disabled = !hasParameters;
-    $('animation-motion').value = mode === 'zoom' ? 'zoom' : hasParameters ? 'parameters' : 'colors';
+    $('animation-motion').value = hasParameters ? 'parameters' : 'colors';
     $('color-gif-phase').value = String(wrapPhase(state.colors.phase)); $('color-gif-speed').value = String(state.speed);
-    $('gif-wander-colors').checked = mode === 'zoom' ? state.wander : hasParameters ? state.wander : true;
+    $('gif-wander-colors').checked = hasParameters ? state.wander : true;
     $('animation-format').value = typeof VideoEncoder === 'undefined' ? 'gif' : 'mp4';
+    if (!animationOpened) {
+      $('animation-size').value = typeof VideoEncoder === 'undefined' || engine.mobile ? '720' : '1920';
+      animationOpened = true;
+    }
     $('gif-duration').value = '4';
     $('animation-format').querySelector('option[value="mp4"]').disabled = typeof VideoEncoder === 'undefined';
     const canvas = document.createElement('canvas'); canvas.id = 'color-gif-preview'; canvas.setAttribute('aria-label', 'Animation preview');
@@ -182,11 +220,10 @@ export function setupImageExports({ engine, palettes, getState, getCurrentField,
       $('color-gif-status').textContent = 'Preview ready.'; setBusy(false);
     } catch (error) { if (error.name !== 'AbortError' && preview === current) $('color-gif-status').textContent = error.message; }
   }
-  $('open-color-gif').onclick = () => openAnimation('loop');
-  $('download-gif').onclick = () => openAnimation('zoom');
+  $('open-video-export').onclick = openAnimation;
   animationDialog.addEventListener('close', () => {
     cancelAnimationFrame(raf); job?.abort(); preview?.controller.abort(); preview?.renderer?.destroy(); preview = null;
-    if (!document.body.classList.contains('ui-hidden')) dialog.showModal();
+    returnToOptions('open-video-export');
   });
   $('download-color-gif').onclick = () => runJob('color-gif-status', async signal => {
     const current = preview; if (!current?.ready || !current.valid) throw new Error('Wait for a valid preview.');

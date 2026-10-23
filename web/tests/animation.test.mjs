@@ -277,9 +277,20 @@ test('high-resolution MP4 quality has distinct bitrate ceilings and GIF retains 
   for (const [quality,paletteSize] of [['draft',64],['balanced',128],['high',256]]) {
     assert.equal(animationExport(state,{...output,format:'gif',quality}).paletteSize,paletteSize);
   }
-  for (const quality of ['ultra','extreme']) {
+  for (const quality of ['ultra','extreme','maximum']) {
     assert.throws(()=>animationExport(state,{...output,format:'gif',quality}),/require MP4/);
   }
+});
+
+test('Maximum MP4 requests the minimum quantizer with no bitrate cap or fallback',()=>{
+  const extreme=animationExport(state,{...output,quality:'extreme'});
+  for (const longest of [720,1920,3840]) {
+    const p=animationExport(state,{...output,quality:'maximum',longest});
+    assert.equal(p.quantizer,0);assert.equal(p.bitrate,null);
+    assert.equal(p.frames,extreme.frames);assert.equal(p.phaseAt(30),extreme.phaseAt(30));
+    assert.deepEqual(p.viewAt(30),extreme.viewAt(30));
+  }
+  assert.equal(extreme.quantizer,null);
 });
 
 test('animation aspect defaults to the main view, including portrait views',()=>{

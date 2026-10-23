@@ -4,6 +4,13 @@ import { hasConstant } from './fractals.mjs';
 export const wrapPhase = phase => ((phase % 1) + 1) % 1;
 export const advancePhase = (phase, speed, seconds) => wrapPhase(phase + speed * Math.max(0, seconds));
 
+const aspectRatios = { '16:9': 9 / 16, '1:1': 1, '21:9': 9 / 21, '9:16': 16 / 9, '4:3': 3 / 4, '3:2': 2 / 3 };
+export function exportAspect(viewAspect, aspectRatio = 'view') {
+  if (aspectRatio === 'view') return viewAspect;
+  if (!Object.hasOwn(aspectRatios, aspectRatio)) throw new Error('Choose an export aspect ratio.');
+  return aspectRatios[aspectRatio];
+}
+
 export function exportDimensions(aspect, longest) {
   return {
     width: Math.max(16, 2 * Math.round(longest / Math.max(1, aspect) / 2)),
