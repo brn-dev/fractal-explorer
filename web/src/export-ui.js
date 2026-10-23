@@ -117,6 +117,10 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
   function clearSoundtrack(current) {
     current.soundtrack?.controller.abort(); current.soundtrack = null; current.sound.clear();
   }
+  function unlockPreview(current) {
+    const pending = current.unlocking = current.sound.unlock();
+    pending.finally(() => { if (current.unlocking === pending) current.unlocking = null; });
+  }
   const soundtrackKey = p => JSON.stringify([p.mode,p.aspect,p.fps,p.cycleFrames,p.motionFrames,p.holdFrames,p.start,p.speed,p.wander]);
   function prepareSoundtrack(current, p) {
     // Output resolution and compression do not change the soundtrack. Both
@@ -180,7 +184,7 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
     const isGIF = $('animation-format').value === 'gif';
     if (isGIF) $('animation-soundscape').checked = false;
     const includeSoundscape = !isGIF && $('animation-soundscape').checked;
-    if (includeSoundscape) current.sound.unlock();
+    if (includeSoundscape) unlockPreview(current);
     else { clearSoundtrack(current); $('animation-preview-status').textContent = ''; }
     Promise.resolve(setAudioPreview(includeSoundscape)).catch(() => {});
     $('animation-end-hold-row').hidden = $('animation-end-hold-note').hidden = isGIF;
@@ -245,7 +249,6 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
       }
       if (preview === current && version === current.version && !job) {
         current.renderer.paint(current.state.colors.palette, current.state.colors.density, p.phaseAt(index));
-        $('color-gif-live-phase').textContent = `${(index / p.fps).toFixed(2)} / ${p.duration.toFixed(2)} s`;
       }
     })().catch(error => {
       if (preview === current && error.name !== 'AbortError') { $('color-gif-status').textContent = error.message; current.paused = true; syncPlay(); }
@@ -259,7 +262,7 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
       if (p.includeSoundscape) {
         if (current.sound.buffer && !current.paused) {
           if (current.sound.ended) { current.paused = true; syncPlay(); }
-          else if (!current.sound.playing && !current.sound.play()) {
+          else if (!current.unlocking && !current.sound.playing && !current.sound.play()) {
             current.paused = true; syncPlay(); $('animation-preview-status').textContent = 'Soundtrack ready · press Play preview to hear it.';
           }
         }
@@ -269,6 +272,8 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
         if (!current.paused) current.elapsed = (time - current.start) / 1000;
       }
       const index = p.looping && !p.includeSoundscape ? Math.floor(current.elapsed * p.fps) % p.frames : Math.min(p.frames - 1, Math.floor(current.elapsed * p.fps));
+      const position = p.looping && !p.includeSoundscape ? current.elapsed % p.duration : Math.min(current.elapsed, p.duration);
+      $('color-gif-live-phase').textContent = `${position.toFixed(2)} / ${p.duration.toFixed(2)} s`;
       if (current.index !== index || current.key === null) previewFrame(index, p);
     }
     raf = requestAnimationFrame(tick);
@@ -281,7 +286,7 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
     if (!preview) return;
     preview.paused = !preview.paused; preview.start = null;
     if (preview.paused) preview.sound.pause();
-    else { if (preview.sound.ended) preview.sound.reset(); preview.sound.unlock(); }
+    else { if (preview.sound.ended) preview.sound.reset(); if (program?.includeSoundscape) unlockPreview(preview); }
     syncPlay();
   };
   document.addEventListener('visibilitychange', () => { if (preview) { preview.sound.pause(); preview.start = null; } });
