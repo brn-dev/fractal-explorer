@@ -39,6 +39,10 @@ For `brn-dev/fractal-explorer`, the Pages URL is `https://brn-dev.github.io/frac
 
 Drag to pan, scroll or pinch to zoom, double-click to zoom toward a point. WASD / arrows pan; E / + zoom in; Q / − zoom out. Space pauses or resumes parameter animations; R resets, H hides the UI, and P toggles places. Controls collapse initially on narrow screens. Mobile rendering uses a smaller pixel budget and bounded GPU submissions. Native performance and sustained speed still depend on the phone, browser, driver, and thermal state; mobile layouts have been checked in an emulated viewport, not on physical phones.
 
+Navigation stretches the last rendered image using the exact requested center and width until the new field is ready. Pinch zoom follows the moving finger midpoint, and consecutive gestures build on the current view. The preview uses the same zoom limits and image aspect ratio as the final render.
+
+The **crosshair icon** in the top-right corner, **G**, or **Light & color → Centering rulers** toggles horizontal and vertical guides with evenly spaced ticks and a center ring. Drag a feature to their intersection, then use E / + to zoom around the center. The preference persists across reloads, and the guides stay available when H hides the UI. They are display guides and do not appear in exports.
+
 The interface keeps the fractal in focus: no corner branding, location counter, or decorative settings header/footer. The location title and subtitle appear on startup, when choosing a place, or when changing fractal type, then fade away after three seconds. Panning and adjusting parameters leave them hidden. The settings panel collapses to a compact pair of controls and mute icons; tap the controls icon to restore the settings.
 
 GPU information appears alongside render timing and resolution in the bottom-left status line, including on mobile. Collapsing the place cards also hides their heading, leaving just the toggle icon.

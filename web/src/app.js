@@ -1,5 +1,6 @@
 import { zoomLabel } from './numbers.mjs';
 import { navigate as navigateLocal, validate } from './decimal.mjs';
+import { screenPoint, gestureView, previewTransform } from './navigation.mjs';
 import { BrowserEngine } from './engine.js';
 import { renderDimensions, qualityScales } from './resolution.mjs';
 import { setupExports } from './export-ui.js';
@@ -105,6 +106,7 @@ let renderSettings = {
 };
 let placesHidden = false;
 let vignetteEnabled = true;
+let rulersEnabled = false;
 let wanderingSpeed = .12, lastAnimationTime = null;
 let view = { ...base },
   palette = 0,
@@ -113,16 +115,15 @@ let view = { ...base },
   field = null,
   meta = null;
 let generation = 0,
-  viewEpoch = 0,
   dirty = false,
   rendering = false,
   scheduled = null,
-  navChain = Promise.resolve(),
   activeDestination = 0;
 let lastPaint = 0,
   toastTimer,
   imageView = null,
   imageSettings = null;
+let navigationPreviewView = null, cancelNavigationGesture = () => {};
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let automationSettings = {}, automationRenderer, automationRendererPromise, pausedStatic = null;
 let audio, audioAnalysisTimer, audioAnalysisBusy = false, lastAudioAnalysis = -Infinity;
@@ -164,10 +165,10 @@ const automationPlayer = new ProgressiveAnimation({
     return { metadata: result.metadata, field: await renderer.readField() };
   },
   present: frame => {
-    if (!paintingReady) canvas.style.transform = '';
     engine.presentCached(frame.field, frame.metadata);
     field = frame.field; meta = frame.metadata; imageView = frame.view; imageSettings = { ...renderSettings };
     paintingReady = true; paint(); automationControls.showValues(frame.view);
+    updateNavigationPreview();
     audio?.present(frame);
     $('render-resolution').textContent = `${meta.width} × ${meta.height}`;
     $('render-status').textContent = `${meta.backend.toUpperCase()} · ${automationPlaybackLabel(automationPlayer)}`;
@@ -490,7 +491,7 @@ function saveSession() {
   try {
     localStorage.setItem(
       "fractal-web-session",
-      JSON.stringify({ view, ...colorState(), renderSettings, quality: Number($("quality").value), cacheMemoryMiB, placesHidden, vignetteEnabled, wanderingSpeed, automation: automationSettings }),
+      JSON.stringify({ view, ...colorState(), renderSettings, quality: Number($("quality").value), cacheMemoryMiB, placesHidden, vignetteEnabled, rulersEnabled, wanderingSpeed, automation: automationSettings }),
     );
   } catch {}
 }
@@ -511,6 +512,15 @@ function setVignetteEnabled(enabled) {
   $('vignette-enabled').checked = enabled;
   $('fractal-vignette').hidden = !enabled;
 }
+function setRulersEnabled(enabled) {
+  rulersEnabled = enabled;
+  $('centering-rulers').hidden = !enabled;
+  $('rulers-enabled').checked = enabled;
+  const button = $('toggle-rulers'), label = `${enabled ? 'Hide' : 'Show'} centering rulers`;
+  button.setAttribute('aria-pressed', String(enabled));
+  button.setAttribute('aria-label', label);
+  button.title = `${label} (G)`;
+}
 function setPlacesHidden(hidden) {
   placesHidden = hidden;
   $('destination-list').hidden = hidden;
@@ -530,9 +540,11 @@ function setPanelCollapsed(collapsed) {
   button.title = label;
 }
 function loadView(next, index = -1, preview = false, sceneReason = null) {
+  cancelNavigationGesture();
+  navigationPreviewView = null;
+  canvas.style.transform = '';
   clearTimeout(parameterPreviewTimer);
   parameterPreview = preview;
-  viewEpoch++;
   const customChanged = next.fractal === 'custom' && (next.custom_formula !== view.custom_formula || next.custom_mode !== view.custom_mode || next.custom_constant_count !== view.custom_constant_count || JSON.stringify(next.custom_inputs) !== JSON.stringify(view.custom_inputs));
   if (next.fractal !== view.fractal || customChanged || Object.keys(automationSettings).some(key => next[key] !== undefined && next[key] !== view[key])) {
     pausedStatic = null;
@@ -614,7 +626,7 @@ async function render() {
       paint();
       requestAudioAnalysis();
       if (automationPlayer.paused && pausedStatic) automationControls.showValues(snapshot);
-      canvas.style.transform = "";
+      updateNavigationPreview();
       setRenderIndicator('ready', pausedStatic ? 'Static view · parameter animations paused' : 'View ready');
       $("render-status").textContent =
         `${meta.backend.toUpperCase()} · ${meta.elapsed_ms.toLocaleString()} ms${pausedStatic ? ' · parameters paused' : ''}`;
@@ -640,7 +652,7 @@ async function render() {
     }
   } catch (error) {
     if (token === generation && error.name !== "AbortError") {
-      canvas.style.transform = "";
+      updateNavigationPreview();
       $("render-status").textContent = "Render could not complete";
       setRenderIndicator('error', 'Render could not complete');
       toast(error.message);
@@ -650,26 +662,33 @@ async function render() {
     if (dirty) render();
   }
 }
-function navigate(dx, dy, factor = 1) {
+function navigationViewport() {
+  const quality = parameterPreview ? Math.min(1, Number($('quality').value)) : $('quality').value;
+  const dimensions = renderDimensions(innerWidth, innerHeight, quality, { gpu: engine.gpu, mobile: engine.mobile, limits: engine.renderLimits });
+  return { width: innerWidth, height: innerHeight, aspect: dimensions.height / dimensions.width };
+}
+function updateNavigationPreview() {
+  if (!imageView || !navigationPreviewView) { canvas.style.transform = ''; return; }
+  if (['x', 'y', 'span'].every(key => imageView[key] === navigationPreviewView[key])) { canvas.style.transform = ''; return; }
+  const transform = previewTransform(imageView, navigationPreviewView, navigationViewport(), meta.height / meta.width);
+  canvas.style.transform = transform
+    ? `translate(${transform.x}px, ${transform.y}px) scale(${transform.scaleX}, ${transform.scaleY})` : '';
+}
+function commitNavigation(next) {
+  cancelNavigationGesture();
   audio?.resetAnalysis();
-  // Serialize navigation requests so every tiny decimal movement builds on the previous one.
-  generation++;
-  const epoch = viewEpoch;
-  navChain = navChain
-    .then(async () => {
-      if (epoch !== viewEpoch) return;
-      const response = await localNavigation({ view, dx, dy, factor });
-      const moved = await response.json();
-      if (epoch !== viewEpoch) return;
-      view = moved;
-      activeDestination = -1;
-      syncView();
-      buildDestinations();
-      saveSession();
-      requestRender(65);
-    })
-    .catch((error) => toast(error.message));
-  return navChain;
+  view = next;
+  navigationPreviewView = view;
+  activeDestination = -1;
+  updateNavigationPreview();
+  syncView();
+  buildDestinations();
+  saveSession();
+  requestRender(65);
+}
+function navigate(dx, dy, factor = 1) {
+  try { commitNavigation(navigateLocal({ view, dx, dy, factor })); }
+  catch (error) { toast(error.message); }
 }
 function isInput(event) {
   return (
@@ -680,74 +699,86 @@ function isInput(event) {
 function setupNavigation() {
   const viewport = $("viewport");
   const pointers = new Map();
-  let pinch = null;
-  let drag = null,
-    wheel = 0,
-    wheelTimer;
+  let gesture = null, wheel = 0, wheelPoint, wheelTimer;
+  const midpoint = () => {
+    const [a, b] = [...pointers.values()];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, distance: Math.hypot(a.x - b.x, a.y - b.y) };
+  };
+  const flushWheel = () => {
+    clearTimeout(wheelTimer);
+    const delta = wheel;
+    wheel = 0;
+    if (!delta) return;
+    const factor = Math.exp(-Math.max(-900, Math.min(900, delta)) * .002);
+    const point = screenPoint(wheelPoint.x, wheelPoint.y, navigationViewport());
+    navigate(point.dx, point.dy, factor);
+  };
+  cancelNavigationGesture = () => {
+    clearTimeout(wheelTimer); wheel = 0;
+    pointers.clear(); gesture = null;
+  };
+  const showGesture = () => {
+    if (!gesture) return;
+    try {
+      const factor = gesture.distance === undefined ? 1
+        : Math.max(.05, Math.min(20, gesture.current.distance / Math.max(1, gesture.distance)));
+      navigationPreviewView = gestureView(gesture.view, gesture.start, gesture.current, factor, gesture.viewport);
+      updateNavigationPreview();
+    } catch (error) {
+      cancelNavigationGesture(); navigationPreviewView = view;
+      updateNavigationPreview(); toast(error.message);
+    }
+  };
   viewport.addEventListener(
     "wheel",
     (e) => {
       e.preventDefault();
+      if (pointers.size) return;
       wheel += e.deltaY;
+      wheelPoint = { x: e.clientX, y: e.clientY };
       clearTimeout(wheelTimer);
-      const x = e.clientX / innerWidth - 0.5,
-        y = (innerHeight / 2 - e.clientY) / innerWidth;
-      wheelTimer = setTimeout(() => {
-        const factor = Math.exp(-Math.max(-900, Math.min(900, wheel)) * 0.002);
-        wheel = 0;
-        navigate(x, y, factor);
-      }, 45);
+      wheelTimer = setTimeout(flushWheel, 45);
     },
     { passive: false },
   );
   viewport.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
+    flushWheel();
+    if (pointers.size >= 2) return;
     viewport.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
     if (pointers.size === 2) {
-      const [a,b] = [...pointers.values()];
-      pinch = { initial:Math.hypot(a.x-b.x,a.y-b.y), current:Math.hypot(a.x-b.x,a.y-b.y), x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
-      drag = null; return;
+      const point = midpoint();
+      gesture = { view: navigationPreviewView ?? view, viewport: navigationViewport(), start: point, current: point, distance: point.distance };
+    } else {
+      const point = { x: e.clientX, y: e.clientY };
+      gesture = { view, viewport: navigationViewport(), start: point, current: point };
     }
-    drag = { x: e.clientX, y: e.clientY };
   });
   viewport.addEventListener("pointermove", (e) => {
-    if (pointers.has(e.pointerId)) pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
-    if (pinch && pointers.size === 2) {
-      const [a,b] = [...pointers.values()]; pinch.current = Math.hypot(a.x-b.x,a.y-b.y);
-      canvas.style.transform = `scale(${Math.max(.1,Math.min(10,pinch.current/Math.max(1,pinch.initial)))})`;
-      return;
-    }
-    if (drag)
-      canvas.style.transform = `translate(${e.clientX - drag.x}px, ${e.clientY - drag.y}px)`;
+    if (!pointers.has(e.pointerId) || !gesture) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    gesture.current = pointers.size === 2 ? midpoint() : { x: e.clientX, y: e.clientY };
+    showGesture();
   });
   const end = (e) => {
-    pointers.delete(e.pointerId);
-    if (pinch) {
-      const factor = Math.max(.05,Math.min(20,pinch.current/Math.max(1,pinch.initial)));
-      navigate(pinch.x/innerWidth-.5,(innerHeight/2-pinch.y)/innerWidth,factor);
-      pinch=null; drag=null; pointers.clear(); return;
-    }
-    if (!drag) return;
-    const dx = (drag.x - e.clientX) / innerWidth,
-      dy = (e.clientY - drag.y) / innerWidth;
-    drag = null;
-    if (Math.abs(dx) + Math.abs(dy) > 0.001) navigate(dx, dy);
-    else canvas.style.transform = "";
+    if (!pointers.has(e.pointerId) || !gesture) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    gesture.current = pointers.size === 2 ? midpoint() : { x: e.clientX, y: e.clientY };
+    showGesture();
+    if (gesture && navigationPreviewView !== view) commitNavigation(navigationPreviewView);
+    else { cancelNavigationGesture(); navigationPreviewView = view; updateNavigationPreview(); }
   };
   viewport.addEventListener("pointerup", end);
-  viewport.addEventListener("pointercancel", () => {
-    pointers.clear(); pinch=null;
-    drag = null;
-    canvas.style.transform = "";
+  viewport.addEventListener("pointercancel", (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    cancelNavigationGesture(); navigationPreviewView = view;
+    updateNavigationPreview();
   });
-  viewport.addEventListener("dblclick", (e) =>
-    navigate(
-      e.clientX / innerWidth - 0.5,
-      (innerHeight / 2 - e.clientY) / innerWidth,
-      3,
-    ),
-  );
+  viewport.addEventListener("dblclick", (e) => {
+    const point = screenPoint(e.clientX, e.clientY, navigationViewport());
+    navigate(point.dx, point.dy, 3);
+  });
   $("zoom-in").onclick = () => navigate(0, 0, 2);
   $("zoom-out").onclick = () => navigate(0, 0, 0.5);
   $("reset").onclick = () =>
@@ -779,13 +810,17 @@ function setupNavigation() {
     if (key === "r") action = () => $("reset").click();
     if (key === "h" && !e.repeat) action = () => $("toggle-ui").click();
     if (key === "p" && !e.repeat) action = () => $("toggle-destinations").click();
+    if (key === "g" && !e.repeat) action = () => $("toggle-rulers").click();
     if (key === "?") action = () => $("help-dialog").showModal();
     if (action) {
       e.preventDefault();
       action();
     }
   });
-  addEventListener("resize", () => requestRender(250));
+  addEventListener("resize", () => {
+    cancelNavigationGesture(); navigationPreviewView = view;
+    updateNavigationPreview(); requestRender(250);
+  });
 }
 async function downloadBlob(blob, name) {
   const url = URL.createObjectURL(blob),
@@ -820,8 +855,9 @@ function syncRenderSettings(settings) {
   }
 }
 function restoreSharedState(shared) {
+  cancelNavigationGesture(); navigationPreviewView = null; canvas.style.transform = '';
   automationPlayer.configure(null); pausedStatic = null;
-  viewEpoch++; view = shared.view; automationSettings = shared.automation; activeDestination = -1;
+  view = shared.view; automationSettings = shared.automation; activeDestination = -1;
   restoreColors(shared); wanderingSpeed = shared.wanderingSpeed;
   vignetteEnabled = shared.vignetteEnabled;
   automationPlayer.paused = shared.paused || reducedMotion;
@@ -854,6 +890,8 @@ function setupControls() {
   $('toggle-ui').onclick = toggleUI;
   $('toggle-destinations').onclick = () => { setPlacesHidden(!placesHidden); saveSession(); };
   $('vignette-enabled').onchange = () => { setVignetteEnabled($('vignette-enabled').checked); saveSession(); };
+  $('toggle-rulers').onclick = () => { setRulersEnabled(!rulersEnabled); saveSession(); };
+  $('rulers-enabled').onchange = () => { setRulersEnabled($('rulers-enabled').checked); saveSession(); };
   $('wandering-speed').oninput = () => {
     wanderingSpeed = Number($('wandering-speed').value);
     $('wandering-speed-value').textContent = `${wanderingSpeed.toFixed(2)} cycles/s`;
@@ -1130,6 +1168,7 @@ async function init() {
     cacheMemoryMiB = cacheMemorySetting(saved?.cacheMemoryMiB, engine.mobile);
     setPlacesHidden(saved?.placesHidden === true);
     vignetteEnabled = saved?.vignetteEnabled !== false;
+    rulersEnabled = saved?.rulersEnabled === true;
     if (Number.isFinite(saved?.wanderingSpeed)) wanderingSpeed = Math.max(.05, Math.min(2, saved.wanderingSpeed));
     if (saved?.view && Object.hasOwn(fractals, saved.view.fractal)) {
       view = validate({ ...base, ...saved.view });
@@ -1166,6 +1205,7 @@ async function init() {
   buildPalettes();
   buildDestinations();
   setVignetteEnabled(vignetteEnabled);
+  setRulersEnabled(rulersEnabled);
   syncView();
   syncAutomationPause();
   syncColorControls();

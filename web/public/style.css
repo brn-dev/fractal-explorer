@@ -84,6 +84,7 @@ a {
   outline: none;
   touch-action: none;
   cursor: grab;
+  overflow: hidden;
 }
 #viewport:active {
   cursor: grabbing;
@@ -93,6 +94,66 @@ canvas {
   width: 100%;
   height: 100%;
   object-fit: fill;
+}
+#fractal-canvas {
+  transform-origin: center;
+}
+#centering-rulers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: #e8f5d6a6;
+  filter: drop-shadow(0 1px 1px #081112) drop-shadow(1px 0 1px #081112);
+}
+.ruler {
+  position: absolute;
+  background-position: center;
+}
+.ruler::after {
+  content: '';
+  position: absolute;
+  background: currentColor;
+}
+.ruler-horizontal {
+  left: 0;
+  right: 0;
+  top: calc(50% - 5.5px);
+  height: 11px;
+  background-image: repeating-linear-gradient(90deg, currentColor 0 1px, transparent 1px 40px);
+  background-size: 80px 100%;
+}
+.ruler-horizontal::after {
+  left: 0;
+  right: 0;
+  top: 5px;
+  height: 1px;
+}
+.ruler-vertical {
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 5.5px);
+  width: 11px;
+  background-image: repeating-linear-gradient(180deg, currentColor 0 1px, transparent 1px 40px);
+  background-size: 100% 80px;
+}
+.ruler-vertical::after {
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 1px;
+}
+.ruler-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--lime);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+#toggle-rulers[aria-pressed="true"] {
+  color: var(--lime);
 }
 .vignette {
   position: absolute;

@@ -23,9 +23,17 @@
     >
       <canvas id="fractal-canvas"></canvas>
       <div id="fractal-vignette" class="vignette" aria-hidden="true"></div>
+      <div id="centering-rulers" aria-hidden="true" hidden>
+        <div class="ruler ruler-horizontal"></div>
+        <div class="ruler ruler-vertical"></div>
+        <span class="ruler-center"></span>
+      </div>
     </main>
     <header>
       <div class="header-right">
+        <button id="toggle-rulers" class="icon-button visibility-button" type="button" title="Show centering rulers (G)" aria-label="Show centering rulers" aria-pressed="false" aria-controls="centering-rulers" aria-keyshortcuts="G">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="6" /><path d="M12 2v6m0 8v6M2 12h6m8 0h6" /></svg>
+        </button>
         <button
           id="help"
           class="icon-button"
@@ -268,6 +276,11 @@
           <label class="switch-label">
             <span>Vignette</span>
             <input id="vignette-enabled" type="checkbox" role="switch" aria-controls="fractal-vignette" checked />
+            <span class="switch"></span>
+          </label>
+          <label class="switch-label">
+            <span>Centering rulers</span>
+            <input id="rulers-enabled" type="checkbox" role="switch" aria-controls="centering-rulers" />
             <span class="switch"></span>
           </label>
         </section>
@@ -608,6 +621,9 @@
       </div>
       <div class="shortcut">
         <span>Show / hide location cards</span><span>P</span>
+      </div>
+      <div class="shortcut">
+        <span>Show / hide centering rulers</span><span>G</span>
       </div>
       <div class="shortcut">
         <span>Pause / resume parameters</span><span>Space</span>
