@@ -3,31 +3,32 @@
 override PAIRED: bool = true;
 override EXTENDED: bool = false;
 fn two_sum(a:f32,b:f32)->vec2f {
-  let s=a+b; let v=s-a;
-  return vec2f(s,(a-(s-v))+(b-v));
+  let s=round32(a+b); let v=round32(s-a);
+  return vec2f(s,round32(round32(a-round32(s-v))+round32(b-v)));
 }
 fn ra(a:vec2f,b:vec2f)->vec2f {
   if (!PAIRED) {return vec2f(a.x+b.x,0);}
   let s=two_sum(a.x,b.x);let t=two_sum(a.y,b.y);
-  let u=two_sum(s.x,s.y+t.x);return two_sum(u.x,u.y+t.y);
+  let u=two_sum(s.x,round32(s.y+t.x));return two_sum(u.x,round32(u.y+t.y));
 }
 fn rn(a:vec2f)->vec2f {return -a;}
 fn rs(a:vec2f,b:vec2f)->vec2f {return ra(a,-b);}
 fn rm(a:vec2f,b:vec2f)->vec2f {
   if (!PAIRED) {return vec2f(a.x*b.x,0);}
-  let ah=bitcast<f32>(bitcast<u32>(a.x)&0xfffff000u);let al=a.x-ah;
-  let bh=bitcast<f32>(bitcast<u32>(b.x)&0xfffff000u);let bl=b.x-bh;
-  let p=a.x*b.x;
-  var e=((ah*bh-p)+ah*bl+al*bh)+al*bl;
-  e=e+(a.x*b.y+a.y*b.x); e=e+a.y*b.y;
+  let ah=bitcast<f32>(bitcast<u32>(a.x)&0xfffff000u);let al=round32(a.x-ah);
+  let bh=bitcast<f32>(bitcast<u32>(b.x)&0xfffff000u);let bl=round32(b.x-bh);
+  let p=round32(a.x*b.x);
+  var e=round32(round32(round32(round32(ah*bh)-p)+round32(ah*bl))+round32(al*bh));
+  e=round32(e+round32(al*bl));
+  e=round32(e+round32(round32(a.x*b.y)+round32(a.y*b.x))); e=round32(e+round32(a.y*b.y));
   return two_sum(p,e);
 }
 fn rf(x:f32)->vec2f {return vec2f(x,0);}
 fn rd(a:vec2f,b:vec2f)->vec2f {
-  let q=rf(a.x/b.x);
+  let q=rf(round32(a.x/b.x));
   if(!PAIRED){return q;}
   let remainder=rs(a,rm(b,q));
-  return ra(q,rf((remainder.x+remainder.y)/b.x));
+  return ra(q,rf(round32(round32(remainder.x+remainder.y)/b.x)));
 }
 fn rshift(a:vec2f,e:i32)->vec2f {if(all(a==vec2f(0))){return a;}return ldexp(a,vec2i(e));}
 struct Wide {m:vec2f,e:i32,pad:i32}

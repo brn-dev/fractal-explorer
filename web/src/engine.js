@@ -7,6 +7,7 @@ import { customConstantNames } from './custom-constants.mjs';
 import { validate, decimal, order } from './decimal.mjs';
 import { packWide } from './wide.mjs';
 import { renderLimits, validateDimensions } from './resolution.mjs';
+import { arithmeticShader, arithmeticCases, coordinateCases, checkArithmetic, GPUArithmeticError } from './gpu-arithmetic.mjs';
 
 import { kinds } from './fractals.mjs';
 import { sampleField } from './audio/reactive-analysis.mjs';
@@ -59,10 +60,10 @@ export class BrowserEngine {
       if (this.destroyed) throw makeAbort();
       this.deviceName = adapter.info?.description || [adapter.info?.vendor, adapter.info?.architecture].filter(Boolean).join(' ') || 'Local GPU';
       this.device.lost.then(info => { this.lost = info.message || 'GPU device lost. Reload to reconnect.'; });
-      this.module = await this.compile(arithmetic + '\n' + fractal);
+      await this.initArithmetic();
+      this.module = await this.compile(this.arithmeticSource + '\n' + fractal);
       this.colorModule = await this.compile(color);
       this.colorPipeline = this.device.createRenderPipeline({ layout: 'auto', vertex: { module: this.colorModule, entryPoint: 'vertex' }, fragment: { module: this.colorModule, entryPoint: 'fragment', targets: [{ format: navigator.gpu.getPreferredCanvasFormat() }] }, primitive: { topology: 'triangle-list' } });
-      await this.probeArithmetic();
       if (this.destroyed) throw makeAbort();
       // Check availability before claiming the canvas, so a failed GPU setup can use 2D.
       this.context = this.canvas.getContext('webgpu');
@@ -70,7 +71,7 @@ export class BrowserEngine {
       this.colorUniform = this.buffer(48, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
       this.paletteBuffer = this.buffer(4096 * 16, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
       this.gpu = true;
-      return { gpu: true, device: this.deviceName, paired: this.pairedOK };
+      return { gpu: true, device: this.deviceName, paired: this.pairedOK, arithmeticMode: this.arithmeticMode };
     } catch (error) {
       if (this.destroyed) { this.device?.destroy(); throw makeAbort(); }
       this.gpuError = error.message;
@@ -78,7 +79,7 @@ export class BrowserEngine {
       this.cpuContext = this.canvas.getContext('2d', { alpha: false });
       if (!this.cpuContext) throw new Error(`Cannot initialize a drawing context: ${error.message}`);
       this.gpu = false;
-      return { gpu: false, device: 'Local CPU · WebAssembly worker', error: error.message };
+      return { gpu: false, device: 'Local CPU · WebAssembly worker', error: error.message, arithmeticProbes: this.arithmeticProbes };
     }
   }
   async compile(code) {
@@ -92,35 +93,53 @@ export class BrowserEngine {
     if (data) this.device.queue.writeBuffer(b, 0, data);
     return b;
   }
+  async initArithmetic() {
+    this.arithmeticProbes = [];
+    this.arithmeticMode = 'native';
+    this.arithmeticSource = arithmeticShader(arithmetic);
+    try { await this.probeArithmetic(); }
+    catch (error) {
+      if (!(error instanceof GPUArithmeticError)) throw error;
+      // Retry the same tests with observable intermediate f32 bit patterns.
+      // Only devices needing these guards pay their per-operation cost.
+      this.arithmeticMode = 'guarded';
+      this.arithmeticSource = arithmeticShader(arithmetic, true);
+      this.arithmeticGuard = this.buffer(16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, new Uint32Array([0xffffffff, 0, 0, 0]));
+      await this.probeArithmetic();
+    }
+  }
+  bindArithmeticGuard(pass, pipeline) {
+    if (!this.arithmeticGuard) return;
+    const groups = this.arithmeticGuardGroups ??= new WeakMap();
+    if (!groups.has(pipeline)) groups.set(pipeline, this.device.createBindGroup({ layout: pipeline.getBindGroupLayout(1), entries: [{ binding: 0, resource: { buffer: this.arithmeticGuard } }] }));
+    pass.setBindGroup(1, groups.get(pipeline));
+  }
   async probeArithmetic() {
-    const cases = [[1, 2 ** -30, 1, -(2 ** -31)], [.9999999403953552, 2 ** -49, .5000000596046448, -(2 ** -48)], [1.0000001192092896, 0, .9999998807907104, 0], [-.8123456239700317, 1e-9, .7333332896232605, -2e-9]];
-    const source = arithmetic + `\n@group(0) @binding(0) var<storage,read> input:array<vec4f>;\n@group(0) @binding(1) var<storage,read_write> output:array<vec4f>;\n@compute @workgroup_size(1) fn probe(@builtin(global_invocation_id) id:vec3u){let v=input[id.x];output[id.x]=vec4f(ra(v.xy,v.zw),rm(v.xy,v.zw));}\n@compute @workgroup_size(1) fn coordinate_probe(@builtin(global_invocation_id) id:vec3u){let v=input[id.x];output[id.x]=vec4f(rd(v.xy,v.zw),0,0);}`;
+    const source = this.arithmeticSource + `\n@group(0) @binding(0) var<storage,read> input:array<vec4f>;\n@group(0) @binding(1) var<storage,read_write> output:array<vec4f>;\n@compute @workgroup_size(1) fn probe(@builtin(global_invocation_id) id:vec3u){let v=input[id.x];output[id.x]=vec4f(ra(v.xy,v.zw),rm(v.xy,v.zw));}\n@compute @workgroup_size(1) fn coordinate_probe(@builtin(global_invocation_id) id:vec3u){let v=input[id.x];output[id.x]=vec4f(rd(v.xy,v.zw),0,0);}`;
     const module = await this.compile(source);
     const pipeline = await this.device.createComputePipelineAsync({ layout: 'auto', compute: { module, entryPoint: 'probe', constants: { PAIRED: true } } });
-    const values = new Float32Array(cases.flat());
+    const values = arithmeticCases;
     const input = this.buffer(values.byteLength, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, values);
     const output = this.buffer(values.byteLength, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
     const read = this.buffer(values.byteLength, GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ);
     try {
       const group = this.device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [input, output].map((buffer, binding) => ({ binding, resource: { buffer } })) });
       const encoder = this.device.createCommandEncoder(), pass = encoder.beginComputePass();
-      pass.setPipeline(pipeline); pass.setBindGroup(0, group); pass.dispatchWorkgroups(cases.length); pass.end();
+      pass.setPipeline(pipeline); pass.setBindGroup(0, group); this.bindArithmeticGuard(pass, pipeline); pass.dispatchWorkgroups(values.length / 4); pass.end();
       encoder.copyBufferToBuffer(output, 0, read, 0, values.byteLength); this.device.queue.submit([encoder.finish()]);
       await read.mapAsync(GPUMapMode.READ); const got = new Float32Array(read.getMappedRange().slice(0)); read.unmap();
-      this.pairedOK = cases.every((_, k) => {
-        const a = values[4 * k] + values[4 * k + 1], b = values[4 * k + 2] + values[4 * k + 3];
-        return Math.abs(got[4 * k] + got[4 * k + 1] - (a + b)) < 2e-13 && Math.abs(got[4 * k + 2] + got[4 * k + 3] - a * b) < 2e-13;
-      });
-      const coordinateValues = new Float32Array([-959.5,0,1920,0,-539.5,0,1920,0,.5,0,4096,0,1.5,0,3001,0]);
+      const coordinateValues = coordinateCases;
       const coordinatePipeline = await this.device.createComputePipelineAsync({ layout:'auto',compute:{module,entryPoint:'coordinate_probe',constants:{PAIRED:true}} });
       this.device.queue.writeBuffer(input,0,coordinateValues);
       const coordinateGroup = this.device.createBindGroup({layout:coordinatePipeline.getBindGroupLayout(0),entries:[input,output].map((buffer,binding)=>({binding,resource:{buffer}}))});
       const coordinateEncoder=this.device.createCommandEncoder(), coordinatePass=coordinateEncoder.beginComputePass();
-      coordinatePass.setPipeline(coordinatePipeline);coordinatePass.setBindGroup(0,coordinateGroup);coordinatePass.dispatchWorkgroups(4);coordinatePass.end();
+      coordinatePass.setPipeline(coordinatePipeline);coordinatePass.setBindGroup(0,coordinateGroup);this.bindArithmeticGuard(coordinatePass,coordinatePipeline);coordinatePass.dispatchWorkgroups(coordinateValues.length / 4);coordinatePass.end();
       coordinateEncoder.copyBufferToBuffer(output,0,read,0,values.byteLength);this.device.queue.submit([coordinateEncoder.finish()]);
       await read.mapAsync(GPUMapMode.READ);const coords=new Float32Array(read.getMappedRange().slice(0));read.unmap();
-      this.pairedOK &&= [0,1,2,3].every(k=>Math.abs(coords[4*k]+coords[4*k+1]-coordinateValues[4*k]/coordinateValues[4*k+2])<2e-13);
-      if (!this.pairedOK) throw new Error('GPU paired-arithmetic probes failed. Using the CPU worker for accuracy.');
+      const report = checkArithmetic(got, coords);
+      this.arithmeticProbes.push({ mode: this.arithmeticMode, ...report });
+      this.pairedOK = report.passed;
+      if (!this.pairedOK) throw new GPUArithmeticError(report);
     } finally { input.destroy(); output.destroy(); read.destroy(); }
   }
   cancel() { this.version++; }
@@ -142,7 +161,7 @@ export class BrowserEngine {
       if (options.custom) {
         const inputCode = compileCustomInputs({ custom_mode: 'advanced', custom_inputs: options.custom.inputs }).wgsl;
         const code = fractal.replace(/fn custom_step[^\n]+/, customMath + '\n' + compileFormula(options.custom.formula).wgsl).replace(/fn custom_initial[^\n]+/, inputCode);
-        module = await this.compile(arithmetic + '\n' + code);
+        module = await this.compile(this.arithmeticSource + '\n' + code);
       }
       this.pipelines.set(key, await this.device.createComputePipelineAsync({ layout: 'auto', compute: { module, entryPoint: 'iterate', constants: { PAIRED: options.arithmetic !== 'fp32', EXTENDED: options.extended } } }));
       while (this.pipelines.size > 16) this.pipelines.delete(this.pipelines.keys().next().value);
@@ -227,7 +246,7 @@ export class BrowserEngine {
       const h = Math.min(rows, tile[1] + tile[3] - y);
       this.device.queue.writeBuffer(this.uniform, 0, this.params(view, width, height, options, packet, [tile[0], y, tile[2], h], anchor, repair));
       const encoder = this.device.createCommandEncoder(), pass = encoder.beginComputePass();
-      pass.setPipeline(pipeline); pass.setBindGroup(0, group); pass.dispatchWorkgroups(Math.ceil(tile[2] / 8), Math.ceil(h / 8)); pass.end();
+      pass.setPipeline(pipeline); pass.setBindGroup(0, group); this.bindArithmeticGuard(pass, pipeline); pass.dispatchWorkgroups(Math.ceil(tile[2] / 8), Math.ceil(h / 8)); pass.end();
       this.device.queue.submit([encoder.finish()]);
       // Bound each submission for mobile watchdogs and give newer navigation a turn.
       await this.device.queue.onSubmittedWorkDone();

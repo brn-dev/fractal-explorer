@@ -17,6 +17,7 @@ const cases = {
 };
 const modes = { auto: { arithmetic: 'auto', acceleration: 'auto' }, series: { arithmetic: 'double-single', acceleration: 'series' }, bla: { arithmetic: 'double-single', acceleration: 'bla' }, combined: { arithmetic: 'double-single', acceleration: 'series-bla' }, fp32: { arithmetic: 'fp32', acceleration: 'auto' } };
 let data;
+const deviceData = () => ({ date: new Date().toISOString(), device: engine.deviceName ?? 'CPU', gpu: engine.gpu, gpu_error: engine.gpuError, arithmetic_mode: engine.arithmeticMode, arithmetic_probes: engine.arithmeticProbes, userAgent: navigator.userAgent, rows: [] });
 const median = values => values.slice().sort((a,b)=>a-b)[Math.floor(values.length / 2)];
 function updateRaw() { $('results-json').value = JSON.stringify(data, null, 2); }
 function addRow(row) {
@@ -28,13 +29,16 @@ function addRow(row) {
 }
 try {
   const hardware = await engine.init();
-  $('device').textContent = hardware.gpu ? `WebGPU · ${hardware.device} · paired arithmetic probe passed` : `CPU fallback · ${hardware.error}`;
+  $('device').textContent = hardware.gpu ? `WebGPU · ${hardware.device} · ${hardware.arithmeticMode} paired arithmetic probe passed` : `CPU fallback · ${hardware.error}`;
+  data = deviceData(); updateRaw();
+  $('download').disabled = false;
+  $('progress').textContent = 'Startup precision results are ready to download. Run the benchmark to add render timings and pixel checks.';
   $('run').disabled = false;
 } catch (error) { $('device').textContent = error.message; }
 $('run').onclick = async () => {
   $('run').disabled = true; $('download').disabled = true; $('results').replaceChildren();
   const [requestedWidth, requestedHeight] = $('resolution').value.split(',').map(Number), repeats = Number($('repeats').value);
-  data = { date: new Date().toISOString(), device: engine.deviceName ?? 'CPU', gpu: engine.gpu, userAgent: navigator.userAgent, resolution: [requestedWidth, requestedHeight], repeats, timing: 'performance.now; queue completion; rendering total excludes coloring/drawing', precision: 'MPFR CPU references, paired FP32 GPU deltas; FP32 is experimental', cases, modes, rows: [] };
+  data = { ...deviceData(), resolution: [requestedWidth, requestedHeight], repeats, timing: 'performance.now; queue completion; rendering total excludes coloring/drawing', precision: 'MPFR CPU references, paired FP32 GPU deltas; FP32 is experimental', cases, modes };
   try {
     for (const [name, view] of Object.entries(cases)) {
       const [width, height] = name === 'deep10000' ? [32, 24] : [requestedWidth, requestedHeight];

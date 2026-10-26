@@ -1187,7 +1187,7 @@ async function init() {
     engineReady = true;
     $("hardware").textContent = hardware.gpu ? hardware.device.toUpperCase() : 'LOCAL CPU · WASM';
     $("hardware").title = hardware.gpu ? 'Computation runs on this device’s GPU; high-precision references run in its CPU worker.' : hardware.error;
-    if (!hardware.gpu) toast('GPU unavailable. Using the local CPU worker at reduced resolution. ' + hardware.error);
+    if (!hardware.gpu) toast(hardware.error + ' Using the local CPU worker at reduced resolution for accuracy.');
 
     requestRender();
   } catch (error) {
