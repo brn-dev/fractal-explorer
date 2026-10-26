@@ -1,7 +1,8 @@
 import { BrowserEngine } from './engine.js';
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { animationPlan } from './animation.mjs';
-import { animationExport, ditherFrame, exportQualities } from './animation-export.mjs';
+import { animationExport, ditherFrame, exportQualities, zoomJourneyDefaults } from './animation-export.mjs';
+import { zoomLabel } from './numbers.mjs';
 import { drawVignette, exportAspect, exportDimensions, gifPaletteSample, wrapPhase } from './export-utils.mjs';
 import { getSoundscape } from './audio/soundscapes.mjs';
 import { soundscapeFrame, renderSoundscape, SOUNDSCAPE_WARMUP } from './audio/export-audio.mjs';
@@ -110,6 +111,7 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
   function readOptions() {
     return { mode: $('animation-motion').value, format: $('animation-format').value, quality: $('animation-quality').value,
       longest: Number($('animation-size').value), aspectRatio: $('animation-aspect').value, fps: Number($('animation-fps').value), duration: Number($('gif-duration').value),
+      startZoom: $('animation-zoom-start').value, endZoom: $('animation-zoom-end').value,
       endHold: $('animation-format').value === 'mp4' ? Number($('animation-end-hold').value) : 0,
       repeats: $('animation-format').value === 'mp4' && $('animation-motion').value !== 'zoom' ? Number($('animation-repeats').value) : 1,
       includeSoundscape: $('animation-format').value === 'mp4' && $('animation-soundscape').checked,
@@ -122,7 +124,7 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
     const pending = current.unlocking = current.sound.unlock();
     pending.finally(() => { if (current.unlocking === pending) current.unlocking = null; });
   }
-  const soundtrackKey = p => JSON.stringify([p.mode,p.aspect,p.fps,p.cycleFrames,p.motionFrames,p.holdFrames,p.start,p.speed,p.wander]);
+  const soundtrackKey = p => JSON.stringify([p.mode,p.aspect,p.fps,p.cycleFrames,p.motionFrames,p.holdFrames,p.start,p.speed,p.wander,p.startZoom,p.endZoom]);
   function prepareSoundtrack(current, p) {
     // Output resolution and compression do not change the soundtrack. Both
     // preview and MP4 use this single analysis pass and the very same buffer.
@@ -199,6 +201,7 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
     if ($('animation-format').value === 'gif' && $('animation-fps').value === '60') $('animation-fps').value = '30';
     $('animation-dither-row').hidden = $('animation-format').value !== 'gif';
     $('animation-duration-row').hidden = $('animation-motion').value !== 'zoom';
+    $('animation-zoom-range').hidden = $('animation-zoom-note').hidden = $('animation-motion').value !== 'zoom';
     try {
       program = animationExport(current.state, readOptions()); current.valid = true;
       const p = program;
@@ -206,7 +209,9 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
       $('color-gif-stage').style.maxWidth = `${220 / p.aspect}px`;
       $('color-gif-phase-slider').value = String(p.start); $('color-gif-speed-slider').value = String(p.speed);
       $('animation-source-note').textContent = p.mode === 'parameters'
-        ? 'Targets, cycle shapes, and speeds come from the loop buttons beside the main-view sliders.' : p.mode === 'zoom' ? 'A single journey ending at 8× magnification.' : 'One complete palette cycle, using the current view.';
+        ? 'Targets, cycle shapes, and speeds come from the loop buttons beside the main-view sliders.' : p.mode === 'zoom'
+          ? `${zoomLabel(p.viewAt(0).span)} → ${zoomLabel(p.viewAt(p.motionFrames - 1).span)} · stays centered on your current view.`
+          : 'One complete palette cycle, using the current view.';
       $('color-gif-details').textContent = `${p.duration.toFixed(2)} s${p.repeats > 1 ? ` · ${p.repeats} repeats` : ''}${p.holdFrames ? ` (includes ${p.endHold.toFixed(2)} s end hold)` : ''} · ${p.frames} frames · ${p.width} × ${p.height} · ${p.fps} fps · preview up to 480 px`;
       $('download-color-gif').innerHTML = `Download ${p.format.toUpperCase()} <span>↓</span>`;
       current.mp4 = p.format === 'mp4' ? null : true;
@@ -295,7 +300,7 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
   for (const name of ['phase', 'speed']) {
     $(`color-gif-${name}-slider`).oninput = () => { $(`color-gif-${name}`).value = $(`color-gif-${name}-slider`).value; updateOptions(); };
   }
-  for (const id of ['color-gif-phase', 'color-gif-speed', 'gif-duration']) {
+  for (const id of ['color-gif-phase', 'color-gif-speed', 'gif-duration', 'animation-zoom-start', 'animation-zoom-end']) {
     const input = $(id); let timer;
     const apply = () => { clearTimeout(timer); updateOptions(); };
     input.onchange = input.onblur = apply;
@@ -319,6 +324,9 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
       animationOpened = true;
     }
     $('gif-duration').value = '4';
+    const zoomDefaults = zoomJourneyDefaults(state.visibleView ?? state.view);
+    $('animation-zoom-start').value = zoomDefaults.startZoom;
+    $('animation-zoom-end').value = zoomDefaults.endZoom;
     $('animation-format').querySelector('option[value="mp4"]').disabled = typeof VideoEncoder === 'undefined';
     const canvas = document.createElement('canvas'); canvas.id = 'color-gif-preview'; canvas.setAttribute('aria-label', 'Animation preview');
     $('color-gif-preview').replaceWith(canvas);

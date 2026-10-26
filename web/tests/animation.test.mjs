@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { animationParameters, animationPlan, cycleShapes, defaultAutomation, validateAutomation, cacheDimensions, cacheMemoryOptionsMiB, cacheMemorySetting, cacheMemoryLabel, FrameSchedule, ProgressiveAnimation } from '../src/animation.mjs';
-import { animationExport, ditherFrame } from '../src/animation-export.mjs';
+import { animationExport, ditherFrame, zoomJourneyDefaults } from '../src/animation-export.mjs';
 import { defaultView } from '../src/fractals.mjs';
-import { compare, decimal, plainText } from '../src/decimal.mjs';
+import { compare, decimal, order, plainText, validate } from '../src/decimal.mjs';
 
 const base = { x:'0', y:'0', span:'3.6', fractal:'julia', iterations:800, bailout:64, julia_x:'-.8', julia_y:'.156' };
 const settings = { julia_x:{enabled:true,target:'-.7',speed:.25} };
@@ -350,10 +350,76 @@ test('GIF timing distributes 30/40ms frames without changing total animation dur
 test('colors and zoom exports preserve their respective loop and endpoint behavior',()=>{
   const c=animationExport(state,{...output,mode:'colors',wander:true});assert.equal(c.viewAt(8),base);assert.equal(c.looping,true);
   const z=animationExport(state,{...output,mode:'zoom',wander:false});
-  assert.equal(compare(decimal(z.viewAt(0).span),decimal(base.span)),0);assert.equal(Number(z.viewAt(z.frames-1).span),Number(base.span)/8);assert.equal(z.looping,false);
+  assert.equal(compare(decimal(z.viewAt(0).span),decimal(base.span)),0);assert.equal(z.viewAt(z.frames-1).span,base.span);assert.equal(z.looping,false);
   assert.throws(()=>animationExport({...state,automation:{}},output));
   assert.throws(()=>animationExport(state,{...output,mode:'zoom',duration:0}));
   assert.throws(()=>animationExport(state,{...output,format:'gif',longest:3840}));
+});
+
+test('zoom journeys default from 1× to the exact visible viewport, including deep decimal widths',()=>{
+  for (const span of ['.008','1.23456789012345678901234567890123456789e-1000','1e-10000','16']) {
+    const visibleView={...base,span,x:'-.12345678901234567890123456789',y:'.25'};
+    const source={...state,visibleView},defaults=zoomJourneyDefaults(visibleView);
+    assert.equal(defaults.startZoom,'1');
+    assert.ok(decimal(defaults.endZoom).n>0n);
+    const p=animationExport(source,{...output,mode:'zoom',...defaults});
+    assert.equal(Number(p.viewAt(0).span),3.6);
+    assert.deepEqual(p.viewAt(p.motionFrames-1),visibleView);
+    assert.equal(p.viewAt(25).x,visibleView.x);assert.equal(p.viewAt(25).y,visibleView.y);
+    assert.equal(source.view.span,base.span);
+    const fallback=animationExport({...source,view:visibleView,visibleView:undefined},{...output,mode:'zoom'});
+    assert.deepEqual(fallback.viewAt(fallback.frames-1),visibleView);
+  }
+  assert.deepEqual(zoomJourneyDefaults({...base,span:'.008'}),{startZoom:'1',endZoom:'450'});
+  assert.equal(zoomJourneyDefaults({...base,span:'1e-10000'}).endZoom,'3.6e10000');
+});
+
+test('custom zoom endpoints share a proportional path in GIF and MP4 and support zooming out',()=>{
+  for (const format of ['gif','mp4']) for (const [startZoom,endZoom,direction] of [['2','128',-1],['128','2',1]]) {
+    const p=animationExport(state,{...output,mode:'zoom',format,startZoom,endZoom,duration:.5,fps:10});
+    const spans=Array.from({length:p.motionFrames},(_,index)=>Number(p.viewAt(index).span));
+    assert.equal(spans[0],3.6/Number(startZoom));assert.equal(spans.at(-1),3.6/Number(endZoom));
+    assert.ok(Math.abs(spans[2]-.225)<1e-14);
+    const ratio=(Number(startZoom)/Number(endZoom))**(1/(p.motionFrames-1));
+    for(let i=1;i<spans.length;i++) {
+      assert.equal(Math.sign(spans[i]-spans[i-1]),direction);
+      assert.ok(Math.abs(spans[i]/spans[i-1]-ratio)<1e-12);
+    }
+    for(let i=0;i<p.frames;i++) assert.deepEqual({...p.viewAt(i),span:base.span},base);
+  }
+});
+
+test('zoom journeys cross thousands of decimal orders without underflow and hold their exact endpoint',()=>{
+  for(const reverse of [false,true]) {
+    const p=animationExport({...state,visibleView:{...base,span:'1e-10000'}},{...output,mode:'zoom',startZoom:reverse?'3.6e10000':'3.6e8000',endZoom:reverse?'3.6e8000':'3.6e10000',duration:.5,fps:10,endHold:1});
+    const expected=reverse?[-10000,-9500,-9000,-8500,-8000]:[-8000,-8500,-9000,-9500,-10000];
+    for(let i=0;i<p.motionFrames;i++) {
+      const view=p.viewAt(i);
+      assert.equal(order(decimal(view.span)),expected[i]);
+      assert.deepEqual(validate(view),view);
+      assert.ok(decimal(view.span).n>0n);
+    }
+    for(let i=p.motionFrames;i<p.frames;i++) assert.deepEqual(p.viewAt(i),p.viewAt(p.motionFrames-1));
+  }
+});
+
+test('equal zoom endpoints keep the view fixed while allowing color wandering',()=>{
+  const p=animationExport(state,{...output,mode:'zoom',startZoom:'450',endZoom:'4.5e2'});
+  assert.equal(Number(p.viewAt(0).span),.008);
+  for(let i=1;i<p.frames;i++) assert.deepEqual(p.viewAt(i),p.viewAt(0));
+  assert.notEqual(p.phaseAt(1),p.phaseAt(0));
+});
+
+test('zoom fields reject invalid magnifications and enforce each formula’s limits',()=>{
+  for(const key of ['startZoom','endZoom']) {
+    for(const value of ['', ' ', 'nope', 'Infinity', 'NaN', '0', '-1', '.224', '3.61e10000', '1e10001']) {
+      assert.throws(()=>animationExport(state,{...output,mode:'zoom',[key]:value}),/zoom/);
+    }
+    const source={...state,visibleView:{...base,fractal:'tricorn'}};
+    assert.throws(()=>animationExport(source,{...output,mode:'zoom',[key]:'3.61e10'}),/zoom/);
+    assert.doesNotThrow(()=>animationExport(source,{...output,mode:'zoom',startZoom:'.225',endZoom:'3.6e10'}));
+  }
+  assert.doesNotThrow(()=>animationExport(state,{...output,startZoom:'invalid',endZoom:'invalid'}));
 });
 test('ordered GIF dithering preserves opacity and exact interior pixels',()=>{
   const bytes=new Uint8ClampedArray([8,17,18,255,128,128,128,255,128,128,128,255]);

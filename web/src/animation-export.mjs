@@ -1,5 +1,6 @@
 import { animationPlan } from './animation.mjs';
-import { navigate } from './decimal.mjs';
+import { compare, decimal, divide, multiply, order, plainText, text, validate } from './decimal.mjs';
+import { minimumSpan } from './fractals.mjs';
 import { exportAspect, exportDimensions, wrapPhase } from './export-utils.mjs';
 
 export const exportQualities = {
@@ -10,6 +11,48 @@ export const exportQualities = {
   extreme: { colors: 256, bits: 2.4, maxBitrate: 600e6, mp4Only: true },
   maximum: { colors: 256, quantizer: 0, mp4Only: true },
 };
+
+const overviewSpan = decimal('3.6');
+function zoomText(value) {
+  const exponent = order(value);
+  return exponent > -4 && exponent < 6 ? plainText(value)
+    : `${plainText({ n: value.n, e: value.e - exponent })}e${exponent}`;
+}
+export function zoomJourneyDefaults(view) {
+  return { startZoom: '1', endZoom: zoomText(divide(overviewSpan, decimal(view.span), 16)) };
+}
+function zoomJourney(view, options) {
+  view = validate(view);
+  const defaults = zoomJourneyDefaults(view), minimum = decimal('.225'), maximum = divide(overviewSpan, decimal(minimumSpan(view.fractal)));
+  const endpoint = (value, label) => {
+    let zoom;
+    try { zoom = decimal(value); }
+    catch { throw new Error(`${label} zoom must be a positive number; scientific notation such as 1e12 works.`); }
+    if (zoom.n <= 0n) throw new Error(`${label} zoom must be a positive number.`);
+    if (compare(zoom, minimum) < 0 || compare(zoom, maximum) > 0) throw new Error(`${label} zoom must be between ${zoomText(minimum)}× and ${zoomText(maximum)}× for this formula.`);
+    // The editable default is a short magnification. Preserve the viewport's
+    // exact width when it is used, including widths with long decimal mantissas.
+    const span = compare(zoom, decimal(defaults.endZoom)) === 0 ? view.span : text(divide(overviewSpan, zoom));
+    return { zoom: zoomText(zoom), view: validate({ ...view, span }) };
+  };
+  const from = endpoint(options.startZoom ?? defaults.startZoom, 'Start'), to = endpoint(options.endZoom ?? defaults.endZoom, 'End');
+  const first = decimal(from.view.span), last = decimal(to.view.span);
+  const mantissa = value => Number(plainText({ n: value.n, e: -order(value) + value.e }));
+  // Interpolate in log space without converting full widths or magnifications
+  // to Number: the supported journey can cross thousands of decimal orders.
+  const distance = order(last) - order(first) + Math.log10(mantissa(last) / mantissa(first));
+  return {
+    startZoom: from.zoom, endZoom: to.zoom,
+    viewAt: amount => {
+      if (amount <= 0 || compare(first, last) === 0) return from.view;
+      if (amount >= 1) return to.view;
+      const step = distance * amount, exponent = Math.floor(step);
+      const scale = decimal(`${10 ** (step - exponent)}e${exponent}`);
+      return validate({ ...view, span: text(multiply(first, scale)) });
+    },
+  };
+}
+
 export function animationExport(state, options) {
   const { mode, format, quality, longest, fps, start, speed, wander, aspectRatio = 'view', endHold = 0, repeats = 1 } = options;
   if (!['parameters', 'colors', 'zoom'].includes(mode) || !['gif', 'mp4'].includes(format) || !Object.hasOwn(exportQualities, quality)) throw new Error('Choose valid animation export settings.');
@@ -28,15 +71,17 @@ export function animationExport(state, options) {
   const { width, height } = exportDimensions(aspect, longest);
   if (format === 'gif' && width * height * frames > (state.mobile ? 160e6 : 480e6)) throw new Error('This GIF would be too large to encode in memory. Choose MP4, a smaller size, or fewer frames.');
   const colorCycles = mode === 'colors' ? 1 : format === 'mp4' || mode === 'zoom' ? speed * cycleFrames / fps : Math.max(1, Math.round(speed * cycleFrames / fps));
+  const zoom = mode === 'zoom' ? zoomJourney(state.visibleView ?? state.view, options) : null;
   return {
     ...options, repeats, aspectRatio, aspect, width, height, frames, cycleFrames, motionFrames, holdFrames, endHold: holdFrames / fps, motionDuration: motionFrames / fps, duration: frames / fps, looping: mode !== 'zoom', parameters,
+    ...(zoom ? { startZoom: zoom.startZoom, endZoom: zoom.endZoom } : {}),
     bitrate: exportQualities[quality].quantizer === undefined ? Math.min(exportQualities[quality].maxBitrate, Math.max(500000, Math.round(width * height * fps * exportQualities[quality].bits))) : null,
     quantizer: exportQualities[quality].quantizer ?? null,
     paletteSize: exportQualities[quality].colors,
     delay: index => 10 * (Math.round((index + 1) * 100 / fps) - Math.round(index * 100 / fps)),
     phaseAt: index => wrapPhase(start + (wander ? colorCycles * index / cycleFrames : 0)),
-    viewAt: index => parameters ? parameters.viewAt(Math.min(index, motionFrames - 1) % cycleFrames, cycleFrames) : mode === 'zoom'
-      ? navigate({ view: state.visibleView ?? state.view, factor: 8 ** (Math.min(index, motionFrames - 1) / (motionFrames - 1)) })
+    viewAt: index => parameters ? parameters.viewAt(Math.min(index, motionFrames - 1) % cycleFrames, cycleFrames) : zoom
+      ? zoom.viewAt(Math.min(index, motionFrames - 1) / (motionFrames - 1))
       : state.visibleView ?? state.view,
   };
 }
