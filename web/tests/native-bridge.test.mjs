@@ -37,3 +37,13 @@ test('Maximum forwards dynamic quality and full screen pixels without a fixed bi
     await encoder.cancel();
   } finally {delete globalThis.FractalNative;}
 });
+
+test('moderate dynamic quality forwards its quantizer and fallback target and exposes the selected native mode',async()=>{
+  let request;
+  globalThis.FractalNative={info(){},beginVideo(json){request=JSON.parse(json);return '{"ok":true,"id":"dynamic","qualityMode":"dynamic-vbr","bitrate":30000000}';},cancelVideo(){return '{"ok":true}';}};
+  try {
+    const encoder=await nativeVideoEncoder({}, {width:2256,height:2504,fps:30,bitrate:30000000,quantizer:22,nativeTarget:'open-steady'});
+    assert.equal(request.quantizer,22);assert.equal(request.bitrate,30000000);
+    assert.equal(encoder.encodingInfo.qualityMode,'dynamic-vbr');assert.equal(encoder.encodingInfo.bitrate,30000000);await encoder.cancel();
+  } finally {delete globalThis.FractalNative;}
+});

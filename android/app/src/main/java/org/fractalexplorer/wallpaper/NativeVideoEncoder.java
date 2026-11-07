@@ -97,12 +97,13 @@ final class NativeVideoEncoder {
   }
 
   static Selection select(int width, int height, int fps, int bitrate, Integer quantizer) {
-    format(width, height, fps, quantizer == null ? bitrate : 500000);
-    if (quantizer != null && quantizer != 0)
-      throw new IllegalArgumentException("Only Maximum dynamic quality is supported");
+    if (quantizer != null && (quantizer < 0 || quantizer > 51))
+      throw new IllegalArgumentException("Choose an H.264 quantizer from 0 to 51");
+    boolean maximum = quantizer != null && quantizer == 0;
+    format(width, height, fps, maximum ? 500000 : bitrate);
     MediaCodecInfo[] codecs = new MediaCodecList(MediaCodecList.REGULAR_CODECS).getCodecInfos();
-    // Prefer genuine constant-quality encoding for Maximum. Where unavailable,
-    // explicitly use the codec's maximum VBR rate and report that mode to the UI.
+    // Prefer constant quality. Moderate modes use their supplied VBR fallback;
+    // Maximum retains its existing highest-quality / maximum-VBR behavior.
     for (int tier = quantizer == null ? 1 : 0; tier <= 1; tier++) {
       for (boolean hardware : new boolean[] {true, false})
         for (MediaCodecInfo candidate : codecs) {
@@ -120,15 +121,24 @@ final class NativeVideoEncoder {
             int target =
                 cq
                     ? 0
-                    : quantizer == null
+                    : !maximum
                         ? bitrate
                         : Math.min(
                             2000000000, caps.getVideoCapabilities().getBitrateRange().getUpper());
             MediaFormat configured = format(width, height, fps, cq ? 500000 : target);
             configured.setInteger(MediaFormat.KEY_BITRATE_MODE, mode);
             if (cq) {
+              int lower = encoder.getQualityRange().getLower();
+              int upper = encoder.getQualityRange().getUpper();
+              if (!maximum && lower == upper) continue; // No moderate CQ level exists.
+              int quality =
+                  maximum
+                      ? upper
+                      : (int)
+                          (upper
+                              - Math.max(1L, Math.round(((long) upper - lower) * quantizer / 51d)));
               configured.removeKey(MediaFormat.KEY_BIT_RATE);
-              configured.setInteger(MediaFormat.KEY_QUALITY, encoder.getQualityRange().getUpper());
+              configured.setInteger(MediaFormat.KEY_QUALITY, quality);
             }
             for (MediaCodecInfo.CodecProfileLevel profile : caps.profileLevels) {
               if (profile.profile == MediaCodecInfo.CodecProfileLevel.AVCProfileHigh) {
@@ -146,7 +156,9 @@ final class NativeVideoEncoder {
             return new Selection(
                 candidate.getName(),
                 configured,
-                cq ? "maximum-cq" : quantizer == null ? "vbr" : "maximum-vbr",
+                cq
+                    ? maximum ? "maximum-cq" : "dynamic-cq"
+                    : maximum ? "maximum-vbr" : quantizer == null ? "vbr" : "dynamic-vbr",
                 target);
           } catch (IllegalArgumentException ignored) {
           }

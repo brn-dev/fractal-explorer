@@ -7,6 +7,18 @@ import { decimal, compare } from '../src/decimal.mjs';
 const view = { fractal:'julia', x:'0', y:'0', span:'3.6', julia_x:'-.8', julia_y:'.156', iterations:200, bailout:64 };
 const snapshot = () => wallpaperSnapshot({ view, colors:{palette:0,density:1,phase:.2}, speed:.12, wander:true, automation:{} }, [{name:'Test',colors:['#001122','#aabbcc','#001122']}]);
 
+test('moderate dynamic modes share quality across clips and use output pixels for a bounded fallback',()=>{
+  const draft=defaultWallpaperDraft(snapshot(),'inner');assert.equal(draft.quality,'dynamic-high');
+  draft.longest='native';draft.screenSizes={inner:{width:2256,height:2504}};draft.supersampling=2;
+  for(const [quality,qp,bits,max]of [['dynamic-high',22,.18,60e6],['dynamic-balanced',26,.1,35e6]]) {
+    draft.quality=quality;const plans=wallpaperPlan(draft);
+    for(const plan of plans){assert.equal(plan.quantizer,qp);assert.equal(plan.bitrate,Math.min(max,Math.round(plan.width*plan.height*plan.fps*bits)));}
+    assert.equal(wallpaperManifest(draft,plans).editor.quality,quality);
+  }
+  draft.quality='maximum';assert.equal(wallpaperPlan(draft)[0].quantizer,0);assert.equal(wallpaperPlan(draft)[0].bitrate,null);
+  assert.equal(draft.quality,'maximum','existing Maximum drafts retain their selected mode');
+});
+
 test('wallpaper supersampling increases render samples while preserving encoded dimensions and bitrate',()=>{
   const captured=wallpaperSnapshot({view,colors:{palette:0},supersampling:2},[{colors:['#000000','#ffffff']}]);
   const draft=defaultWallpaperDraft(captured,'inner');
@@ -53,7 +65,7 @@ test('saved steady parameters match live animation samples without per-channel s
 
 test('native screen pixels and video quality are independent of preview resolution',()=>{
   for(const screen of ['cover','inner']) {
-    const draft=defaultWallpaperDraft(snapshot(),screen);draft.longest='native';
+    const draft=defaultWallpaperDraft(snapshot(),screen);draft.longest='native';draft.quality='maximum';
     draft.screenSizes={cover:{width:1080,height:2520},inner:{width:2256,height:2504}};
     const plan=wallpaperPlan(draft)[0],preview=wallpaperPlan(draft,{previewLongest:480})[0];
     assert.deepEqual([plan.width,plan.height],Object.values(draft.screenSizes[screen]));

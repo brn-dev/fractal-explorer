@@ -3,6 +3,7 @@
 import { Output, Mp4OutputFormat, BufferTarget, CanvasSource, AudioBufferSource, Quality, canEncodeVideo, canEncodeAudio } from 'mediabunny';
 import { SOUNDSCAPE_SAMPLE_RATE } from './audio/export-audio.mjs';
 import { hasNativeVideo, nativeCall, nativeVideoEncoder } from './native-bridge.mjs';
+import { selectVideoRateControl } from './video-rate-control.mjs';
 
 const audioEncoding = { codec: 'aac', quality: new Quality({ bitrate: 256000 }) };
 let audioSupport;
@@ -25,30 +26,37 @@ function encodingOptions(options) {
   return {
     codec: 'avc', latencyMode: 'quality', contentHint: 'detail',
     // Maximum must use the requested quantizer: no silent bitrate fallback.
-    quality: new Quality(options.quantizer != null ? { quantizer: options.quantizer } : { bitrate: options.bitrate }),
+    quality: new Quality(options.quantizer != null ? { quantizer: options.quantizer } : { bitrate: options.bitrate, bitrateMode: 'variable' }),
   };
 }
 export async function supportsMP4(options) {
-  if (hasNativeVideo() && (options.nativeTarget || typeof VideoEncoder === 'undefined')) return !options.includeSoundscape && nativeCall('supportsVideo', JSON.stringify(options)).supported;
-  if (typeof VideoEncoder === 'undefined') return false;
-  const { codec, ...encoding } = encodingOptions(options);
-  return canEncodeVideo(codec, { width: options.width, height: options.height, frameRate: options.fps, ...encoding });
+  return (await videoEncodingInfo(options)).supported;
+}
+export async function videoEncodingInfo(options) {
+  if (hasNativeVideo() && (options.nativeTarget || typeof VideoEncoder === 'undefined')) return options.includeSoundscape ? { supported: false } : nativeCall('supportsVideo', JSON.stringify(options));
+  if (typeof VideoEncoder === 'undefined') return { supported: false };
+  return selectVideoRateControl(options, choice => {
+    const { codec, ...encoding } = encodingOptions({ ...options, ...choice });
+    return canEncodeVideo(codec, { width: options.width, height: options.height, frameRate: options.fps, ...encoding });
+  });
 }
 export async function mp4Encoder(canvas, options) {
   if (hasNativeVideo() && (options.nativeTarget || typeof VideoEncoder === 'undefined')) {
     if (!await supportsMP4(options)) throw new Error('These MP4 settings are unavailable on this phone. Try a smaller size, a lower frame rate, or turn sound off.');
     return nativeVideoEncoder(canvas, options);
   }
-  if (!await supportsMP4(options)) throw new Error('MP4 / H.264 encoding is unavailable at these settings in this browser. Choose a lower quality, a smaller size, or GIF.');
+  const selection = await videoEncodingInfo(options);
+  if (!selection.supported) throw new Error('MP4 / H.264 encoding is unavailable at these settings in this browser. Choose a lower quality, a smaller size, or GIF.');
   if (options.includeSoundscape && !await supportsMP4Audio()) throw new Error('MP4 soundscape encoding is unavailable in this browser. Turn off Include soundscape.');
   const target = new BufferTarget();
   const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
-  const source = new CanvasSource(canvas, { ...encodingOptions(options), keyFrameInterval: 2 });
+  const source = new CanvasSource(canvas, { ...encodingOptions({ ...options, ...selection }), keyFrameInterval: 2 });
   output.addVideoTrack(source, { frameRate: options.fps });
   const audio = options.includeSoundscape ? new AudioBufferSource(audioEncoding) : null;
   if (audio) output.addAudioTrack(audio);
   try { await output.start(); } catch (error) { await output.cancel(); throw error; }
   return {
+    encodingInfo: selection,
     add: index => source.add(index / options.fps, 1 / options.fps),
     finish: async audioBuffer => {
       source.close();

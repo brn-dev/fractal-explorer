@@ -145,6 +145,21 @@ test('a phone design renders on PC into a portable ZIP at the phone output size 
   } finally {globalThis.testVideo=oldVideo;await close(elements);}
 });
 
+test('wallpaper export reports the actual CQ or VBR fallback without rewriting the selected dynamic preset',async()=>{
+  const oldVideo=globalThis.testVideo;
+  globalThis.testVideo={async supportsMP4(){return true;},async mp4Encoder(canvas,plan){return {encodingInfo:plan.transition?{qualityMode:'dynamic-vbr',bitrate:30000000}:{qualityMode:'dynamic-quantizer',quantizer:22,bitrate:null},async add(){},async finish(){return new Blob(['mp4']);},async cancel(){}};}};
+  const {elements,api}=setup();
+  try {
+    elements['open-wallpaper-export'].click();await flush();assert.equal(api.draft().quality,'dynamic-high');
+    document.getElementById('wallpaper-open-transition-seconds').value='.5';elements['wallpaper-idle-seconds'].value='2';elements['wallpaper-idle-fps'].value='10';
+    await elements['wallpaper-create'].onclick();
+    assert.match(elements['wallpaper-encoding-note'].textContent,/Transition: variable bitrate.*30.0 Mbps.*fallback.*Steady: constant quality.*QP 22/);
+    assert.match(elements['wallpaper-encoding-note'].textContent,/file average/);
+    assert.equal(api.draft().quality,'dynamic-high');
+    elements['wallpaper-quality'].value='maximum';elements['wallpaper-quality'].onchange();await flush();assert.equal(api.draft().quality,'maximum');
+  } finally {globalThis.testVideo=oldVideo;await close(elements);}
+});
+
 test('capturing a scene inherits explorer sampling and export downsamples before encoding',async()=>{
   let applied; const outputs=[],painted=[],oldVideo=globalThis.testVideo;
   const {elements,api}=setup(true,{getState:()=>({...state,supersampling:2}),applyState:value=>{applied=value;},paint(canvas,values,metadata){canvas.width=metadata.width;canvas.height=metadata.height;painted.push([metadata.width,metadata.height]);}});

@@ -8,9 +8,11 @@ export function nativeCall(method, ...args) {
 }
 export const hasNativeVideo = () => !!nativeBridge();
 export async function nativeVideoEncoder(canvas, options) {
-  const { id } = nativeCall('beginVideo', JSON.stringify({ slot: options.nativeTarget ?? null, width: options.width, height: options.height, fps: options.fps, bitrate: options.bitrate, quantizer: options.quantizer ?? null }));
+  const selection = nativeCall('beginVideo', JSON.stringify({ slot: options.nativeTarget ?? null, width: options.width, height: options.height, fps: options.fps, bitrate: options.bitrate, quantizer: options.quantizer ?? null }));
+  const { id } = selection;
   let done = false;
   return {
+    encodingInfo: selection,
     add: async index => { nativeCall('appendVideo', id, canvas.toDataURL('image/png').split(',')[1], index); },
     finish: async () => { const file = nativeCall('finishVideo', id); done = true; return { nativeFile: file.id, size: file.size, type: 'video/mp4' }; },
     cancel: async () => { if (!done) { nativeCall('cancelVideo', id); done = true; } },

@@ -7,6 +7,10 @@ import { exportQualities } from './animation-export.mjs';
 export const WALLPAPER_FORMAT = 'fractal-wallpaper/v1';
 export const MAX_WALLPAPER_JSON_BYTES = 4 * 1024 ** 2;
 export const wallpaperSamplingScales = [1, 1.5, 2, 3, 4];
+export const wallpaperDynamicQualities = {
+  'dynamic-balanced': { quantizer: 26, bits: .10, maxBitrate: 35e6 },
+  'dynamic-high': { quantizer: 22, bits: .18, maxBitrate: 60e6 },
+};
 export function wallpaperJSON(value, pretty = false) {
   const json = JSON.stringify(value, null, pretty ? 2 : undefined);
   if (new TextEncoder().encode(json).byteLength > MAX_WALLPAPER_JSON_BYTES) throw new Error('Wallpaper data exceeds 4 MiB.');
@@ -64,6 +68,10 @@ export function wallpaperDimensions(draft, screen, previewLongest) {
 }
 export function wallpaperEncoding(width, height, fps, draft) {
   const quality = draft.quality ?? 'high';
+  if (Object.hasOwn(wallpaperDynamicQualities, quality)) {
+    const preset = wallpaperDynamicQualities[quality];
+    return { quality, quantizer: preset.quantizer, bitrate: Math.min(preset.maxBitrate, Math.max(500000, Math.round(width * height * fps * preset.bits))) };
+  }
   if (quality === 'custom') {
     if (!Number.isFinite(draft.bitrateMbps) || draft.bitrateMbps < .5 || draft.bitrateMbps > 600) throw new Error('Choose a bitrate from 0.5 to 600 Mbps.');
     return { quality, bitrate: Math.round(draft.bitrateMbps * 1e6), quantizer: null };
@@ -111,7 +119,7 @@ export function defaultWallpaperDraft(snapshot, screen) {
     const span = multiply(decimal(snapshot.view.span), decimal('1.3'));
     states[slot.key].view = validate({ ...snapshot.view, span: compare(span, decimal('16')) > 0 ? '16' : text(span) });
   }
-  const draft = { format: WALLPAPER_FORMAT, name: 'My fractal wallpaper', quality: 'maximum', supersampling: snapshot.supersampling ?? 1, steadyMotion: 'animated', arrivalSeconds: 3, idleSeconds: 8,
+  const draft = { format: WALLPAPER_FORMAT, name: 'My fractal wallpaper', quality: 'dynamic-high', supersampling: snapshot.supersampling ?? 1, steadyMotion: 'animated', arrivalSeconds: 3, idleSeconds: 8,
     longest: 1080, arrivalFps: 30, idleFps: 15, coverAspect: 2520 / 1080, innerAspect: 2504 / 2256,
     states, transitions: Object.fromEntries(wallpaperStates.filter(slot => slot.transition).map(slot => [slot.key, {seconds:3,easing:'ease-out'}])) };
   return screen ? wallpaperScreenDraft(draft, screen) : draft;

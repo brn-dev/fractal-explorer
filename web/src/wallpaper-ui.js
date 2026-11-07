@@ -9,6 +9,7 @@ import { validateDimensions } from './resolution.mjs';
 import { createWallpaperURL, readWallpaperURL, wallpaperHandoff } from './wallpaper-share.mjs';
 import { shareBaseURL } from './share.mjs';
 import { WallpaperFrameRenderer } from './wallpaper-renderer.mjs';
+import { videoRateDescription } from './video-rate-control.mjs';
 
 const $ = id => document.getElementById(id);
 const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
@@ -58,10 +59,10 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
           if (!encodingInfo.has(request)) encodingInfo.set(request, nativeCall('supportsVideo', request));
           const info = encodingInfo.get(request);
           if (!info.supported) return 'unsupported at this quality';
-          if (info.qualityMode === 'maximum-cq') return 'maximum quality · dynamic bitrate';
-          if (info.qualityMode === 'maximum-vbr') return `maximum variable bitrate · up to ${(info.bitrate / 1e6).toFixed(1)} Mbps`;
+          if (info.qualityMode) return videoRateDescription(info);
         }
-        return plan.quantizer === 0 ? 'maximum quality · dynamic bitrate' : `${(plan.bitrate / 1e6).toFixed(1)} Mbps`;
+        if (plan.quantizer > 0) return `dynamic quality (QP ${plan.quantizer}); VBR fallback target ${(plan.bitrate / 1e6).toFixed(1)} Mbps`;
+        return videoRateDescription({ ...plan, qualityMode: plan.quantizer === 0 ? 'maximum-quantizer' : 'vbr' });
       };
       $('wallpaper-encoding-note').textContent = `${resolution} · Transition: ${describe(plans[0])}. Steady: ${describe(plans[1])}.`;
     } catch (error) { $('wallpaper-encoding-note').textContent = error.message; }
@@ -443,10 +444,18 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
       }
       fields = new ExportFieldCache({ memoryBudget: exportCacheBudget(engine.mobile), signal });
       const entries = [], canvas = document.createElement('canvas');
+      const actualEncoding = new Map();
+      const showActualEncoding = () => {
+        $('wallpaper-encoding-note').textContent = `${plans[0].width} × ${plans[0].height} · ${plans.filter(plan => actualEncoding.has(plan.key)).map(plan => `${plan.transition ? 'Transition' : 'Steady'}: ${actualEncoding.get(plan.key)}`).join('. ')}.`;
+      };
       const total = plans.reduce((sum, p) => sum + p.frames, 0); let complete = 0;
       for (const p of plans) {
         canvas.width = p.width; canvas.height = p.height;
         video = await mp4Encoder(canvas, { ...p, nativeTarget: p.key });
+        if (video.encodingInfo?.qualityMode) {
+          actualEncoding.set(p.key, videoRateDescription(video.encodingInfo));
+          showActualEncoding();
+        }
         for (let index = 0; index < p.frames; index++) {
           check(signal); $('wallpaper-status').textContent = `${p.title} · frame ${index + 1} / ${p.frames} · ${Math.round(100 * complete / total)}%`;
           await renderSample(renderer, canvas, p, index, fields, signal);
@@ -458,6 +467,10 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
           await video.add(index); complete++; await nextFrame();
         }
         check(signal); const blob = await video.finish(); video = null;
+        if (Number.isFinite(blob?.size) && blob.size > 0) {
+          actualEncoding.set(p.key, `${actualEncoding.get(p.key) ?? 'Encoded'} · ${(blob.size / 1e6).toFixed(1)} MB · file average ≈${(blob.size * 8 / p.duration / 1e6).toFixed(1)} Mbps`);
+          showActualEncoding();
+        }
         if (!native) entries.push([p.file, blob]);
       }
       check(signal);
