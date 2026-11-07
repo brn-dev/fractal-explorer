@@ -10,6 +10,16 @@ const {BrowserEngine}=await server.ssrLoadModule('/src/engine.js');
 await server.close();
 const internal=()=>Object.assign(new Error('CreateComputePipelines failed with VK_ERROR_UNKNOWN'),{reason:'internal'});
 const view={fractal:'mandelbrot',x:'-.5',y:'0',span:'3.6',julia_x:'-.8',julia_y:'.156',iterations:80,bailout:64};
+
+test('GPU palette phase keeps a value just below one on the last stop instead of rounding to the first',()=>{
+  const definition={colors:['#ff0000','#ffffff']},phases=[],engine=Object.create(BrowserEngine.prototype);
+  const pass={setPipeline(){},setBindGroup(){},draw(){},end(){}};
+  Object.assign(engine,{gpu:true,last:{metadata:{width:16,height:16,color_origin:2}},canvas:{width:16,height:16},palettes:[definition],paletteIndex:0,paletteDefinition:definition,
+    colorUniform:{},colorPipeline:{getBindGroupLayout(){}},context:{getCurrentTexture(){return{createView(){}}}},
+    device:{queue:{writeBuffer(buffer,offset,bytes){if(buffer===engine.colorUniform)phases.push(new DataView(bytes).getFloat32(12,true));},submit(){}},createBindGroup(){},createCommandEncoder(){return{beginRenderPass(){return pass;},finish(){}}}}});
+  for(const phase of [.999999999,1,.5,0])engine.paint(0,1.3,phase);
+  assert.deepEqual(phases,[1-2**-24,1,.5,0]);
+});
 globalThis.GPUBufferUsage??={UNIFORM:64,COPY_DST:8};
 globalThis.GPUShaderStage??={COMPUTE:4};
 

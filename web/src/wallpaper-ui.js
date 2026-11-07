@@ -8,6 +8,7 @@ import { setupWallpaperGallery } from './wallpaper-gallery.js';
 import { validateDimensions } from './resolution.mjs';
 import { createWallpaperURL, readWallpaperURL, wallpaperHandoff } from './wallpaper-share.mjs';
 import { shareBaseURL } from './share.mjs';
+import { WallpaperFrameRenderer } from './wallpaper-renderer.mjs';
 
 const $ = id => document.getElementById(id);
 const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
@@ -46,6 +47,7 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
   }
   const encodingInfo = new Map();
   const sampleCanvases = new WeakMap();
+  const frameRenderers = new WeakMap();
   function encodingSummary() {
     try {
       const plans = wallpaperPlan(draft), first = plans[0];
@@ -169,24 +171,19 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     let surfaces = sampleCanvases.get(canvas);
     if (!surfaces) { surfaces = { work: document.createElement('canvas'), layer: document.createElement('canvas') }; sampleCanvases.set(canvas, surfaces); }
     const work = plan.supersampling > 1 ? surfaces.work : canvas;
-    async function field(view, settings) {
-      const key = JSON.stringify([view, settings, width, height]);
-      let frame = await fields.get(key); check(signal);
-      if (!frame) {
-        const metadata = (await renderer.render(view, width, height, settings)).metadata;
-        check(signal); const values = await renderer.readField(); check(signal);
-        frame = { values, metadata }; await fields.put(key, frame);
-      }
-      return frame;
-    }
+    let painter = frameRenderers.get(renderer);
+    if (!painter) { painter = new WallpaperFrameRenderer(renderer, fields, paint, signal); frameRenderers.set(renderer, painter); }
+    const cache = sample.crossfade || (!plan.transition && Object.keys(plan.parameterCycles ?? {}).length > 0);
+    const field = (view, settings) => painter.field(view, settings, width, height, cache);
     if (!sample.crossfade) {
       const frame = await field(sample.view, plan.destination.settings);
-      paint(work, frame.values, frame.metadata, sample.colors);
+      await painter.paint(work, frame, sample.colors);
     } else {
-      const from = await field(sample.from.view, sample.from.settings), to = await field(sample.to.view, sample.to.settings);
       const layer = surfaces.layer;
-      paint(work, from.values, from.metadata, sample.from.colors);
-      paint(layer, to.values, to.metadata, sample.to.colors);
+      const from = await field(sample.from.view, sample.from.settings);
+      await painter.paint(work, from, sample.from.colors);
+      const to = await field(sample.to.view, sample.to.settings);
+      await painter.paint(layer, to, sample.to.colors);
       const context = work.getContext('2d'); context.globalAlpha = sample.amount; context.drawImage(layer, 0, 0); context.globalAlpha = 1;
     }
     if (work !== canvas) {

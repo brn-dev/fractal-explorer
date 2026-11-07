@@ -419,8 +419,8 @@ export class BrowserEngine {
     }
     this.last = { field: this.gpu ? true : field, metadata };
   }
-  palette(index) {
-    const colors = this.palettes[index].colors.map(s => s.match(/[0-9a-f]{2}/gi).map(v => parseInt(v, 16)));
+  palette(index, definition = this.palettes[index]) {
+    const colors = definition.colors.map(s => s.match(/[0-9a-f]{2}/gi).map(v => parseInt(v, 16)));
     const data = new Float32Array(4096 * 4);
     for (let i = 0; i < 4096; i++) {
       const t = i / 4096 * (colors.length - 1), k = Math.floor(t), f = t - k;
@@ -429,13 +429,13 @@ export class BrowserEngine {
     }
     return data;
   }
-  paint(palette, density, phase) {
+  paint(palette, density, phase, definition = this.palettes[palette]) {
     if (!this.last) return;
     const meta = this.last.metadata;
     if (this.canvas.width !== meta.width) this.canvas.width = meta.width;
     if (this.canvas.height !== meta.height) this.canvas.height = meta.height;
     if (!this.gpu) {
-      const image = this.cpuContext.createImageData(meta.width, meta.height), table = this.palette(palette), values = this.last.field;
+      const image = this.cpuContext.createImageData(meta.width, meta.height), table = this.palette(palette, definition), values = this.last.field;
       for (let i = 0; i < values.length; i++) {
         const n = values[i], t = ((Math.log1p(Math.max(0, n - meta.color_origin)) * .2 * density + phase) % 1 + 1) % 1, k = Math.min(4095, Math.floor(t * 4096));
         for (let a = 0; a < 3; a++) image.data[4 * i + a] = n < 0 ? [8, 17, 18][a] : Math.round(table[k * 4 + a] * 255);
@@ -443,12 +443,15 @@ export class BrowserEngine {
       }
       this.cpuContext.putImageData(image, 0, 0); return;
     }
-    if (this.paletteIndex !== palette || this.paletteDefinition !== this.palettes[palette]) {
-      this.device.queue.writeBuffer(this.paletteBuffer, 0, this.palette(palette));
-      this.paletteIndex = palette; this.paletteDefinition = this.palettes[palette];
+    if (this.paletteIndex !== palette || this.paletteDefinition !== definition) {
+      this.device.queue.writeBuffer(this.paletteBuffer, 0, this.palette(palette, definition));
+      this.paletteIndex = palette; this.paletteDefinition = definition;
     }
     const bytes = new ArrayBuffer(48), d = new DataView(bytes);
-    d.setUint32(0, meta.width, true); d.setUint32(4, meta.height, true); d.setFloat32(8, density, true); d.setFloat32(12, phase, true); d.setFloat32(16, meta.color_origin, true);
+    // A phase just below one must stay below one after conversion to f32.
+    // Otherwise a non-loop palette jumps from its last stop to its first.
+    const gpuPhase = phase < 1 && Math.fround(phase) === 1 ? 1 - 2 ** -24 : phase;
+    d.setUint32(0, meta.width, true); d.setUint32(4, meta.height, true); d.setFloat32(8, density, true); d.setFloat32(12, gpuPhase, true); d.setFloat32(16, meta.color_origin, true);
     this.device.queue.writeBuffer(this.colorUniform, 0, bytes);
     const group = this.device.createBindGroup({ layout: this.colorPipeline.getBindGroupLayout(0), entries: [this.colorUniform, this.output, this.paletteBuffer].map((buffer, binding) => ({ binding, resource: { buffer } })) });
     const encoder = this.device.createCommandEncoder(), pass = encoder.beginRenderPass({ colorAttachments: [{ view: this.context.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: .03, g: .06, b: .07, a: 1 } }] });
