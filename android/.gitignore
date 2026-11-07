@@ -1,0 +1,6 @@
+local.properties
+.gradle/
+app/build/
+app/src/main/assets/*.mp4
+app/src/main/assets/*.png
+app/src/main/assets/demo.json

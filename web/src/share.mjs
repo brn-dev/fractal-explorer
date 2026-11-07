@@ -38,7 +38,7 @@ export function sharedState(data, paletteCount) {
 
 export function shareBaseURL(current, configured) {
   const url = new URL(current);
-  const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || url.hostname.endsWith('.localhost');
+  const local = ['localhost', '127.0.0.1', '[::1]', 'appassets.androidplatform.net'].includes(url.hostname) || url.hostname.endsWith('.localhost');
   const base = new URL(configured || (local ? publishedURL : new URL('.', url).href));
   if (!['http:', 'https:'].includes(base.protocol)) throw new Error('Share links require a website URL.');
   base.username = ''; base.password = ''; base.search = ''; base.hash = '';

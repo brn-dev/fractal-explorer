@@ -18,6 +18,15 @@ function normal({ n, e }) {
   return { n, e };
 }
 export function text(a) { return a.n === 0n ? '0' : `${a.n}${a.e ? `e${a.e}` : ''}`; }
+// Interpolation can add digits beyond the input budget. Keep more than the
+// deepest supported viewport needs, while remaining valid decimal input.
+export function boundedText(a) {
+  if (!a.n) return '0';
+  const digits = (a.n < 0n ? -a.n : a.n).toString().length;
+  const remove = Math.max(0, digits - 12048, -24064 - a.e);
+  if (remove >= digits) return '0';
+  return text(remove ? normal({ n: a.n / power(remove), e: a.e + remove }) : a);
+}
 // Format editable values without converting through Number or losing digits.
 export function plainText(a) {
   if (!a.n) return '0';
@@ -32,7 +41,8 @@ export function plainText(a) {
 }
 export function order(a) { return a.n ? (a.n < 0n ? -a.n : a.n).toString().length - 1 + a.e : -Infinity; }
 function power(n) {
-  if (n < 0 || n > 24064) throw new Error('Coordinate precision budget exceeded.');
+  // Two accepted exponents may sit at opposite ends of the input range.
+  if (n < 0 || n > 48128) throw new Error('Coordinate precision budget exceeded.');
   return 10n ** BigInt(n);
 }
 export function add(a, b) {
@@ -47,7 +57,16 @@ export function divide(a, b, digits = 80) {
   const shift = Math.max(0, digits + order(b) - b.e - (order(a) - a.e));
   return normal({ n: a.n * power(shift) / b.n, e: a.e - b.e - shift });
 }
-export function compare(a, b) { const c = add(a, { n: -b.n, e: b.e }); return c.n < 0n ? -1 : c.n > 0n ? 1 : 0; }
+export function compare(a, b) {
+  const sign = n => n < 0n ? -1 : n > 0n ? 1 : 0;
+  const first = sign(a.n), last = sign(b.n);
+  if (first !== last) return first < last ? -1 : 1;
+  if (!first) return 0;
+  // Unequal orders need no large alignment, including tiny legal coordinates.
+  const distance = order(a) - order(b);
+  if (distance) return (distance < 0 ? -1 : 1) * first;
+  return sign(add(a, { n: -b.n, e: b.e }).n);
+}
 export function validate(view) {
   if (!Object.hasOwn(fractals, view.fractal)) throw new Error('Unknown fractal.');
   const out = parameterDefaults(view);

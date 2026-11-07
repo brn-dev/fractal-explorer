@@ -6,6 +6,8 @@ A completely separate [browser-only edition](web/README.md) now lives in `web/`.
 
 The web edition can be hosted on GitHub Pages using the included [deployment workflow](.github/workflows/deploy-web.yml). See [Pages setup](web/README.md#github-pages); only the static web bundle is published.
 
+An experimental [Android edition](android/README.md) bundles the web explorer in a WebView with **Export → Create wallpaper**. Cover and main screens have separate drafts, rendering and gallery selection, each with a transition and steady loop sharing one palette and color speed. Older combined wallpapers remain compatible. The browser exports a screen-specific package for Android import. Playback uses videos without live fractal calculation or hinge-angle setup; physical Fold behavior and battery use still need testing.
+
 ## Inspiration and attribution
 
 **[Fractal Explorer — fractalexplorer.org](https://fractalexplorer.org/)** was a visual and interaction reference for this recreation. Credit to its creators for the fractal exploration experience that helped inspire this app.

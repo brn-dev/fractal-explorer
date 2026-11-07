@@ -1,0 +1,19 @@
+{
+  "arrival_seconds": 2.8,
+  "idle_seconds": 8,
+  "arrival_fps": 30,
+  "idle_fps": 15,
+  "palette": ["#06111b", "#123749", "#247e8e", "#72e4d1", "#b6a0e8", "#efbc83", "#123749", "#06111b"],
+  "cover": {
+    "width": 720, "height": 1680, "rotate": true,
+    "view": {"fractal": "julia", "x": "0", "y": "0", "span": "3.5", "julia_x": "-0.8", "julia_y": "0.156", "iterations": 600},
+    "arrival_from": {"span": "4.5", "julia_x": "-1.0", "julia_y": "0.025"},
+    "idle_delta": {"julia_x": "0.003", "julia_y": "0.002", "span": "-0.025"}
+  },
+  "inner": {
+    "width": 1080, "height": 1200, "rotate": false,
+    "view": {"fractal": "julia", "x": "0", "y": "0", "span": "2.85", "julia_x": "-0.74543", "julia_y": "0.113008", "iterations": 600},
+    "arrival_from": {"span": "4.0", "julia_x": "-0.78", "julia_y": "0.165"},
+    "idle_delta": {"julia_x": "0.00015", "julia_y": "0.0001", "span": "-0.018"}
+  }
+}

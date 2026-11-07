@@ -1,0 +1,47 @@
+plugins { id 'com.android.application' }
+
+def developmentKey = new File(rootProject.projectDir.parentFile, 'artifacts/android-wallpaper/debug.keystore')
+
+android {
+    namespace 'org.fractalexplorer.wallpaper'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'org.fractalexplorer.wallpaper'
+        minSdk 30
+        targetSdk 36
+        versionCode 13
+        versionName '0.7.1'
+    }
+    androidResources { noCompress += ['mp4', 'png'] }
+    signingConfigs {
+        debug {
+            storeFile developmentKey
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+}
+
+tasks.register('ensureDevelopmentKey', Exec) {
+    onlyIf { !developmentKey.isFile() }
+    doFirst { developmentKey.parentFile.mkdirs() }
+    commandLine new File(System.getProperty('java.home'), System.getProperty('os.name').toLowerCase().contains('windows') ? 'bin/keytool.exe' : 'bin/keytool').absolutePath,
+        '-genkeypair', '-keystore', developmentKey.absolutePath, '-storepass', 'android', '-keypass', 'android',
+        '-alias', 'androiddebugkey', '-keyalg', 'RSA', '-validity', '10000', '-dname', 'CN=Fractal Wallpaper Debug,O=Fractal Explorer,C=AT'
+}
+tasks.configureEach { if (name == 'validateSigningDebug') dependsOn 'ensureDevelopmentKey' }
+
+def webRoot = new File(rootProject.projectDir.parentFile, 'web')
+tasks.register('buildExplorer', Exec) {
+    workingDir webRoot
+    commandLine System.getProperty('os.name').toLowerCase().contains('windows') ? ['cmd', '/c', 'npm', 'run', 'build'] : ['npm', 'run', 'build']
+}
+tasks.register('bundleExplorer', Sync) {
+    dependsOn 'buildExplorer'
+    from new File(webRoot, 'dist')
+    into layout.buildDirectory.dir('generated/explorerAssets/explorer')
+}
+android.sourceSets.main.assets.srcDir layout.buildDirectory.dir('generated/explorerAssets')
+tasks.named('preBuild').configure { dependsOn 'bundleExplorer' }

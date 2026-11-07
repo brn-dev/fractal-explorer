@@ -4,6 +4,9 @@ import { screenPoint, gestureView, previewTransform } from './navigation.mjs';
 import { BrowserEngine } from './engine.js';
 import { renderDimensions, qualityScales } from './resolution.mjs';
 import { setupExports } from './export-ui.js';
+import { setupWallpaper } from './wallpaper-ui.js';
+import { wallpaperLoopTiming } from './wallpaper.mjs';
+import { nativeBridge, nativeDownload } from './native-bridge.mjs';
 import { advancePhase } from './export-utils.mjs';
 import { fractals, defaultView, parameterDefaults, hasConstant, fractalParameters } from './fractals.mjs';
 import { LIVE_FPS, animationPlan, cacheDimensions, cacheMemoryOptionsMiB, cacheMemorySetting, cacheMemoryLabel, ProgressiveAnimation, validateAutomation } from './animation.mjs';
@@ -17,7 +20,7 @@ import { setupAppUpdates } from './update-ui.js';
 import { validateCustomPalette, customPaletteDefinition, paletteSelection } from './palettes.mjs';
 import { setupPaletteEditor } from './palette-ui.js';
 const $ = (id) => document.getElementById(id);
-const canvas = $("fractal-canvas");
+let canvas = $("fractal-canvas");
 const base = {
   x: "-0.5",
   y: "0",
@@ -32,10 +35,41 @@ const palettes = await (await fetch(new URL('./palettes.json', document.baseURI)
 const builtinPaletteCount = palettes.length, customPaletteIndex = builtinPaletteCount;
 let customPalette = null;
 palettes.push({ name: 'My palette', colors: ['#160f32', '#d654bc', '#fff1df', '#160f32'] });
-const engine = new BrowserEngine(canvas, palettes);
+const engine = new BrowserEngine(canvas, palettes, {
+  onCanvasChange: next => { canvas = next; },
+  onBackendChange: () => {
+    if (!engineReady) return;
+    syncHardware();
+    toast('GPU driver failed. Using the local CPU. Retry GPU is available under Rendering.');
+    requestRender(); // Fit the main view to the CPU budget before doing CPU work.
+  },
+  onDeviceLost: info => { if (engineReady) engine.useCPU(new Error(info.message || 'GPU device lost.')); },
+});
 let cacheMemoryMiB = cacheMemorySetting(undefined, engine.mobile);
 let paintingReady = false;
 let engineReady = false;
+let wallpaperStartEditing = false;
+let wallpaperSteadyContext = null;
+let reconnectingGPU = false;
+function syncHardware() {
+  $('hardware').textContent = engine.gpu ? engine.deviceName.toUpperCase() : 'LOCAL CPU · WASM';
+  $('hardware').title = engine.gpu ? 'Computation runs on this device’s GPU; high-precision references run in its CPU worker.' : engine.gpuError;
+  $('retry-gpu').hidden = !!engine.gpu || !navigator.gpu;
+  $('gpu-status').textContent = engine.gpu ? '' : navigator.gpu ? 'Using the local CPU. You can retry the GPU without restarting.' : 'Using the local CPU. WebGPU is unavailable in this browser.';
+}
+async function retryGPU() {
+  if (reconnectingGPU) return;
+  holdPausedParameters();
+  reconnectingGPU = true; engineReady = false; engine.cancel(); generation++;
+  automationPlayer.configure(null); automationRenderer?.destroy(); automationRenderer = null; automationRendererPromise = null;
+  paintingReady = false; $('retry-gpu').disabled = true; $('gpu-status').textContent = 'Checking the GPU…';
+  try {
+    const hardware = await engine.init({ initialView: currentRenderView(), settings: renderSettings });
+    engineReady = true; syncHardware(); requestRender();
+    if (!hardware.gpu) toast('The GPU is still unavailable. Continuing with the local CPU.');
+  } catch (error) { $('gpu-status').textContent = error.message; }
+  finally { reconnectingGPU = false; $('retry-gpu').disabled = false; }
+}
 let parameterPreview = false, parameterPreviewTimer, locationIntroTimer;
 const destinations = [
   {
@@ -206,15 +240,24 @@ document.addEventListener('visibilitychange', () => {
 });
 function setAutomation(next) {
   try {
+    if (wallpaperStartEditing) next = {};
     automationSettings = validateAutomation(view, next);
     pausedStatic = null;
     automationPlayer.paused = false; syncAutomationPause();
     syncView(); saveSession(); requestRender();
   } catch (error) { toast(error.message); automationControls.sync(); }
 }
+function fitWallpaperColorTiming() {
+  if (!wallpaperSteadyContext) return;
+  const { duration } = wallpaperLoopTiming(view, automationSettings, wallpaperSteadyContext.idleSeconds, wallpaperSteadyContext.idleFps);
+  const cycles = Math.min(Math.floor(duration * 2 + 1e-9), Math.max(1, Math.round(wanderingSpeed * duration)));
+  wanderingSpeed = cycles / duration;
+  $('wandering-speed').value = String(wanderingSpeed);
+  $('wandering-speed-value').textContent = `${Number(wanderingSpeed.toFixed(5))} cycles/s · wallpaper loop`;
+}
 function syncAutomationPause() {
   const button = $('automation-pause');
-  button.hidden = !Object.keys(automationSettings).length;
+  button.hidden = wallpaperStartEditing || !Object.keys(automationSettings).length;
   button.setAttribute('aria-pressed', String(automationPlayer.paused));
   const label = automationPlayer.paused ? 'Resume parameter animations' : 'Pause parameter animations';
   button.setAttribute('aria-label', label);
@@ -224,6 +267,7 @@ function automationPlaybackLabel(player) {
   return player.paused ? 'parameter animations paused' : player.schedule.ready.size === player.plan.frames ? '30 fps cached' : 'animation warming';
 }
 function toggleParameterAnimations() {
+  if (wallpaperStartEditing) return;
   if (!Object.keys(automationSettings).length) return;
   audio?.resetAnalysis();
   automationPlayer.setPaused(!automationPlayer.paused);
@@ -302,9 +346,14 @@ function restoreColors(data) {
   palette = selected.palette === 'custom' ? customPaletteIndex : selected.palette;
   density = Number.isFinite(data.density) ? Math.max(.2, Math.min(4, data.density)) : 1;
   phase = Number.isFinite(data.phase) ? ((data.phase % 1) + 1) % 1 : 0;
+  if (wallpaperSteadyContext) {
+    wallpaperSteadyContext.colorOrigin = phase;
+    wallpaperSteadyContext.colorElapsed = 0;
+    wallpaperSteadyContext.colorTimeBase = 0;
+  }
 }
-function colorTable(index = palette) {
-  const colors = palettes[index].colors.map((c) =>
+function colorTable(index = palette, definition = null) {
+  const colors = (definition ?? palettes[index]).colors.map((c) =>
       [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)),
     ),
     table = new Uint8ClampedArray(4096 * 3);
@@ -336,7 +385,7 @@ function paint(target = canvas, values = field, metadata = meta, colors = {palet
   const context = target.getContext("2d"),
     image = context.createImageData(metadata.width, metadata.height),
     bytes = image.data,
-    table = colorTable(colors.palette);
+    table = colorTable(colors.palette, colors.definition);
   for (let i = 0; i < values.length; i++) {
     const n = values[i],
       o = i * 4;
@@ -552,6 +601,7 @@ function loadView(next, index = -1, preview = false, sceneReason = null) {
   }
   if (next.fractal !== view.fractal) automationSettings = {};
   else if (customChanged) automationSettings = validateAutomation(next, automationSettings);
+  if (!Object.keys(automationSettings).length) { automationPlayer.paused = false; syncAutomationPause(); }
   view = parameterDefaults({ ...base, ...next });
   if (sceneReason) majorSceneChange(sceneReason);
   activeDestination = index;
@@ -605,8 +655,17 @@ async function render() {
   const { width, height, capped } = renderDimensions(innerWidth, innerHeight, quality, { gpu: engine.gpu, mobile: engine.mobile, limits: engine.renderLimits });
   $("quality-note").textContent = `${parameterPreview ? 'Preview · ' : ''}${width.toLocaleString()} × ${height.toLocaleString()} pixels${capped ? ' · resolution limit reached' : ''}. Higher quality smooths fine edges; increase iterations for more fractal detail.`;
   try {
-    const plan = automationPlayer.paused && pausedStatic ? null : animationPlan(snapshot, automationSettings, LIVE_FPS, pausedStatic?.frameOffset ?? 0);
+    const plan = wallpaperStartEditing || (automationPlayer.paused && pausedStatic) ? null : animationPlan(snapshot, automationSettings, LIVE_FPS, pausedStatic?.frameOffset ?? 0);
+    fitWallpaperColorTiming();
     if (plan) {
+      if (wallpaperSteadyContext) {
+        if (pausedStatic) {
+          // Resume the visible geometry phase, retaining whole palette laps when
+          // its loop is longer than the parameter loop. Keep the held color.
+          wallpaperSteadyContext.colorTimeBase = Math.floor(wallpaperSteadyContext.colorElapsed / plan.duration) * plan.duration + plan.frameOffset / plan.fps;
+          wallpaperSteadyContext.colorOrigin = advancePhase(phase, -wanderingSpeed, wallpaperSteadyContext.colorTimeBase);
+        } else wallpaperSteadyContext.colorTimeBase = 0;
+      }
       const dimensions = cacheDimensions({ width, height, capped }, plan.frames, cacheMemoryMiB * 1048576);
       automationPlayer.configure(plan, { ...dimensions, settings: settingsSnapshot });
       pausedStatic = null;
@@ -823,6 +882,7 @@ function setupNavigation() {
   });
 }
 async function downloadBlob(blob, name) {
+  if (nativeBridge()) return nativeDownload(blob, name);
   const url = URL.createObjectURL(blob),
     a = document.createElement("a");
   a.href = url;
@@ -857,11 +917,11 @@ function syncRenderSettings(settings) {
 function restoreSharedState(shared) {
   cancelNavigationGesture(); navigationPreviewView = null; canvas.style.transform = '';
   automationPlayer.configure(null); pausedStatic = null;
-  view = shared.view; automationSettings = shared.automation; activeDestination = -1;
+  view = shared.view; automationSettings = wallpaperStartEditing ? {} : shared.automation; activeDestination = -1;
   restoreColors(shared); wanderingSpeed = shared.wanderingSpeed;
   vignetteEnabled = shared.vignetteEnabled;
-  automationPlayer.paused = shared.paused || reducedMotion;
-  $('animate').checked = shared.wander && !reducedMotion;
+  automationPlayer.paused = (shared.paused && Object.keys(automationSettings).length > 0) || reducedMotion;
+  $('animate').checked = shared.wander && !reducedMotion && !wallpaperStartEditing;
   setPlacesHidden(true); setPanelCollapsed(true); hideLocationIntro();
 }
 function setupControls() {
@@ -895,6 +955,14 @@ function setupControls() {
   $('wandering-speed').oninput = () => {
     wanderingSpeed = Number($('wandering-speed').value);
     $('wandering-speed-value').textContent = `${wanderingSpeed.toFixed(2)} cycles/s`;
+    fitWallpaperColorTiming();
+    saveSession();
+  };
+  $('animate').onchange = () => {
+    if (wallpaperSteadyContext && $('animate').checked) {
+      const clock = automationPlayer.plan ? (wallpaperSteadyContext.colorTimeBase ?? 0) + automationPlayer.schedule.elapsed(performance.now()) : wallpaperSteadyContext.colorElapsed;
+      wallpaperSteadyContext.colorOrigin = advancePhase(phase, -wanderingSpeed, clock);
+    }
     saveSession();
   };
   for (const [field, id] of [
@@ -971,6 +1039,7 @@ function setupControls() {
   };
   $("phase").oninput = () => {
     phase = Number($("phase").value);
+    if (wallpaperSteadyContext) wallpaperSteadyContext.colorOrigin = advancePhase(phase, -wanderingSpeed, wallpaperSteadyContext.colorElapsed);
     $("phase-value").textContent = phase.toFixed(2);
     paint();
     saveSession();
@@ -1072,13 +1141,19 @@ function setupControls() {
     } catch (error) { $('location-export-status').textContent = error.message; }
   };
   $('choose-location').onclick = () => $('import-location').click();
+  let locationImportVersion = 0;
+  const locationDialog = $('location-export-dialog');
+  locationDialog.addEventListener('close', () => { locationImportVersion++; });
   $("import-location").onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    const version = ++locationImportVersion;
+    const current = () => version === locationImportVersion && locationDialog.open;
     $('location-export-status').textContent = 'Opening location…';
     try {
       if (file.size > 256000) throw new Error("Location file is too large.");
       const data = JSON.parse(await file.text());
+      if (!current()) return;
       if (
         data.format !== "fractal-explorer/v1" ||
         !data.view ||
@@ -1087,6 +1162,7 @@ function setupControls() {
         throw new Error("This is not a Fractal Explorer location.");
       const validated = await localNavigation({ view: data.view });
       const imported = await validated.json();
+      if (!current()) return;
       restoreColors(data);
       syncColorControls();
       syncPalette();
@@ -1095,18 +1171,51 @@ function setupControls() {
       setAutomation(data.automation ?? {});
       $('location-export-dialog').close();
     } catch (error) {
-      $('location-export-status').textContent = error.message;
+      if (current()) $('location-export-status').textContent = error.message;
     }
     e.target.value = "";
   };
+  const snapshotState = () => {
+    return { view: { ...view }, visibleView: { ...(imageView ?? view) }, requestedView: currentRenderView(),
+      visibleViewReady: !rendering && paintingReady && !!field && (automationPlayer.plan || JSON.stringify(imageView) === JSON.stringify(currentRenderView())) && JSON.stringify(imageSettings) === JSON.stringify(renderSettings),
+      automation: structuredClone(automationSettings), settings: { ...renderSettings },
+      colors: { palette, density, phase, definition: structuredClone(palettes[palette]) }, speed: wanderingSpeed, wander: $('animate').checked,
+      loopColorPhase: wallpaperSteadyContext && $('animate').checked ? wallpaperSteadyContext.colorOrigin : undefined,
+      audio: { ...audio.selection, volume: audio.settings.volume, intensity: audio.settings.intensity } };
+  };
+  const exportState = () => {
+    if (!engineReady) throw new Error('Wait for the browser renderer to start.');
+    return snapshotState();
+  };
+  setupWallpaper({ engine, palettes, paint, downloadBlob, getState: snapshotState,
+    onSceneEditingChange(slot, context) {
+      wallpaperStartEditing = !!slot?.transition;
+      wallpaperSteadyContext = slot && !slot.transition ? { ...context, colorOrigin: null, colorElapsed: 0, colorTimeBase: 0 } : null;
+      $('wandering-speed').step = wallpaperSteadyContext ? 'any' : '.01';
+      automationControls.setDisabled(wallpaperStartEditing, 'Start scenes are still images. Set motion with the transition curve.');
+      $('animate').disabled = wallpaperStartEditing || reducedMotion;
+      $('animate').title = wallpaperStartEditing ? 'Choose a still start color; the transition controls its movement.' : reducedMotion ? 'Disabled by your reduced motion preference' : '';
+      $('wandering-speed').disabled = wallpaperStartEditing;
+    },
+    applyState(snapshot) {
+      const definition = snapshot.colors.definition;
+      const builtin = palettes.slice(0, builtinPaletteCount).findIndex(p => JSON.stringify(p.colors) === JSON.stringify(definition.colors));
+      const stops = [...definition.colors], loop = stops.length > 2 && stops.at(-1) === stops[0];
+      if (loop) stops.pop();
+      restoreColors({ ...snapshot.colors, palette: builtin >= 0 ? builtin : 'custom',
+        customPalette: { name: definition.name, colors: stops, loop } });
+      syncColorControls(); syncPalette(); syncRenderSettings(snapshot.settings);
+      loadView(snapshot.view, -1, false, 'wallpaper'); setAutomation(snapshot.automation ?? {});
+      wanderingSpeed = snapshot.speed ?? .12; $('animate').checked = !!snapshot.wander;
+      $('wandering-speed').value = String(wanderingSpeed); saveSession();
+      $('wandering-speed-value').textContent = `${wanderingSpeed.toFixed(2)} cycles/s`;
+      fitWallpaperColorTiming();
+    },
+  });
   setupExports({
     engine, palettes, paint, colorTable, downloadBlob,
     setAudioPreview: active => audio.setPreviewing(active),
-    getState: () => {
-      if (!engineReady) throw new Error('Wait for the browser renderer to start.');
-      return { view: { ...view }, visibleView: { ...(imageView ?? view) }, automation: structuredClone(automationSettings), settings: { ...renderSettings }, colors: { palette, density, phase }, speed: wanderingSpeed, wander: $('animate').checked,
-        audio: { ...audio.selection, volume: audio.settings.volume, intensity: audio.settings.intensity } };
-    },
+    getState: exportState,
     getCurrentField: async () => {
       if (rendering || !paintingReady || !field || (!automationPlayer.plan && JSON.stringify(imageView) !== JSON.stringify(currentRenderView())) || JSON.stringify(imageSettings) !== JSON.stringify(renderSettings)) throw new Error('Wait for the current view to finish rendering.');
       const metadata = { ...meta };
@@ -1144,11 +1253,18 @@ function animate(time) {
   automationPlayer.tick(time, document.hidden || !!document.querySelector('dialog[open]'));
   if (
     $("animate").checked &&
+    !wallpaperStartEditing &&
     field &&
+    (!wallpaperSteadyContext || paintingReady) &&
     !reducedMotion && !document.hidden &&
     !document.querySelector('dialog[open]')
   ) {
-    phase = advancePhase(phase, wanderingSpeed, elapsed);
+    if (wallpaperSteadyContext) {
+      if (!automationPlayer.paused) {
+        wallpaperSteadyContext.colorElapsed = automationPlayer.plan ? (wallpaperSteadyContext.colorTimeBase ?? 0) + automationPlayer.schedule.elapsed(time) : wallpaperSteadyContext.colorElapsed + Math.max(0, elapsed);
+        phase = advancePhase(wallpaperSteadyContext.colorOrigin ?? phase, wanderingSpeed, wallpaperSteadyContext.colorElapsed);
+      }
+    } else phase = advancePhase(phase, wanderingSpeed, elapsed);
     if (time - lastPaint > (engine.gpu ? 16 : 65)) {
       $("phase").value = phase;
       $("phase-value").textContent = phase.toFixed(2);
@@ -1159,6 +1275,7 @@ function animate(time) {
   requestAnimationFrame(animate);
 }
 async function init() {
+  $('retry-gpu').onclick = retryGPU;
   try {
     const savedCustom = JSON.parse(localStorage.getItem('fractal-web-custom-palette-v1'));
     if (savedCustom) setCustomPalette(savedCustom);
@@ -1223,11 +1340,10 @@ async function init() {
   }
   requestAnimationFrame(animate);
   try {
-    const hardware = await engine.init({ forceCPU: new URLSearchParams(location.search).get('cpu') === '1' });
+    const hardware = await engine.init({ forceCPU: new URLSearchParams(location.search).get('cpu') === '1', initialView: currentRenderView(), settings: renderSettings });
     engineReady = true;
-    $("hardware").textContent = hardware.gpu ? hardware.device.toUpperCase() : 'LOCAL CPU · WASM';
-    $("hardware").title = hardware.gpu ? 'Computation runs on this device’s GPU; high-precision references run in its CPU worker.' : hardware.error;
-    if (!hardware.gpu) toast(hardware.error + ' Using the local CPU worker at reduced resolution for accuracy.');
+    syncHardware();
+    if (!hardware.gpu) toast(navigator.gpu ? 'GPU unavailable. Using the local CPU. Retry GPU is available under Rendering.' : 'WebGPU unavailable. Using the local CPU.');
 
     requestRender();
   } catch (error) {

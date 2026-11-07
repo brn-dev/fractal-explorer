@@ -8,6 +8,7 @@ import { getSoundscape } from './audio/soundscapes.mjs';
 import { soundscapeFrame, renderSoundscape, SOUNDSCAPE_WARMUP } from './audio/export-audio.mjs';
 import { SoundscapePreview } from './audio/preview-audio.mjs';
 import { ExportFieldCache, exportCacheBudget } from './export-field-cache.mjs';
+import { hasNativeVideo } from './native-bridge.mjs';
 
 const $ = id => document.getElementById(id);
 const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
@@ -318,16 +319,16 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
     $('animation-motion').value = hasParameters ? 'parameters' : 'colors';
     $('color-gif-phase').value = String(wrapPhase(state.colors.phase)); $('color-gif-speed').value = String(state.speed);
     $('gif-wander-colors').checked = hasParameters ? state.wander : true;
-    $('animation-format').value = typeof VideoEncoder === 'undefined' ? 'gif' : 'mp4';
+    $('animation-format').value = typeof VideoEncoder === 'undefined' && !hasNativeVideo() ? 'gif' : 'mp4';
     if (!animationOpened) {
-      $('animation-size').value = typeof VideoEncoder === 'undefined' || engine.mobile ? '720' : '1920';
+      $('animation-size').value = (typeof VideoEncoder === 'undefined' && !hasNativeVideo()) || engine.mobile ? '720' : '1920';
       animationOpened = true;
     }
     $('gif-duration').value = '4';
     const zoomDefaults = zoomJourneyDefaults(state.visibleView ?? state.view);
     $('animation-zoom-start').value = zoomDefaults.startZoom;
     $('animation-zoom-end').value = zoomDefaults.endZoom;
-    $('animation-format').querySelector('option[value="mp4"]').disabled = typeof VideoEncoder === 'undefined';
+    $('animation-format').querySelector('option[value="mp4"]').disabled = typeof VideoEncoder === 'undefined' && !hasNativeVideo();
     const canvas = document.createElement('canvas'); canvas.id = 'color-gif-preview'; canvas.setAttribute('aria-label', 'Animation preview');
     $('color-gif-preview').replaceWith(canvas);
     syncPlay(); $('color-gif-status').textContent = 'Preparing your view…';

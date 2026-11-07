@@ -2,6 +2,7 @@ import { createUpdateMonitor } from './updates.mjs';
 
 export async function setupAppUpdates({ saveSession }) {
   const $ = id => document.getElementById(id), status = $('offline-status');
+  if (globalThis.FractalNative?.info) { status.textContent = 'Bundled in the Android app · available offline. Install an APK update to update the explorer.'; return; }
   if (!('serviceWorker' in navigator)) { status.textContent = 'Offline caching is unavailable in this browser.'; return; }
   status.textContent = 'Checking offline cache…';
   const timeout = setTimeout(() => { status.textContent = 'Offline caching is unavailable in this browser. Static hosting is still required for reloads.'; }, 8000);

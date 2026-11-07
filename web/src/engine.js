@@ -8,6 +8,7 @@ import { validate, decimal, order } from './decimal.mjs';
 import { packWide } from './wide.mjs';
 import { renderLimits, validateDimensions } from './resolution.mjs';
 import { arithmeticShader, arithmeticCases, coordinateCases, checkArithmetic, GPUArithmeticError } from './gpu-arithmetic.mjs';
+import { computePipeline, renderPipeline, gpuBackendFailure, GPUBackendError, specializeFractal } from './gpu-recovery.mjs';
 
 import { kinds } from './fractals.mjs';
 import { sampleField } from './audio/reactive-analysis.mjs';
@@ -42,13 +43,15 @@ class WorkerClient {
 }
 
 export class BrowserEngine {
-  constructor(canvas, palettes) {
+  constructor(canvas, palettes, { onCanvasChange, onBackendChange, onDeviceLost } = {}) {
     this.canvas = canvas; this.palettes = palettes; this.worker = new WorkerClient();
     this.packets = new Map(); this.pipelines = new Map(); this.version = 0;
     this.mobile = matchMedia('(pointer:coarse)').matches;
     this.paletteIndex = -1; this.last = null;
+    this.onCanvasChange = onCanvasChange; this.onBackendChange = onBackendChange; this.onDeviceLost = onDeviceLost;
   }
-  async init({ forceCPU = false } = {}) {
+  async init({ forceCPU = false, initialView = { fractal: 'mandelbrot', span: '3.6' }, settings = {} } = {}) {
+    this.lost = null;
     await this.worker.call('init');
     if (this.destroyed) throw makeAbort();
     try {
@@ -59,28 +62,58 @@ export class BrowserEngine {
       this.device = await adapter.requestDevice();
       if (this.destroyed) throw makeAbort();
       this.deviceName = adapter.info?.description || [adapter.info?.vendor, adapter.info?.architecture].filter(Boolean).join(' ') || 'Local GPU';
-      this.device.lost.then(info => { this.lost = info.message || 'GPU device lost. Reload to reconnect.'; });
+      const device = this.device;
+      this.device.lost.then(info => {
+        if (this.device !== device || this.destroyed) return;
+        this.lost = info.message || 'GPU device lost.';
+        this.onDeviceLost?.(info);
+      });
       await this.initArithmetic();
-      this.module = await this.compile(this.arithmeticSource + '\n' + fractal);
+      // Verify the real kernel before reporting GPU readiness or claiming the canvas.
+      await this.pipeline(this.options(initialView, settings));
       this.colorModule = await this.compile(color);
-      this.colorPipeline = this.device.createRenderPipeline({ layout: 'auto', vertex: { module: this.colorModule, entryPoint: 'vertex' }, fragment: { module: this.colorModule, entryPoint: 'fragment', targets: [{ format: navigator.gpu.getPreferredCanvasFormat() }] }, primitive: { topology: 'triangle-list' } });
+      this.colorPipeline = await renderPipeline(device, { label: 'Fractal colors', layout: 'auto', vertex: { module: this.colorModule, entryPoint: 'vertex' }, fragment: { module: this.colorModule, entryPoint: 'fragment', targets: [{ format: navigator.gpu.getPreferredCanvasFormat() }] }, primitive: { topology: 'triangle-list' } }, () => this.destroyed || this.device !== device);
       if (this.destroyed) throw makeAbort();
       // Check availability before claiming the canvas, so a failed GPU setup can use 2D.
-      this.context = this.canvas.getContext('webgpu');
+      this.context = this.drawingContext('webgpu');
       this.context.configure({ device: this.device, format: navigator.gpu.getPreferredCanvasFormat(), alphaMode: 'opaque' });
       this.colorUniform = this.buffer(48, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
       this.paletteBuffer = this.buffer(4096 * 16, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
+      if (this.lost) throw new GPUBackendError(new Error(this.lost));
       this.gpu = true;
+      this.gpuError = null;
       return { gpu: true, device: this.deviceName, paired: this.pairedOK, arithmeticMode: this.arithmeticMode };
     } catch (error) {
       if (this.destroyed) { this.device?.destroy(); throw makeAbort(); }
-      this.gpuError = error.message;
-      this.device?.destroy(); this.device = null;
-      this.cpuContext = this.canvas.getContext('2d', { alpha: false });
-      if (!this.cpuContext) throw new Error(`Cannot initialize a drawing context: ${error.message}`);
-      this.gpu = false;
+      this.useCPU(error);
       return { gpu: false, device: 'Local CPU · WebAssembly worker', error: error.message, arithmeticProbes: this.arithmeticProbes };
     }
+  }
+  drawingContext(kind, options) {
+    let context = this.canvas.getContext(kind, options);
+    if (context) return context;
+    // A canvas cannot change context types after WebGPU/2D has claimed it.
+    // Navigation listeners live on the viewport; preserve the child's attributes.
+    const replacement = this.canvas.cloneNode(false);
+    context = replacement.getContext(kind, options);
+    if (!context) throw new Error(`Cannot initialize a ${kind} drawing context.`);
+    this.canvas.replaceWith(replacement); this.canvas = replacement;
+    this.onCanvasChange?.(replacement);
+    return context;
+  }
+  useCPU(error) {
+    this.gpuError = error.message;
+    const device = this.device; this.device = null; this.gpu = false;
+    this.context?.unconfigure(); this.context = null; device?.destroy();
+    this.pipelines?.clear(); this.packets?.clear(); this.packetIds?.clear();
+    for (const key of ['output','stats','readStats','uniform','colorUniform','paletteBuffer','colorPipeline','colorModule','iterateLayout','iteratePipelineLayout','arithmeticGuard','arithmeticGuardGroups','audioSamplePipeline','emptyReference','emptySeries','emptyMaps']) this[key] = null;
+    this.width = this.height = 0; this.paletteIndex = -1; this.last = null; this.lost = null;
+    this.cpuContext = this.drawingContext('2d', { alpha: false });
+    this.onBackendChange?.({ gpu: false, error: this.gpuError });
+  }
+  computePipeline(descriptor) {
+    const device = this.device;
+    return computePipeline(device, descriptor, () => this.destroyed || this.device !== device);
   }
   async compile(code) {
     const module = this.device.createShaderModule({ code });
@@ -117,7 +150,7 @@ export class BrowserEngine {
   async probeArithmetic() {
     const source = this.arithmeticSource + `\n@group(0) @binding(0) var<storage,read> input:array<vec4f>;\n@group(0) @binding(1) var<storage,read_write> output:array<vec4f>;\n@compute @workgroup_size(1) fn probe(@builtin(global_invocation_id) id:vec3u){let v=input[id.x];output[id.x]=vec4f(ra(v.xy,v.zw),rm(v.xy,v.zw));}\n@compute @workgroup_size(1) fn coordinate_probe(@builtin(global_invocation_id) id:vec3u){let v=input[id.x];output[id.x]=vec4f(rd(v.xy,v.zw),0,0);}`;
     const module = await this.compile(source);
-    const pipeline = await this.device.createComputePipelineAsync({ layout: 'auto', compute: { module, entryPoint: 'probe', constants: { PAIRED: true } } });
+    const pipeline = await this.computePipeline({ label: 'Fractal arithmetic probe', layout: 'auto', compute: { module, entryPoint: 'probe', constants: { PAIRED: true } } });
     const values = arithmeticCases;
     const input = this.buffer(values.byteLength, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, values);
     const output = this.buffer(values.byteLength, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
@@ -129,7 +162,7 @@ export class BrowserEngine {
       encoder.copyBufferToBuffer(output, 0, read, 0, values.byteLength); this.device.queue.submit([encoder.finish()]);
       await read.mapAsync(GPUMapMode.READ); const got = new Float32Array(read.getMappedRange().slice(0)); read.unmap();
       const coordinateValues = coordinateCases;
-      const coordinatePipeline = await this.device.createComputePipelineAsync({ layout:'auto',compute:{module,entryPoint:'coordinate_probe',constants:{PAIRED:true}} });
+      const coordinatePipeline = await this.computePipeline({ label:'Fractal coordinate probe',layout:'auto',compute:{module,entryPoint:'coordinate_probe',constants:{PAIRED:true}} });
       this.device.queue.writeBuffer(input,0,coordinateValues);
       const coordinateGroup = this.device.createBindGroup({layout:coordinatePipeline.getBindGroupLayout(0),entries:[input,output].map((buffer,binding)=>({binding,resource:{buffer}}))});
       const coordinateEncoder=this.device.createCommandEncoder(), coordinatePass=coordinateEncoder.beginComputePass();
@@ -152,18 +185,31 @@ export class BrowserEngine {
     const extended = perturb && (settings.range_mode === 'floatexp' || settings.range_mode === 'scaled' || depth < -15);
     if (settings.range_mode === 'standard' && perturb && depth < -15) throw new Error('Standard exponent range is unsafe here. Select Auto or extended range.');
     const acceleration = !perturb ? 'none' : settings.acceleration === 'auto' ? (depth < -15 ? 'series' : 'none') : settings.acceleration;
-    return { perturb, arithmetic, extended, acceleration, custom: view.fractal === 'custom' ? { formula: view.custom_formula, inputs: customInputExpressions(view) } : null };
+    return { kind: kinds.indexOf(view.fractal), perturb, arithmetic, extended, acceleration, custom: view.fractal === 'custom' ? { formula: view.custom_formula, inputs: customInputExpressions(view) } : null };
   }
   async pipeline(options) {
-    const key = JSON.stringify([options.arithmetic, options.extended, options.custom]);
+    const key = JSON.stringify([options.kind, options.perturb, options.arithmetic, options.extended, options.custom]);
     if (!this.pipelines.has(key)) {
-      let module = this.module;
-      if (options.custom) {
-        const inputCode = compileCustomInputs({ custom_mode: 'advanced', custom_inputs: options.custom.inputs }).wgsl;
-        const code = fractal.replace(/fn custom_step[^\n]+/, customMath + '\n' + compileFormula(options.custom.formula).wgsl).replace(/fn custom_initial[^\n]+/, inputCode);
-        module = await this.compile(this.arithmeticSource + '\n' + code);
-      }
-      this.pipelines.set(key, await this.device.createComputePipelineAsync({ layout: 'auto', compute: { module, entryPoint: 'iterate', constants: { PAIRED: options.arithmetic !== 'fp32', EXTENDED: options.extended } } }));
+      const device = this.device;
+      const pending = (async () => {
+        let code = fractal;
+        if (options.custom) {
+          const inputCode = compileCustomInputs({ custom_mode: 'advanced', custom_inputs: options.custom.inputs }).wgsl;
+          code = code.replace(/fn custom_step[^\n]+/, customMath + '\n' + compileFormula(options.custom.formula).wgsl).replace(/fn custom_initial[^\n]+/, inputCode);
+        }
+        const module = await this.compile(this.arithmeticSource + '\n' + specializeFractal(code, options.kind, options.perturb));
+        if (this.destroyed || this.device !== device) throw makeAbort();
+        if (!this.iteratePipelineLayout) {
+          // Specialization may remove unused shader bindings. Keep the host ABI fixed.
+          this.iterateLayout = this.device.createBindGroupLayout({ entries: ['uniform','read-only-storage','read-only-storage','read-only-storage','storage','storage'].map((type,binding) => ({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type}})) });
+          const layouts = [this.iterateLayout];
+          if (this.arithmeticGuard) layouts.push(this.device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}}]}));
+          this.iteratePipelineLayout = this.device.createPipelineLayout({bindGroupLayouts:layouts});
+        }
+        return this.computePipeline({ label: `Fractal ${options.kind} ${options.perturb ? 'deep' : 'direct'} ${options.arithmetic}`, layout: this.iteratePipelineLayout, compute: { module, entryPoint: 'iterate', constants: { PAIRED: options.arithmetic !== 'fp32', EXTENDED: options.extended } } });
+      })();
+      this.pipelines.set(key, pending);
+      pending.catch(() => { if (this.pipelines.get(key) === pending) this.pipelines.delete(key); });
       while (this.pipelines.size > 16) this.pipelines.delete(this.pipelines.keys().next().value);
     }
     return this.pipelines.get(key);
@@ -263,10 +309,25 @@ export class BrowserEngine {
       if (token !== this.version) throw makeAbort();
       this.last = result; return result;
     }
-    if (this.lost) throw new Error(this.lost);
+    try { return await this.renderGPU(view, width, height, options, token, start); }
+    catch (error) {
+      if (this.destroyed || token !== this.version) throw makeAbort();
+      if (!gpuBackendFailure(error) && !this.lost) throw error;
+      this.useCPU(error);
+      if (this.destroyed || token !== this.version) throw makeAbort();
+      const result = await this.worker.call('cpu', view, width, height, options.acceleration === 'none' ? 'none' : 'series');
+      if (this.destroyed || token !== this.version) throw makeAbort();
+      result.metadata.warning = 'GPU driver failed. Rendering with the local CPU; you can retry the GPU.';
+      this.last = result; return result;
+    }
+  }
+  async renderGPU(view, width, height, options, token, start) {
+    if (this.lost) throw new GPUBackendError(new Error(this.lost));
     this.ensureOutput(width, height); this.resetStats();
     const compileStart = now(); await this.pipeline(options); const compilation = now() - compileStart;
+    if (this.destroyed || token !== this.version) throw makeAbort();
     const packet = await this.packet(view, width, height, options);
+    if (this.destroyed || token !== this.version) throw makeAbort();
     let kernel = await this.dispatch(view, width, height, options, packet, [0, 0, width, height], token);
     let stats = await this.readStatistics(), repairs = 0, referenceRepairs = 0, repairMs = 0;
     let minimum = new Float32Array(stats.buffer)[2];
@@ -336,7 +397,7 @@ export class BrowserEngine {
           let y=min(size.y-1u,(2u*id.y+1u)*size.y/64u);
           samples[id.y*32u+id.x]=field[y*size.x+x];
         }` });
-      this.audioSamplePipeline = this.device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'sample' } });
+      this.audioSamplePipeline = await this.computePipeline({ label: 'Fractal audio samples', layout: 'auto', compute: { module, entryPoint: 'sample' } });
     }
     const output = this.buffer(4096,GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
     const read = this.buffer(4096,GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);

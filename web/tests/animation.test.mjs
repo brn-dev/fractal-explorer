@@ -9,6 +9,37 @@ const base = { x:'0', y:'0', span:'3.6', fractal:'julia', iterations:800, bailou
 const settings = { julia_x:{enabled:true,target:'-.7',speed:.25} };
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
+test('all selectable speeds retain exact rates at live and wallpaper frame rates',()=>{
+  for(const fps of [10,15,24,30]) for(let ticks=1;ticks<=40;ticks++) {
+    const speed=ticks/20, plan=animationPlan(base,{julia_x:{enabled:true,target:'-.7',speed,shape:'linear'}},fps);
+    assert.ok(Number.isInteger(plan.frames)); assert.ok(plan.duration<=20);
+    assert.ok(Math.abs(plan.channels[0].cycles/plan.duration-speed)<1e-12);
+    assert.deepEqual(plan.viewAt(plan.frames),plan.viewAt(0));
+  }
+});
+
+test('numeric endpoint interpolation stays within validated parameter limits', () => {
+  const view = { ...defaultView(base, 'newton'), relaxation: 1 };
+  const plan = animationPlan(view, { relaxation: { enabled: true, target: '.2', speed: .25, shape: 'smootherstep' } });
+  assert.equal(plan.viewAt(60).relaxation, .2);
+  for (let i = 0; i < plan.frames; i++) assert.doesNotThrow(() => plan.viewAt(i));
+});
+
+test('maximum length and tiny coordinates remain usable in intermediate frames', () => {
+  for (const from of ['0.' + '1'.repeat(12062), '1e-24064']) {
+    const view = { ...base, julia_x: from };
+    const plan = animationPlan(view, { julia_x: { enabled: true, target: '0', speed: .25, shape: 'linear' } });
+    assert.equal(plan.viewAt(0).julia_x, from);
+    const middle = plan.viewAt(30).julia_x;
+    assert.ok(middle.length <= 12064);
+    assert.ok(compare(decimal(middle), decimal(from)) <= 0);
+    assert.ok(compare(decimal(middle), decimal('0')) >= 0);
+    assert.deepEqual(plan.viewAt(30), plan.viewAt(90));
+    const wide = animationPlan(view, { julia_x: { enabled: true, target: '1000000', speed: .25, shape: 'linear' } });
+    assert.doesNotThrow(() => wide.viewAt(30));
+  }
+});
+
 test('automation targets display ordinary decimals without rounding exact values', () => {
   for (const [input, expected] of [['-3982e-4','-0.3982'], ['32e-2','0.32'], ['1e3','1000'], ['-1e-7','-0.0000001'], ['0e20','0']]) {
     assert.equal(plainText(decimal(input)), expected);

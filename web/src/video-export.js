@@ -2,10 +2,12 @@
 // in real time: timestamps are explicit, so slow fractal frames are never lost.
 import { Output, Mp4OutputFormat, BufferTarget, CanvasSource, AudioBufferSource, Quality, canEncodeVideo, canEncodeAudio } from 'mediabunny';
 import { SOUNDSCAPE_SAMPLE_RATE } from './audio/export-audio.mjs';
+import { hasNativeVideo, nativeCall, nativeVideoEncoder } from './native-bridge.mjs';
 
 const audioEncoding = { codec: 'aac', quality: new Quality({ bitrate: 256000 }) };
 let audioSupport;
 export function supportsMP4Audio() {
+  if (hasNativeVideo() && typeof VideoEncoder === 'undefined') return Promise.resolve(false);
   return audioSupport ??= (async () => {
     const options = { numberOfChannels: 2, sampleRate: SOUNDSCAPE_SAMPLE_RATE, quality: audioEncoding.quality };
     if (await canEncodeAudio('aac', options)) return true;
@@ -27,11 +29,16 @@ function encodingOptions(options) {
   };
 }
 export async function supportsMP4(options) {
+  if (hasNativeVideo() && (options.nativeTarget || typeof VideoEncoder === 'undefined')) return !options.includeSoundscape && nativeCall('supportsVideo', JSON.stringify(options)).supported;
   if (typeof VideoEncoder === 'undefined') return false;
   const { codec, ...encoding } = encodingOptions(options);
   return canEncodeVideo(codec, { width: options.width, height: options.height, frameRate: options.fps, ...encoding });
 }
 export async function mp4Encoder(canvas, options) {
+  if (hasNativeVideo() && (options.nativeTarget || typeof VideoEncoder === 'undefined')) {
+    if (!await supportsMP4(options)) throw new Error('These MP4 settings are unavailable on this phone. Try a smaller size, a lower frame rate, or turn sound off.');
+    return nativeVideoEncoder(canvas, options);
+  }
   if (!await supportsMP4(options)) throw new Error('MP4 / H.264 encoding is unavailable at these settings in this browser. Choose a lower quality, a smaller size, or GIF.');
   if (options.includeSoundscape && !await supportsMP4Audio()) throw new Error('MP4 soundscape encoding is unavailable in this browser. Turn off Include soundscape.');
   const target = new BufferTarget();

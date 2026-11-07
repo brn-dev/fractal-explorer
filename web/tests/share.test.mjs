@@ -49,6 +49,7 @@ test('links omit frame data and device preferences and whitelist the view fields
 });
 
 test('local previews share the published site, deployed paths stay intact, and debug queries are removed',()=>{
+  assert.equal(shareBaseURL('https://appassets.androidplatform.net/explorer/index.html#s=old'),'https://brn-dev.github.io/fractal-explorer/');
   for(const host of ['localhost','127.0.0.1','[::1]','demo.localhost']) assert.equal(shareBaseURL(`http://${host}:8768/?cpu=1#s=old`),'https://brn-dev.github.io/fractal-explorer/');
   assert.equal(shareBaseURL('https://example.com/subpath/index.html?cpu=1#old'),base.replace('/fractal/','/subpath/'));
   assert.equal(shareBaseURL('https://example.com/subpath/'), 'https://example.com/subpath/');

@@ -1,4 +1,5 @@
 import { BrowserEngine } from './engine.js';
+import { nativeBridge, nativeDownload } from './native-bridge.mjs';
 const $ = id => document.getElementById(id);
 const palettes = await (await fetch(new URL('./palettes.json', document.baseURI))).json();
 const engine = new BrowserEngine($('preview'), palettes);
@@ -73,4 +74,10 @@ $('run').onclick = async () => {
   } catch(error) { $('progress').textContent = `Stopped: ${error.message}`; }
   finally { updateRaw(); $('run').disabled=false; $('download').disabled=false; }
 };
-$('download').onclick = () => { const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})); const a=document.createElement('a');a.href=url;a.download='fractal-web-benchmark.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000); };
+$('download').onclick = async () => {
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  try {
+    if (nativeBridge()) { await nativeDownload(blob, 'fractal-web-benchmark.json'); return; }
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');a.href=url;a.download='fractal-web-benchmark.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
+  } catch (error) { $('progress').textContent = `Could not save: ${error.message}`; }
+};

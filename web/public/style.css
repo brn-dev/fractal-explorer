@@ -637,6 +637,7 @@ select option {
 .automation-toggle svg,.slider-precision svg { width:19px;height:19px; }
 .automation-toggle:hover,.automation-toggle[aria-pressed="true"],.slider-precision:hover,.slider-precision[aria-pressed="true"] { color:var(--lime);background:#c7e99c12; }
 .automation-toggle:focus-visible,.slider-precision:focus-visible { outline:1px solid var(--lime);outline-offset:2px; }
+.automation-toggle:disabled { opacity:.35;cursor:default; }
 .slider-precision { grid-column:2;grid-row:1; }
 .automation-enabled .slider-precision { grid-row:1/4; }
 .slider-precision .precision-minus,.slider-precision[aria-pressed="true"] .precision-plus { display:none; }
@@ -1257,6 +1258,34 @@ dialog .export-note {
   }
 }
 .web-benchmark { display:block; color:var(--lime); font-size:11px; margin-top:14px; text-decoration:none; }
+#wallpaper-dialog { width:min(760px, calc(100vw - 28px)); }
+#wallpaper-gallery-dialog { width:min(760px, calc(100vw - 28px)); }
+#wallpaper-gallery-cards { display:grid; gap:14px; margin:18px 0; }
+.wallpaper-gallery-card { display:flex; gap:16px; border:1px solid var(--line); border-radius:12px; padding:14px; min-width:0; }
+.wallpaper-gallery-card > img { width:108px; height:120px; object-fit:cover; border-radius:8px; flex:none; }
+.wallpaper-gallery-card > div { min-width:0; flex:1; }
+.wallpaper-gallery-card h3 { margin:0 0 8px; overflow-wrap:anywhere; }
+.wallpaper-gallery-rename { margin-top:12px; }
+.wallpaper-gallery-rename button { margin-right:8px; }
+@media(max-width:520px) { .wallpaper-gallery-card { flex-direction:column; } .wallpaper-gallery-card > img { width:100%; height:160px; } }
+#wallpaper-state-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:18px 0; }
+.wallpaper-state { min-width:0; border:1px solid var(--line); border-radius:12px; padding:16px; }
+.wallpaper-state h3 { margin:0 0 8px; }
+.wallpaper-state p { font-size:13px; }
+.wallpaper-state-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.wallpaper-state-actions button { flex:1 1 auto; padding:8px 10px; font-size:12px; }
+.wallpaper-transition-timing { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; margin-top:16px; }
+.wallpaper-transition-timing select, .wallpaper-transition-timing input { min-width:0; width:100%; }
+#wallpaper-editing > div { min-width:0; flex:1 1 100%; }
+#wallpaper-editing-help { margin:5px 0 0; font-size:12px; line-height:1.4; }
+#wallpaper-editing > button { flex:1 1 120px; width:auto; justify-content:center; }
+body:has(#wallpaper-editing:not([hidden])) #panel { bottom:var(--wallpaper-editing-space,180px); max-height:calc(100dvh - var(--wallpaper-editing-space,180px) - 115px); }
+#wallpaper-preview-stage { display:flex; justify-content:center; margin:14px 0; height:200px; }
+#wallpaper-preview { width:auto; height:200px; max-width:100%; object-fit:contain; }
+#wallpaper-editing { position:fixed; z-index:110; left:50%; transform:translateX(-50%); bottom:14px; display:flex; flex-wrap:wrap; align-items:center; gap:10px; width:min(720px,calc(100vw - 28px)); padding:12px; border:1px solid var(--line); border-radius:14px; background:var(--panel); box-shadow:0 6px 24px #0007; }
+#wallpaper-editing[hidden] { display:none; }
+#wallpaper-editing strong { flex:1 1 180px; font-size:13px; }
+@media(max-width:520px) { #wallpaper-state-cards { grid-template-columns:1fr; } }
 #viewport { touch-action:none; }
 @media(max-width:700px) {
   #panel { left:14px;right:14px;bottom:91px;width:auto;max-height:62dvh; }

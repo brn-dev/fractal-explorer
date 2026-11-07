@@ -11,6 +11,7 @@ function positionMarker(item, value) {
 }
 export function setupAutomationControls({ getView, getSettings, change, report }) {
   const items = new Map();
+  let disabled = false, disabledReason = '';
   function sync() {
     const view = getView(), settings = getSettings(), parameters = animationParameters(view);
     const wanted = new Set(parameters.map(p => p.key));
@@ -81,6 +82,7 @@ export function setupAutomationControls({ getView, getSettings, change, report }
           if (item.enabled && shownValue !== undefined) positionMarker(item, shownValue);
         };
         button.onclick = () => {
+          if (disabled) return;
           const current = getSettings(), entry = current[p.key];
           const next = { ...current };
           if (entry?.enabled) delete next[p.key]; else next[p.key] = defaultAutomation(getView(), p);
@@ -88,7 +90,7 @@ export function setupAutomationControls({ getView, getSettings, change, report }
         };
         const apply = (quiet = false) => {
           clearTimeout(item.timer);
-          if (!button.isConnected || !getSettings()[p.key]?.enabled) return;
+          if (disabled || !button.isConnected || !getSettings()[p.key]?.enabled) return;
           try {
             const next = validateAutomation(getView(), { ...getSettings(), [p.key]: { enabled: true, target: target.value, speed: Number(speed.value), shape: shape.value } });
             if (JSON.stringify(next) !== JSON.stringify(getSettings())) change(next);
@@ -97,8 +99,9 @@ export function setupAutomationControls({ getView, getSettings, change, report }
         target.onchange = speed.onchange = () => apply();
         target.onblur = speed.onblur = () => apply();
         shape.onchange = () => apply();
-        target.oninput = speed.oninput = () => { clearTimeout(item.timer); item.timer = setTimeout(() => apply(true), 180); };
+        target.oninput = speed.oninput = () => { if (disabled) return; clearTimeout(item.timer); item.timer = setTimeout(() => apply(true), 180); };
         targetSlider.oninput = () => {
+          if (disabled) return;
           target.value = targetSlider.value;
           clearTimeout(item.timer); item.timer = setTimeout(() => apply(true), 180);
         };
@@ -107,7 +110,7 @@ export function setupAutomationControls({ getView, getSettings, change, report }
         item = { group, header, label, input, values, startCaption, targetLabel, row, button, precision, marker, fields, target, targetSlider, speed, shape, live, slider, p, precise: false }; items.set(p.key, item);
       }
       const entry = settings[p.key];
-      const enabled = !!entry?.enabled;
+      const enabled = !!entry?.enabled && !disabled;
       const start = Number(view[p.key]), end = enabled ? Number(entry.target) : start;
       // Keep the axis fixed during a drag. Typed endpoints outside it refit both tracks.
       if (!item.domain || item.enabled !== enabled || Math.min(start, end) < item.domain.min || Math.max(start, end) > item.domain.max) {
@@ -126,14 +129,16 @@ export function setupAutomationControls({ getView, getSettings, change, report }
       item.speed.setAttribute('aria-label', `${p.label} cycles per second`);
       item.shape.setAttribute('aria-label', `${p.label} cycle shape`);
       item.button.setAttribute('aria-label', `${entry?.enabled ? 'Disable' : 'Enable'} ${p.label} automation`);
-      item.button.title = `${entry?.enabled ? 'Disable' : 'Enable'} automation`;
+      item.button.disabled = disabled;
+      item.button.title = disabled ? disabledReason : `${entry?.enabled ? 'Disable' : 'Enable'} automation`;
+      for (const control of [item.target, item.targetSlider, item.speed, item.shape]) control.disabled = disabled;
       item.button.setAttribute('aria-pressed', String(!!entry?.enabled));
       item.button.setAttribute('aria-expanded', String(enabled));
       item.precision.setAttribute('aria-pressed', String(item.precise));
       item.precision.setAttribute('aria-label', `${item.precise ? 'Restore full' : 'Narrow'} ${p.label} slider range`);
       item.precision.title = item.precise ? 'Restore full slider range' : 'Precision mode · narrow slider range';
-      item.fields.hidden = !entry?.enabled;
-      item.marker.hidden = !entry?.enabled;
+      item.fields.hidden = !enabled;
+      item.marker.hidden = !enabled;
       // Playback has its own marker; the editable thumb always marks the start.
       item.slider.value = String(view[p.key]);
       if (entry?.enabled) {
@@ -153,5 +158,10 @@ export function setupAutomationControls({ getView, getSettings, change, report }
       positionMarker(item, value);
     }
   }
-  return { sync, showValues };
+  function setDisabled(value, reason = 'Animation is unavailable while editing this scene.') {
+    disabled = !!value; disabledReason = reason;
+    for (const item of items.values()) clearTimeout(item.timer);
+    sync();
+  }
+  return { sync, showValues, setDisabled };
 }

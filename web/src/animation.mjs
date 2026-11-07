@@ -1,5 +1,5 @@
 import { hasConstant, fractalParameters } from './fractals.mjs';
-import { validate, decimal, add, multiply, text, plainText } from './decimal.mjs';
+import { validate, decimal, add, multiply, boundedText, plainText } from './decimal.mjs';
 
 export const LIVE_FPS = 30;
 const smootherstep = t => t * t * t * (t * (t * 6 - 15) + 10);
@@ -69,9 +69,9 @@ const gcd = (a, b) => b ? gcd(b, a % b) : a;
 export function animationPlan(view, settings, fps = LIVE_FPS, startFrame = 0) {
   const valid = validateAutomation(view, settings), parameters = animationParameters(view).filter(p => valid[p.key]);
   if (!parameters.length) return null;
-  const divisor = parameters.map(p => Math.round(valid[p.key].speed * 20)).reduce(gcd);
+  const divisor = parameters.map(p => Math.round(valid[p.key].speed * 20)).reduce(gcd, fps * 20);
   // Rates are multiples of 0.05 cycles/s: all parameters share a loop <=20 s.
-  const frames = Math.max(2, Math.round(fps * 20 / divisor)), duration = frames / fps;
+  const frames = Math.max(2, fps * 20 / divisor), duration = frames / fps;
   const frameOffset = ((Math.round(startFrame) % frames) + frames) % frames;
   const channels = parameters.map(p => ({ ...p, ...valid[p.key], cycles: Math.round(valid[p.key].speed * 20) / divisor }));
   const viewAt = (index, count = frames) => {
@@ -86,10 +86,11 @@ export function animationPlan(view, settings, fps = LIVE_FPS, startFrame = 0) {
         if (amount === 1) next[p.key] = p.target;
         else {
           const from = decimal(view[p.key]), to = decimal(p.target);
-          next[p.key] = text(add(from, multiply(add(to, { n: -from.n, e: from.e }), decimal(amount.toPrecision(17)))));
+          next[p.key] = boundedText(add(from, multiply(add(to, { n: -from.n, e: from.e }), decimal(amount.toPrecision(17)))));
         }
       } else {
-        const value = Number(view[p.key]) + (Number(p.target) - Number(view[p.key])) * amount;
+        const from = Number(view[p.key]), to = Number(p.target);
+        const value = amount === 1 ? to : Math.max(Math.min(from, to), Math.min(Math.max(from, to), from + (to - from) * amount));
         next[p.key] = p.step === 1 ? Math.round(value) : value;
       }
     }
