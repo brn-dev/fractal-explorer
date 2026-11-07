@@ -546,9 +546,12 @@
       </div>
       <p class="export-note">Higher quality uses more storage. Maximum lets the encoder vary the bitrate for detail; on Android it uses the highest constant quality available, or the device's highest variable bitrate. Unsupported settings are reported before rendering.</p>
       <p id="wallpaper-encoding-note" class="export-note" role="status"></p>
+      <label class="field-label">Fractal supersampling<select id="wallpaper-supersampling"><option value="1">1× · one sample per output pixel</option><option value="1.5">1.5×</option><option value="2">2× · four samples per pixel</option><option value="3">3× · nine samples per pixel</option><option value="4">4× · sixteen samples per pixel</option></select></label>
+      <p class="export-note">Renders larger fractal frames and downsamples the colored image. Your explorer choice is captured when saving a scene. This increases creation time; finished videos keep the selected output resolution. Oversized requests are reported instead of silently reducing sampling.</p>
       <p class="export-note">Arrival plays once at 30 fps. Matching formulas morph; different formulas blend. Palette edits in either scene apply to both. Color timing fits whole cycles in the steady loop and continues at the same speed through the transition, meeting the exact first loop frame.</p>
       <div class="export-choices">
         <button id="wallpaper-create" class="primary-button" type="button">Download wallpaper package</button>
+        <button id="wallpaper-pc" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="wallpaper-pc-dialog">Render on PC…</button>
         <button id="wallpaper-cancel" class="secondary-button" type="button" hidden>Cancel export</button>
         <button id="wallpaper-apply" class="secondary-button" type="button" hidden>Set up on both screens</button>
         <button id="wallpaper-open-draft" class="secondary-button" type="button">Open wallpaper draft</button>
@@ -556,6 +559,26 @@
       </div>
       <input id="wallpaper-draft-file" type="file" accept="application/json,.json" hidden>
       <p id="wallpaper-status" role="status"></p>
+      <p id="wallpaper-renderer-note" class="export-note" role="status"></p>
+    </dialog>
+    <dialog id="wallpaper-pc-dialog" aria-labelledby="wallpaper-pc-title">
+      <form method="dialog"><button class="dialog-close icon-button" aria-label="Close PC rendering instructions">×</button></form>
+      <h2 id="wallpaper-pc-title">Render this design on your PC.</h2>
+      <p id="wallpaper-pc-summary"></p>
+      <ol>
+        <li>Send this link to your PC and open it in Chrome or Edge. It opens the wallpaper designer with your saved scenes and settings.</li>
+        <li>Check that the designer shows GPU rendering, then download the wallpaper package. Keep this tab visible until it finishes.</li>
+        <li>Transfer the ZIP to your phone. In Wallpaper settings, choose Import wallpaper package. It is saved in your gallery and selected for its screen.</li>
+      </ol>
+      <label class="field-label" for="wallpaper-pc-link">PC link</label>
+      <textarea id="wallpaper-pc-link" rows="4" readonly spellcheck="false" aria-describedby="wallpaper-pc-status"></textarea>
+      <div class="export-choices">
+        <button id="wallpaper-pc-copy" class="primary-button" type="button" disabled>Copy PC link</button>
+        <button id="wallpaper-pc-share" class="secondary-button" type="button" hidden disabled>Share PC link…</button>
+        <button id="wallpaper-pc-file" class="secondary-button" type="button">Download PC draft</button>
+      </div>
+      <p id="wallpaper-pc-status" role="status"></p>
+      <p class="export-note">For large designs, download the draft file instead. On your PC open Fractal Explorer → Export → Create wallpaper → Open wallpaper draft. Phone screen dimensions, supersampling, palette, timing and both scenes travel with the design. Links contain settings, not rendered video.</p>
     </dialog>
     <aside id="wallpaper-editing" hidden aria-label="Wallpaper state being edited"><div><strong id="wallpaper-editing-label"></strong><p id="wallpaper-editing-help"></p></div><button id="wallpaper-save-state" class="primary-button" type="button">Save this scene</button><button id="wallpaper-overview" class="secondary-button" type="button">Back to overview</button></aside>
     <dialog id="wallpaper-gallery-dialog" aria-labelledby="wallpaper-gallery-title">
@@ -564,6 +587,10 @@
       <h2 id="wallpaper-gallery-title">Wallpaper gallery</h2>
       <p>Choose cover and main wallpapers independently, without rendering again. Older combined designs are available in both lists.</p>
       <label class="field-label">Wallpapers for<select id="wallpaper-gallery-screen"><option value="inner">Main screen</option><option value="cover">Cover screen</option></select></label>
+      <div id="wallpaper-gallery-shuffle-options">
+        <label class="field-label"><input id="wallpaper-gallery-shuffle" type="checkbox"> Shuffle on each arrival</label>
+        <p id="wallpaper-gallery-shuffle-note" class="export-note"></p>
+      </div>
       <div class="wallpaper-state-actions">
         <button id="wallpaper-gallery-new" class="primary-button" type="button">New wallpaper</button>
         <button id="wallpaper-gallery-set" class="secondary-button" type="button">Set up on both screens</button>

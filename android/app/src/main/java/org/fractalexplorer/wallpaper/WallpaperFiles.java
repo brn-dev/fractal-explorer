@@ -181,6 +181,11 @@ final class WallpaperFiles {
   }
 
   void activateLocked(String id, JSONObject manifest, String selectedScreen) throws Exception {
+    activateLocked(id, manifest, selectedScreen, false);
+  }
+
+  void activateLocked(String id, JSONObject manifest, String selectedScreen, boolean keepPlayback)
+      throws Exception {
     SharedPreferences preferences = context.getSharedPreferences("wallpaper", 0);
     String scope = manifest.optString("screen", "");
     if (selectedScreen != null && !PackPolicy.supports(scope, selectedScreen))
@@ -190,6 +195,10 @@ final class WallpaperFiles {
     SharedPreferences.Editor edit = preferences.edit();
     java.util.List<String> keys = new java.util.ArrayList<>();
     for (String screen : screens) {
+      if (!keepPlayback) {
+        edit.putBoolean("shuffle_" + screen, false);
+        keys.add("shuffle_" + screen);
+      }
       String previous = activeId(preferences, screen);
       if (id.equals(previous)) continue;
       for (String key : new String[] {"idle", "arrival"}) {
@@ -199,9 +208,11 @@ final class WallpaperFiles {
                 ? "animated".equals(manifest.getString("steadyMotion"))
                 : playback(preferences, screen, key);
         boolean value =
-            preferences.getBoolean(
-                saved + id, preferences.getBoolean("gallery_" + key + "_" + id, fallback));
-        if (PackPolicy.validId(previous)) {
+            keepPlayback
+                ? playback(preferences, screen, key)
+                : preferences.getBoolean(
+                    saved + id, preferences.getBoolean("gallery_" + key + "_" + id, fallback));
+        if (!keepPlayback && PackPolicy.validId(previous)) {
           edit.putBoolean(saved + previous, playback(preferences, screen, key));
           keys.add(saved + previous);
         }
@@ -221,6 +232,7 @@ final class WallpaperFiles {
     edit.remove("last_error");
     keys.add("last_error");
     WallpaperGallery.commit(preferences, edit, keys.toArray(new String[0]));
+    if (!keepPlayback) for (String screen : screens) WallpaperGallery.resetShuffle(screen);
   }
 
   /** Replace one clip while preserving every other currently selected state. */

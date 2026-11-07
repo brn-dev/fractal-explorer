@@ -20,6 +20,99 @@ import org.json.JSONObject;
 
 /** Saved packages are immutable; names and per-wallpaper playback choices live in preferences. */
 final class WallpaperGallery {
+  private static final ShufflePolicy shufflePolicy = new ShufflePolicy();
+  private static final java.util.Random random = new java.util.Random();
+
+  static void resetShuffle(String screen) {
+    shufflePolicy.reset(screen);
+  }
+
+  private static void checkScreen(String screen) {
+    if (!"cover".equals(screen) && !"inner".equals(screen))
+      throw new IllegalArgumentException("Choose cover or main screen");
+  }
+
+  private Set<String> shuffleIds(String screen) {
+    return new java.util.HashSet<>(
+        preferences.getStringSet("shuffle_" + screen + "_ids", java.util.Collections.emptySet()));
+  }
+
+  JSONObject shuffle() throws Exception {
+    synchronized (WallpaperFiles.class) {
+      JSONObject result = new JSONObject();
+      for (String screen : new String[] {"cover", "inner"}) {
+        JSONArray ids = new JSONArray();
+        for (String id : shuffleIds(screen)) ids.put(id);
+        result.put(
+            screen,
+            new JSONObject()
+                .put("enabled", preferences.getBoolean("shuffle_" + screen, false))
+                .put("ids", ids));
+      }
+      return result;
+    }
+  }
+
+  void setShuffle(String screen, JSONArray selected, boolean enabled) throws Exception {
+    checkScreen(screen);
+    synchronized (WallpaperFiles.class) {
+      requireNoImport();
+      if (selected.length() > 1024)
+        throw new IOException("Choose up to 1024 wallpapers per shuffle selection");
+      Set<String> ids = new java.util.HashSet<>();
+      for (int i = 0; i < selected.length(); i++) {
+        String id = selected.getString(i);
+        JSONObject saved = manifest(folder(id));
+        if (!PackPolicy.supports(saved.optString("screen", ""), screen))
+          throw new IOException("This wallpaper belongs to the other screen");
+        files.validate(folder(id), saved);
+        ids.add(id);
+      }
+      if (enabled && ids.isEmpty())
+        throw new IOException("Choose at least one wallpaper for shuffle");
+      commit(
+          preferences,
+          preferences
+              .edit()
+              .putStringSet("shuffle_" + screen + "_ids", ids)
+              .putBoolean("shuffle_" + screen, enabled),
+          "shuffle_" + screen + "_ids",
+          "shuffle_" + screen);
+      shufflePolicy.reset(screen);
+    }
+  }
+
+  String chooseForArrival(String screen, long event, long now) throws Exception {
+    checkScreen(screen);
+    synchronized (WallpaperFiles.class) {
+      String active = WallpaperFiles.activeId(preferences, screen);
+      if (!preferences.getBoolean("shuffle_" + screen, false)
+          || SettingsActivity.hasPendingChanges()) return active;
+      Set<String> valid = new java.util.HashSet<>();
+      Map<String, JSONObject> saved = new HashMap<>();
+      for (String id : shuffleIds(screen))
+        try {
+          JSONObject item = manifest(folder(id));
+          if (PackPolicy.supports(item.optString("screen", ""), screen)) {
+            valid.add(id);
+            saved.put(id, item);
+          }
+        } catch (Exception ignored) {
+          /* A damaged entry is left intact and skipped. */
+        }
+      if (valid.isEmpty()) return active;
+      java.util.List<String> sorted = new java.util.ArrayList<>(valid);
+      java.util.Collections.sort(sorted);
+      String pool = sorted.toString();
+      String recent = shufflePolicy.recent(screen, pool, active, event, now);
+      if (recent != null) return recent;
+      String chosen = ShufflePolicy.pick(valid, active, random);
+      if (!chosen.equals(active)) files.activateLocked(chosen, saved.get(chosen), screen, true);
+      shufflePolicy.remember(screen, pool, chosen, event, now);
+      return chosen;
+    }
+  }
+
   private static final java.util.concurrent.ExecutorService playbackWrites =
       java.util.concurrent.Executors.newSingleThreadExecutor(
           action -> {
@@ -246,7 +339,10 @@ final class WallpaperGallery {
       boolean selected = true;
       for (String target : PackPolicy.screens(screen == null ? scope : screen))
         selected &= id.equals(WallpaperFiles.activeId(preferences, target));
-      if (selected) return;
+      if (selected) {
+        files.activateLocked(id, manifest, screen);
+        return;
+      }
       files.validate(folder, manifest);
       files.activateLocked(id, manifest, screen);
     }
@@ -277,6 +373,9 @@ final class WallpaperGallery {
           || id.equals(WallpaperFiles.activeId(preferences, "inner")))
         throw new IOException(
             "Select another wallpaper on every screen using this design before deleting it");
+      for (String screen : new String[] {"cover", "inner"})
+        if (preferences.getBoolean("shuffle_" + screen, false) && shuffleIds(screen).contains(id))
+          throw new IOException("Remove this wallpaper from shuffle before deleting it");
       // A crash after this rename is recovered by the existing pending-package cleanup.
       File removed = new File(files.root(), "pending-" + WallpaperFiles.newId());
       if (!folder.renameTo(removed)) throw new IOException("Cannot remove this wallpaper");

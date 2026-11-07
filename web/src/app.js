@@ -48,6 +48,18 @@ const engine = new BrowserEngine(canvas, palettes, {
 let cacheMemoryMiB = cacheMemorySetting(undefined, engine.mobile);
 let paintingReady = false;
 let engineReady = false;
+let wallpaperUI;
+let wallpaperAddress = null, wallpaperAddressLoad = 0;
+async function openCurrentWallpaperHandoff() {
+  const address = location.href;
+  if (!engineReady || !wallpaperUI || address === wallpaperAddress) return;
+  const token = ++wallpaperAddressLoad;
+  const isCurrent = () => token === wallpaperAddressLoad && address === location.href;
+  try {
+    await wallpaperUI.openHandoff(address, { isCurrent });
+    if (isCurrent()) wallpaperAddress = address;
+  } catch (error) { if (isCurrent()) { wallpaperAddress = address; toast(error.message); } }
+}
 let wallpaperStartEditing = false;
 let wallpaperSteadyContext = null;
 let reconnectingGPU = false;
@@ -66,6 +78,7 @@ async function retryGPU() {
   try {
     const hardware = await engine.init({ initialView: currentRenderView(), settings: renderSettings });
     engineReady = true; syncHardware(); requestRender();
+    await openCurrentWallpaperHandoff();
     if (!hardware.gpu) toast('The GPU is still unavailable. Continuing with the local CPU.');
   } catch (error) { $('gpu-status').textContent = error.message; }
   finally { reconnectingGPU = false; $('retry-gpu').disabled = false; }
@@ -938,6 +951,8 @@ function setupControls() {
   addEventListener('hashchange', async () => {
     const token = ++shareLoad;
     try {
+      if (new URLSearchParams(location.hash.slice(1)).has('w')) { await openCurrentWallpaperHandoff(); return; }
+      wallpaperAddress = null;
       const shared = await readShareURL(location.href, builtinPaletteCount);
       if (token !== shareLoad || !shared) return;
       restoreSharedState(shared); setVignetteEnabled(vignetteEnabled);
@@ -1178,7 +1193,7 @@ function setupControls() {
   const snapshotState = () => {
     return { view: { ...view }, visibleView: { ...(imageView ?? view) }, requestedView: currentRenderView(),
       visibleViewReady: !rendering && paintingReady && !!field && (automationPlayer.plan || JSON.stringify(imageView) === JSON.stringify(currentRenderView())) && JSON.stringify(imageSettings) === JSON.stringify(renderSettings),
-      automation: structuredClone(automationSettings), settings: { ...renderSettings },
+      automation: structuredClone(automationSettings), settings: { ...renderSettings }, supersampling: Number($('quality').value),
       colors: { palette, density, phase, definition: structuredClone(palettes[palette]) }, speed: wanderingSpeed, wander: $('animate').checked,
       loopColorPhase: wallpaperSteadyContext && $('animate').checked ? wallpaperSteadyContext.colorOrigin : undefined,
       audio: { ...audio.selection, volume: audio.settings.volume, intensity: audio.settings.intensity } };
@@ -1187,7 +1202,7 @@ function setupControls() {
     if (!engineReady) throw new Error('Wait for the browser renderer to start.');
     return snapshotState();
   };
-  setupWallpaper({ engine, palettes, paint, downloadBlob, getState: snapshotState,
+  wallpaperUI = setupWallpaper({ engine, palettes, paint, downloadBlob, getState: snapshotState,
     onSceneEditingChange(slot, context) {
       wallpaperStartEditing = !!slot?.transition;
       wallpaperSteadyContext = slot && !slot.transition ? { ...context, colorOrigin: null, colorElapsed: 0, colorTimeBase: 0 } : null;
@@ -1198,6 +1213,7 @@ function setupControls() {
       $('wandering-speed').disabled = wallpaperStartEditing;
     },
     applyState(snapshot) {
+      if (qualityScales.includes(snapshot.supersampling)) $('quality').value = String(snapshot.supersampling);
       const definition = snapshot.colors.definition;
       const builtin = palettes.slice(0, builtinPaletteCount).findIndex(p => JSON.stringify(p.colors) === JSON.stringify(definition.colors));
       const stops = [...definition.colors], loop = stops.length > 2 && stops.at(-1) === stops[0];
@@ -1346,6 +1362,7 @@ async function init() {
     if (!hardware.gpu) toast(navigator.gpu ? 'GPU unavailable. Using the local CPU. Retry GPU is available under Rendering.' : 'WebGPU unavailable. Using the local CPU.');
 
     requestRender();
+    await openCurrentWallpaperHandoff();
   } catch (error) {
     toast(error.message);
     $("render-status").textContent = "Browser renderer could not start";

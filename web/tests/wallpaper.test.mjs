@@ -7,6 +7,25 @@ import { decimal, compare } from '../src/decimal.mjs';
 const view = { fractal:'julia', x:'0', y:'0', span:'3.6', julia_x:'-.8', julia_y:'.156', iterations:200, bailout:64 };
 const snapshot = () => wallpaperSnapshot({ view, colors:{palette:0,density:1,phase:.2}, speed:.12, wander:true, automation:{} }, [{name:'Test',colors:['#001122','#aabbcc','#001122']}]);
 
+test('wallpaper supersampling increases render samples while preserving encoded dimensions and bitrate',()=>{
+  const captured=wallpaperSnapshot({view,colors:{palette:0},supersampling:2},[{colors:['#000000','#ffffff']}]);
+  const draft=defaultWallpaperDraft(captured,'inner');
+  assert.equal(draft.supersampling,2);
+  draft.quality='high';
+  for(const scale of [1,1.5,2,3,4]) {
+    draft.supersampling=scale;
+    const plans=wallpaperPlan(draft), baseline=wallpaperPlan({...draft,supersampling:1});
+    for(let i=0;i<plans.length;i++) {
+      assert.equal(plans[i].renderWidth,plans[i].width*scale);
+      assert.equal(plans[i].renderHeight,plans[i].height*scale);
+      assert.equal(plans[i].bitrate,baseline[i].bitrate);
+      assert.equal(plans[i].width,baseline[i].width);
+    }
+  }
+  delete draft.supersampling; assert.equal(wallpaperPlan(draft)[0].supersampling,1);
+  draft.supersampling=1.7;assert.throws(()=>wallpaperPlan(draft),/supersampling/);
+});
+
 test('each screen renders and packages only its own pair, including migrated combined designs',()=>{
   const legacy = defaultWallpaperDraft(snapshot());
   for (const screen of ['cover','inner']) {

@@ -258,6 +258,23 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
   }
 
   @Override
+  public void shareText(String text) {
+    runOnUiThread(
+        () -> {
+          try {
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("text/plain");
+            send.putExtra(Intent.EXTRA_TEXT, text);
+            startActivity(Intent.createChooser(send, "Send wallpaper design to PC"));
+          } catch (Exception error) {
+            Toast.makeText(
+                    this, "Could not open sharing. Use Copy PC link instead.", Toast.LENGTH_LONG)
+                .show();
+          }
+        });
+  }
+
+  @Override
   protected void onActivityResult(int request, int result, Intent data) {
     super.onActivityResult(request, result, data);
     if (request == CHOOSE_FILE) {

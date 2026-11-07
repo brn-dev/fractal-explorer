@@ -14,7 +14,13 @@ export function decimal(text) {
 }
 function normal({ n, e }) {
   if (!n) return { n: 0n, e: 0 };
-  while (n % 10n === 0n) { n /= 10n; e++; }
+  if (n % 10n === 0n) {
+    // Long editable decimals can have thousands of trailing zeroes. Dividing
+    // one at a time makes repeated scene/automation validation very expensive.
+    const digits = n.toString(); let end = digits.length;
+    while (digits.charCodeAt(end - 1) === 48) end--;
+    e += digits.length - end; n = BigInt(digits.slice(0, end));
+  }
   return { n, e };
 }
 export function text(a) { return a.n === 0n ? '0' : `${a.n}${a.e ? `e${a.e}` : ''}`; }

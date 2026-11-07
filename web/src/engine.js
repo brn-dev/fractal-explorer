@@ -314,6 +314,7 @@ export class BrowserEngine {
       if (this.destroyed || token !== this.version) throw makeAbort();
       if (!gpuBackendFailure(error) && !this.lost) throw error;
       this.useCPU(error);
+      validateDimensions(width, height, this.renderLimits);
       if (this.destroyed || token !== this.version) throw makeAbort();
       const result = await this.worker.call('cpu', view, width, height, options.acceleration === 'none' ? 'none' : 'series');
       if (this.destroyed || token !== this.version) throw makeAbort();

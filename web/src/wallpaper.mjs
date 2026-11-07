@@ -6,6 +6,7 @@ import { exportQualities } from './animation-export.mjs';
 
 export const WALLPAPER_FORMAT = 'fractal-wallpaper/v1';
 export const MAX_WALLPAPER_JSON_BYTES = 4 * 1024 ** 2;
+export const wallpaperSamplingScales = [1, 1.5, 2, 3, 4];
 export function wallpaperJSON(value, pretty = false) {
   const json = JSON.stringify(value, null, pretty ? 2 : undefined);
   if (new TextEncoder().encode(json).byteLength > MAX_WALLPAPER_JSON_BYTES) throw new Error('Wallpaper data exceeds 4 MiB.');
@@ -83,6 +84,7 @@ export function wallpaperSnapshot(state, palettes, { visible = false } = {}) {
     view: validate(visible ? captureView : state.view), automation: structuredClone(state.automation ?? {}),
     settings: structuredClone(state.settings ?? {}), wander: !!state.wander,
     speed: Number(state.speed ?? .12),
+    supersampling: Math.max(1, Number(state.supersampling ?? 1)),
     colors: { density: Number(colors.density ?? 1), phase: wrapPhase(Number(!visible && Number.isFinite(state.loopColorPhase) ? state.loopColorPhase : colors.phase ?? 0)),
       definition: { name: String(definition.name ?? 'Wallpaper'), colors: [...definition.colors] } },
   };
@@ -97,6 +99,7 @@ export function validateWallpaperSnapshot(snapshot) {
   const palette = validateCustomPalette({ name: out.colors.definition.name ?? 'Wallpaper', colors: closed ? normalized.slice(0, -1) : normalized, loop: closed });
   out.colors.definition = { name: palette.name, colors: normalized };
   if (!Number.isFinite(out.speed) || out.speed < .05 || out.speed > 2) throw new Error('Invalid wallpaper color speed.');
+  if (out.supersampling !== undefined && !wallpaperSamplingScales.includes(out.supersampling)) throw new Error('Choose a valid wallpaper supersampling level.');
   if (!Number.isFinite(out.colors.density) || out.colors.density < .2 || out.colors.density > 4 || !Number.isFinite(out.colors.phase)) throw new Error('Invalid wallpaper colors.');
   out.colors.phase = wrapPhase(out.colors.phase);
   return out;
@@ -108,7 +111,7 @@ export function defaultWallpaperDraft(snapshot, screen) {
     const span = multiply(decimal(snapshot.view.span), decimal('1.3'));
     states[slot.key].view = validate({ ...snapshot.view, span: compare(span, decimal('16')) > 0 ? '16' : text(span) });
   }
-  const draft = { format: WALLPAPER_FORMAT, name: 'My fractal wallpaper', quality: 'maximum', steadyMotion: 'animated', arrivalSeconds: 3, idleSeconds: 8,
+  const draft = { format: WALLPAPER_FORMAT, name: 'My fractal wallpaper', quality: 'maximum', supersampling: snapshot.supersampling ?? 1, steadyMotion: 'animated', arrivalSeconds: 3, idleSeconds: 8,
     longest: 1080, arrivalFps: 30, idleFps: 15, coverAspect: 2520 / 1080, innerAspect: 2504 / 2256,
     states, transitions: Object.fromEntries(wallpaperStates.filter(slot => slot.transition).map(slot => [slot.key, {seconds:3,easing:'ease-out'}])) };
   return screen ? wallpaperScreenDraft(draft, screen) : draft;
@@ -177,6 +180,8 @@ export function transitionProgress(t, easing) {
 export function wallpaperPlan(draft, { previewLongest } = {}) {
   if (draft.format !== WALLPAPER_FORMAT) throw new Error('This is not a Fractal Explorer wallpaper.');
   if (!['animated', 'still'].includes(draft.steadyMotion ?? 'animated')) throw new Error('Choose a steady-state playback mode.');
+  const supersampling = draft.supersampling ?? 1;
+  if (!wallpaperSamplingScales.includes(supersampling)) throw new Error('Choose 1×, 1.5×, 2×, 3× or 4× supersampling.');
   if (draft.longest !== 'native' && ![480, 720, 1080, 1920, 2560, 3840].includes(Number(draft.longest))) throw new Error('Choose a wallpaper resolution.');
   if (!Number.isFinite(draft.arrivalSeconds) || draft.arrivalSeconds < .5 || draft.arrivalSeconds > 10 ||
       !Number.isFinite(draft.idleSeconds) || draft.idleSeconds < 2 || draft.idleSeconds > 20) throw new Error('Choose a 0.5–10 second arrival and a 2–20 second idle loop.');
@@ -199,7 +204,7 @@ export function wallpaperPlan(draft, { previewLongest } = {}) {
       cycles: Math.max(1, Math.round(channel.speed * frames / fps)),
       plan: draft.screen ? null : animationPlan(snapshot.view, { [channel.key]: automation.settings[channel.key] }, fps) })) ?? [];
     const cycles = colorCycle ? colorCycle.enabled ? colorCycle.cycles : 0 : snapshot.wander ? Math.max(1, Math.round((snapshot.speed || .12) * frames / fps)) : 0;
-    return { ...slot, ...dimensions, fps, frames, duration: frames / fps, easing: timing?.easing, aspect, snapshot, destination,
+    return { ...slot, ...dimensions, supersampling, renderWidth: dimensions.width * supersampling, renderHeight: dimensions.height * supersampling, fps, frames, duration: frames / fps, easing: timing?.easing, aspect, snapshot, destination,
       crossfade, ...wallpaperEncoding(dimensions.width, dimensions.height, fps, draft),
       colorCycleSeconds: colorCycle?.seconds, parameterCycles: Object.fromEntries(channels.map(channel => [channel.key, channel.cycles])),
       sample(index) {

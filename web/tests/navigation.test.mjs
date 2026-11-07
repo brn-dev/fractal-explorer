@@ -4,6 +4,16 @@ import { decimal, navigate, pixelView, compare } from '../src/decimal.mjs';
 import { gestureView, previewTransform, screenPoint } from '../src/navigation.mjs';
 
 const base = { x: '-.5', y: '0', span: '3.6', fractal: 'mandelbrot', julia_x: '-.8', julia_y: '.156', iterations: 800, bailout: 64 };
+
+test('decimal normalization strips long trailing zero runs exactly for either sign and exponent',()=>{
+  for(const sign of ['', '-']) {
+    const n=sign==='-'?-123n:123n;
+    assert.deepEqual(decimal(sign+'0.123'+'0'.repeat(12000)),{n,e:-3});
+    assert.deepEqual(decimal(sign+'123'+'0'.repeat(12000)+'e-12000'),{n,e:0});
+    assert.deepEqual(decimal(sign+'1'+'0'.repeat(11000)+'10'),{n:BigInt(sign+'1'+'0'.repeat(11000)+'1'),e:1});
+  }
+  assert.deepEqual(decimal('-0.'+'0'.repeat(12000)),{n:0n,e:0});
+});
 const viewport = { width: 1200, height: 800 };
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`);
 const transformed = (point, transform, { width, height }) => ({

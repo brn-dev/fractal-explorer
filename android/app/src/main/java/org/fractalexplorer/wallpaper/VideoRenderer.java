@@ -39,6 +39,7 @@ final class VideoRenderer {
           + " uv=(vUV-.5)*uCrop+.5;gl_FragColor=texture2D(uTexture,(uMatrix*vec4(uv,0.,1.)).xy);}";
   private final Context context;
   private final Surface window;
+  private final boolean shuffleAllowed;
   private final HandlerThread thread = new HandlerThread("Fractal video");
   private final Handler handler;
   private final PlaybackState state = new PlaybackState();
@@ -88,8 +89,13 @@ final class VideoRenderer {
   }
 
   VideoRenderer(Context context, Surface window) {
+    this(context, window, false);
+  }
+
+  VideoRenderer(Context context, Surface window, boolean shuffleAllowed) {
     this.context = context.getApplicationContext();
     this.window = window;
+    this.shuffleAllowed = shuffleAllowed;
     thread.start();
     handler = new Handler(thread.getLooper());
   }
@@ -114,11 +120,38 @@ final class VideoRenderer {
             boolean newArtwork = state.mode != mode;
             if (!initialized) initialize();
             state.screenEvent(screenEvent);
-            boolean changed = state.update(mode, visible, idle, arrival, saving, revision, now);
-            if (newArtwork || posterId == 0 || this.revision != revision) {
+            long currentRevision = revision;
+            boolean currentIdle = idle, currentArrival = arrival;
+            if (shuffleAllowed) {
+              android.content.SharedPreferences preferences =
+                  context.getSharedPreferences("wallpaper", 0);
+              String screen = mode == PlaybackState.Mode.COVER ? "cover" : "inner";
+              // Preference callbacks can be queued before an automatic selection commits.
+              // Resolve content when the renderer executes, never rewind to that old snapshot.
+              currentRevision = WallpaperFiles.revision(preferences, screen);
+              currentIdle = WallpaperFiles.playback(preferences, screen, "idle");
+              currentArrival = WallpaperFiles.playback(preferences, screen, "arrival");
+            }
+            boolean changed =
+                state.update(
+                    mode, visible, currentIdle, currentArrival, saving, currentRevision, now);
+            if (shuffleAllowed && changed && state.arrivalReveal) {
+              try {
+                String screen = state.prefix();
+                new WallpaperGallery(context).chooseForArrival(screen, screenEvent, now);
+                currentRevision =
+                    WallpaperFiles.revision(context.getSharedPreferences("wallpaper", 0), screen);
+                changed |=
+                    state.update(
+                        mode, visible, currentIdle, currentArrival, saving, currentRevision, now);
+              } catch (Exception error) {
+                report(error);
+              }
+            }
+            if (newArtwork || posterId == 0 || this.revision != currentRevision) {
               loadPoster();
               showVideo = false;
-              this.revision = revision;
+              this.revision = currentRevision;
             }
             if (changed) applyStage();
             else if (state.stage != PlaybackState.Stage.HIDDEN) draw();

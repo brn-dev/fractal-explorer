@@ -17,6 +17,7 @@ public final class PlaybackState {
   public Stage stage = Stage.HIDDEN;
   public Mode mode = null;
   public int generation = 0;
+  public boolean arrivalReveal;
   private boolean idle = true, arrival = true, saving = false;
   private long revision = -1, hiddenAt = Long.MIN_VALUE;
   private boolean pendingArrival = true;
@@ -49,6 +50,11 @@ public final class PlaybackState {
     boolean preferences = idle != nextIdle || arrival != nextArrival || saving != powerSave;
     boolean wasHidden = stage == Stage.HIDDEN;
     boolean newArrival = pendingArrival;
+    boolean reveal =
+        changedMode
+            || newArrival
+            || (wasHidden && (hiddenAt == Long.MIN_VALUE || now - hiddenAt >= 2000));
+    arrivalReveal = false;
     if (changedMode || changedContent) pendingArrival = true;
     idle = nextIdle;
     arrival = nextArrival;
@@ -72,6 +78,7 @@ public final class PlaybackState {
     }
     if (next == stage && !changedMode && !changedContent && !(active && newArrival)) return false;
     stage = next;
+    arrivalReveal = next == Stage.ARRIVAL && reveal;
     generation++;
     return true;
   }

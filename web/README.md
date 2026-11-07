@@ -33,6 +33,10 @@ The production app checks for newer versions on startup, every five minutes whil
 
 The repository includes [a Pages deployment workflow](../.github/workflows/deploy-web.yml). In repository **Settings → Pages → Build and deployment**, select **GitHub Actions** as the source once. Pushes to `main` that change `web/` or the workflow then install the locked npm dependencies with Node 24, build the production app, run its tests, and deploy only `web/dist/`. You can also run the workflow manually from **Actions → Deploy web edition to GitHub Pages → Run workflow**. No custom secrets, Python environment, CUDA runtime, or application backend are needed.
 
+### Render phone wallpapers on a PC
+
+In the Android wallpaper designer, **Render on PC…** exports a compact link or a JSON draft without rendering videos on the phone. Open the link here on your PC, or use **Export → Create wallpaper → Open wallpaper draft** to load the file. Both preserve the phone's native panel dimensions, supersampling, exact scene parameters, transitions, loop and color settings, and video quality. Existing working drafts require confirmation before a link replaces them. Check that the designer shows **GPU rendering**, then download the wallpaper ZIP. Keep the browser tab visible during creation. Transfer that ZIP back to the phone and choose **Wallpaper settings → Import wallpaper package**; the videos play without recalculating the fractal. [Android workflow](../android/README.md#render-on-your-pc).
+
 For `brn-dev/fractal-explorer`, the Pages URL is `https://brn-dev.github.io/fractal-explorer/` and the benchmark is at `benchmark.html` beneath it. Vite's relative base, the manifest, module worker, and service worker all remain within that project path. This deployment workflow does not start, build, or change the desktop renderer. New deployments are detected through the service worker's versioned cache and shown in the app's update notice.
 
 ## Explore

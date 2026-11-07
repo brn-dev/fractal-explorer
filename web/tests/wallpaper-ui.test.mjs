@@ -3,21 +3,23 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL, fileURLToPath} from 'node:url';
 import { largeWallpaperDraft } from './wallpaper-fixtures.mjs';
+import { createWallpaperURL, readWallpaperURL } from '../src/wallpaper-share.mjs';
 const root = fileURLToPath(new URL('../src/', import.meta.url));
 const {defaultWallpaperDraft, wallpaperSnapshot} = await import(pathToFileURL(root+'wallpaper.mjs'));
 let source = await readFile(root+'wallpaper-ui.js','utf8');
 source = source.replace("import { BrowserEngine } from './engine.js';", 'const BrowserEngine = globalThis.TestEngine;');
 source = source.replace("await import('./video-export.js')", 'globalThis.testVideo');
 source = source.replaceAll(/from '(\.\/[^']+)'/g, (_, p) => `from '${pathToFileURL(root+p).href}'`);
-source = source.replace(/\n}\s*$/, '\n return {draft:()=>draft};\n}');
+source = source.replace('return { openHandoff };', 'return { openHandoff, draft:()=>draft };');
 let hold = null;
 let slowRender = null;
 const engines = [];
+const renderedSizes = [];
 globalThis.TestEngine = class {
   constructor() { this.destroyCalls=0; engines.push(this); }
   async gate(stage) { if (hold===stage) await new Promise((resolve,reject)=>{this.pending={resolve,reject};}); }
   async init() { await this.gate('init'); }
-  async render(view,width,height,settings) { await this.gate('render'); slowRender?.(); return {metadata:{width,height,color_origin:0,view}}; }
+  async render(view,width,height,settings) { await this.gate('render'); slowRender?.(); renderedSizes.push([width,height]); return {metadata:{width,height,color_origin:0,view}}; }
   async readField() { return new Float32Array(1); }
   cancel() {}
   destroy() { this.destroyCalls++; this.destroyed=true; this.pending?.reject(new DOMException('cancel','AbortError')); }
@@ -27,12 +29,13 @@ class Element extends EventTarget {
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
   focus() {}
+  select() { this.selected=true; }
   click() { this.onclick?.(); }
   querySelectorAll(selector) { const tags=selector.split(',').map(x=>x.trim()),out=[]; const walk=e=>{ for(const c of e.children){if(tags.includes(c.tag))out.push(c);walk(c);} }; walk(this); return out; }
   close() { if(this.open){this.open=false;setImmediate(()=>this.dispatchEvent(new Event('close')));} }
   showModal() { this.open=true; }
   scrollIntoView() {}
-  getContext() { return {globalAlpha:1,drawImage(){}}; }
+  getContext() { return this.context??= {globalAlpha:1,drawImage:(...args)=>{(this.draws??=[]).push(args);}}; }
   toDataURL() { return 'data:image/png;base64,YQ=='; }
   toBlob(callback) { callback(new Blob(['png'])); }
 }
@@ -48,15 +51,136 @@ const {setupWallpaper}=await import('data:text/javascript;base64,'+Buffer.from(s
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function setup(reset=true, overrides={}) {
   hold=null;
+  if (!globalThis.FractalNative) globalThis.window=new EventTarget();
   if(reset){const draft=defaultWallpaperDraft(wallpaperSnapshot(state,palettes));draft.states['open-steady'].view.x='-.12345';storage=JSON.stringify(draft);}
   const extra=['wallpaper-gallery-screen','wallpaper-gallery-dialog','wallpaper-gallery-status','wallpaper-gallery-cards','open-wallpaper-gallery','wallpaper-gallery','wallpaper-gallery-new','wallpaper-gallery-set','wallpaper-replace-dialog','wallpaper-replace-continue','wallpaper-editing-help'];
-  const elements=Object.fromEntries([...ids,...extra].map(id=>[id,new Element(id)]));
+  const elements=Object.fromEntries([...ids,...extra,'wallpaper-supersampling','wallpaper-gallery-shuffle','wallpaper-gallery-shuffle-options','wallpaper-gallery-shuffle-note','wallpaper-renderer-note','wallpaper-pc','wallpaper-pc-dialog','wallpaper-pc-link','wallpaper-pc-status','wallpaper-pc-summary','wallpaper-pc-copy','wallpaper-pc-share','wallpaper-pc-file'].map(id=>[id,new Element(id)]));
   const find=(node,id)=>node.id===id?node:node.children.map(child=>find(child,id)).find(Boolean);
   globalThis.document={hidden:false,getElementById:id=>elements[id]??Object.values(elements).map(node=>find(node,id)).find(Boolean),createElement:tag=>new Element(tag),addEventListener(){}};
+  globalThis.location={href:'https://appassets.androidplatform.net/explorer/index.html'};
   const api=setupWallpaper({engine:{gpu:false,mobile:false},palettes,getState:()=>state,applyState(){},paint(){},downloadBlob(){},...overrides});
   return {elements,api};
 }
 async function close(elements){elements['wallpaper-dialog'].close();await flush();}
+
+test('PC handoff captures native dimensions and sampling without starting an export, and file matches link',async()=>{
+  const downloads=[],shared=[];
+  globalThis.window=new EventTarget();
+  globalThis.FractalNative={info(){},wallpaperDisplays:()=>JSON.stringify({ok:true,screens:{inner:{width:2256,height:2504},cover:{width:1080,height:2520}}}),shareWallpaperLink:url=>{shared.push(url);return '{"ok":true}';}};
+  const {elements}=setup(true,{downloadBlob:async(blob,name)=>{downloads.push({text:await blob.text(),name});}});
+  try {
+    elements['open-wallpaper-export'].click();await flush();
+    elements['wallpaper-size'].value='native';elements['wallpaper-supersampling'].value='2';elements['wallpaper-name'].value='PC design';
+    document.getElementById('wallpaper-open-transition-seconds').value='1.7';
+    const count=engines.length;
+    await elements['wallpaper-pc'].onclick();assert.equal(engines.length,count,'handoff must not create another renderer');
+    assert.equal(engines.at(-1).destroyed,true,'phone preview stops during handoff');
+    assert.equal(elements['wallpaper-pc-dialog'].open,true);assert.equal(elements['wallpaper-pc-share'].hidden,false);
+    const url=elements['wallpaper-pc-link'].value,next=await readWallpaperURL(url);
+    assert.equal(new URL(url).host,'brn-dev.github.io');assert.equal(next.name,'PC design');assert.equal(next.longest,'native');
+    assert.deepEqual(next.screenSizes.inner,{width:2256,height:2504});assert.equal(next.supersampling,2);assert.equal(next.transitions['open-transition'].seconds,1.7);
+    await elements['wallpaper-pc-share'].onclick();assert.deepEqual(shared,[url]);
+    elements['wallpaper-name'].value='Changed after link';
+    await elements['wallpaper-pc-file'].onclick();assert.equal(downloads[0].name,'fractal-wallpaper-inner-draft.json');assert.deepEqual(JSON.parse(downloads[0].text),next);
+  } finally {elements['wallpaper-pc-dialog'].close();await close(elements);delete globalThis.FractalNative;}
+});
+
+test('a PC link asks before replacing an existing working draft and retains the phone pixels on PC',async()=>{
+  const incoming=defaultWallpaperDraft(wallpaperSnapshot({...state,supersampling:2},palettes),'cover');
+  incoming.name='From phone';incoming.longest='native';incoming.screenSizes={cover:{width:1080,height:2520}};
+  const url=await createWallpaperURL('https://example.org/',incoming),{elements,api}=setup();
+  const before=structuredClone(api.draft());
+  try {
+    assert.equal(await api.openHandoff(url),true);assert.deepEqual(api.draft(),before);assert.equal(elements['wallpaper-replace-dialog'].open,true);
+    elements['wallpaper-replace-continue'].click();await flush();
+    assert.equal(elements['wallpaper-dialog'].open,true);assert.equal(api.draft().name,'From phone');assert.equal(api.draft().screen,'cover');
+    assert.deepEqual(api.draft().screenSizes,{cover:{width:1080,height:2520}});assert.equal(api.draft().supersampling,2);assert.equal(elements['wallpaper-size'].value,'native');
+    const saved=structuredClone(api.draft());await assert.rejects(api.openHandoff('https://example.org/#w=g1.broken'),/Could not open/);assert.deepEqual(api.draft(),saved);
+    assert.equal(await api.openHandoff('https://example.org/'),false);
+  } finally {await close(elements);}
+});
+
+test('a superseded PC link read leaves the working draft and replacement prompt untouched',async()=>{
+  const incoming=defaultWallpaperDraft(wallpaperSnapshot(state,palettes),'inner');incoming.name='Outdated request';
+  const {elements,api}=setup(),before=structuredClone(api.draft());
+  try {
+    assert.equal(await api.openHandoff(await createWallpaperURL('https://example.org/',incoming),{isCurrent:()=>false}),false);
+    assert.deepEqual(api.draft(),before);assert.equal(elements['wallpaper-replace-dialog'].open,false);
+  } finally {await close(elements);}
+});
+
+test('a PC link confirmation cannot replace a draft after navigation makes its request stale',async()=>{
+  const incoming=defaultWallpaperDraft(wallpaperSnapshot(state,palettes),'inner');incoming.name='Stale confirmation';
+  const {elements,api}=setup(),before=structuredClone(api.draft());let current=true;
+  try {
+    await api.openHandoff(await createWallpaperURL('https://example.org/',incoming),{isCurrent:()=>current});
+    assert.equal(elements['wallpaper-replace-dialog'].open,true);
+    current=false;window.dispatchEvent(new Event('hashchange'));
+    assert.equal(elements['wallpaper-replace-dialog'].open,false);
+    elements['wallpaper-replace-continue'].click();assert.deepEqual(api.draft(),before);
+  } finally {await close(elements);}
+});
+
+test('a phone design renders on PC into a portable ZIP at the phone output size and sampling',async()=>{
+  const incoming=defaultWallpaperDraft(wallpaperSnapshot({...state,supersampling:2},palettes),'inner');
+  incoming.name='PC exported';incoming.longest='native';incoming.screenSizes={inner:{width:2256,height:2504}};
+  incoming.transitions['open-transition'].seconds=.5;incoming.idleSeconds=2;incoming.idleFps=10;
+  const oldVideo=globalThis.testVideo,outputs=[];let downloaded;
+  const {elements,api}=setup(true,{engine:{gpu:true,mobile:false},downloadBlob:async(blob)=>{downloaded=blob;}});
+  globalThis.testVideo={async supportsMP4(){return true;},async mp4Encoder(canvas,plan){outputs.push(plan);return {async add(){},async finish(){return new Blob(['mp4']);},async cancel(){}};}};
+  try {
+    await api.openHandoff(await createWallpaperURL('https://example.org/',incoming));elements['wallpaper-replace-continue'].click();await flush();
+    renderedSizes.length=0;await elements['wallpaper-create'].onclick();
+    assert.equal(outputs.length,2);assert.ok(outputs.every(p=>p.width===2256&&p.height===2504&&p.supersampling===2));
+    assert.ok(renderedSizes.length>0);assert.ok(renderedSizes.every(([w,h])=>w===4512&&h===5008));
+    const bytes=new Uint8Array(await downloaded.arrayBuffer()),data=new DataView(bytes.buffer),files=new Map();let at=0;
+    while(data.getUint32(at,true)===0x04034b50) {
+      const size=data.getUint32(at+18,true),names=data.getUint16(at+26,true),extra=data.getUint16(at+28,true),start=at+30+names+extra;
+      files.set(new TextDecoder().decode(bytes.subarray(at+30,at+30+names)),bytes.slice(start,start+size));at=start+size;
+    }
+    assert.deepEqual([...files.keys()].sort(),['inner-arrival.mp4','inner-idle.mp4','inner-poster.png','wallpaper.json']);
+    const manifest=JSON.parse(new TextDecoder().decode(files.get('wallpaper.json')));
+    assert.equal(manifest.screen,'inner');assert.equal(manifest.editor.supersampling,2);assert.deepEqual(manifest.editor.screenSizes,incoming.screenSizes);
+    assert.match(elements['wallpaper-status'].textContent,/Import wallpaper package/);
+  } finally {globalThis.testVideo=oldVideo;await close(elements);}
+});
+
+test('capturing a scene inherits explorer sampling and export downsamples before encoding',async()=>{
+  let applied; const outputs=[],painted=[],oldVideo=globalThis.testVideo;
+  const {elements,api}=setup(true,{getState:()=>({...state,supersampling:2}),applyState:value=>{applied=value;},paint(canvas,values,metadata){canvas.width=metadata.width;canvas.height=metadata.height;painted.push([metadata.width,metadata.height]);}});
+  globalThis.testVideo={async supportsMP4(){return true;},async mp4Encoder(canvas,plan){outputs.push({canvas,plan});return {async add(){},async finish(){return new Blob(['mp4']);},async cancel(){}};}};
+  try {
+    elements['open-wallpaper-export'].click();await flush();
+    elements['wallpaper-state-cards'].children[1].children[3].children[2].click();await flush();
+    assert.equal(api.draft().supersampling,2);assert.equal(Number(elements['wallpaper-supersampling'].value),2);
+    elements['wallpaper-state-cards'].children[1].children[3].children[1].click();assert.equal(applied.supersampling,2);
+    elements['wallpaper-overview'].click();await flush();
+    document.getElementById('wallpaper-open-transition-seconds').value='.5';
+    elements['wallpaper-idle-seconds'].value='2';elements['wallpaper-idle-fps'].value='10';
+    renderedSizes.length=0;painted.length=0;
+    await elements['wallpaper-create'].onclick();
+    assert.equal(outputs.length,2);
+    const {canvas,plan}=outputs[0];assert.deepEqual([canvas.width,canvas.height],[plan.width,plan.height]);
+    assert.ok(renderedSizes.length>0);assert.ok(renderedSizes.every(([w,h])=>w===plan.width*2&&h===plan.height*2));
+    assert.ok(painted.every(([w,h])=>w===plan.width*2&&h===plan.height*2));
+    assert.ok(canvas.draws.length>0);assert.ok(canvas.draws.every(args=>args[3]===plan.width&&args[4]===plan.height));
+    assert.equal(canvas.context.imageSmoothingQuality,'high');
+  } finally {globalThis.testVideo=oldVideo;await close(elements);}
+});
+
+test('unsupported supersampling fails before encoding and retains the requested factor',async()=>{
+  const oldVideo=globalThis.testVideo;let encoders=0;
+  const {elements,api}=setup();
+  Object.defineProperty(TestEngine.prototype,'renderLimits',{configurable:true,get:()=>({maxDimension:4096,maxPixels:16000000})});
+  globalThis.testVideo={async supportsMP4(){return true;},async mp4Encoder(){encoders++;throw new Error('must not start');}};
+  try {
+    elements['open-wallpaper-export'].click();await flush();
+    elements['wallpaper-supersampling'].value='4';elements['wallpaper-supersampling'].onchange();await flush();
+    await elements['wallpaper-create'].onclick();
+    assert.match(elements['wallpaper-status'].textContent,/4× supersampling.*exceeds/);
+    assert.equal(encoders,0);assert.equal(api.draft().supersampling,4);
+  } finally {delete TestEngine.prototype.renderLimits;globalThis.testVideo=oldVideo;await close(elements);}
+});
 
 test('import keeps the reopened/current dialog preview alive after queued close events',async()=>{
   const {elements}=setup(); elements['open-wallpaper-export'].onclick();await flush();

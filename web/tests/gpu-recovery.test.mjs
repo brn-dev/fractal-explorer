@@ -77,6 +77,13 @@ test('main-view backend notification can reschedule at CPU budget before oversiz
   await assert.rejects(t.engine.render(view,1000,1000),{name:'AbortError'});
   assert.equal(t.engine.gpu,false);assert.equal(t.calls.filter(c=>Array.isArray(c)&&c[0]==='cpu').length,0);
 });
+test('a GPU failure refuses supersampled work above CPU limits before allocating its fallback field',async()=>{
+  const t=runtimeEngine(internal());
+  t.engine.device.limits={maxTextureDimension2D:8192,maxStorageBufferBindingSize:134217728,maxBufferSize:134217728};
+  await assert.rejects(t.engine.render(view,4512,5008),/dimensions.*4096/i);
+  assert.equal(t.engine.gpu,false);
+  assert.equal(t.calls.filter(c=>Array.isArray(c)&&c[0]==='cpu').length,0);
+});
 test('cancellation, validation and numeric repair failures never silently change backends',async()=>{
   for(const error of [new DOMException('cancel','AbortError'),Object.assign(new Error('bad shader'),{reason:'validation'}),new Error('Precision repair needs 5000 pixels')]){
     const t=runtimeEngine(error);await assert.rejects(t.engine.render(view,32,24),value=>value===error);assert.equal(t.engine.gpu,true);assert.equal(t.destroyed(),0);

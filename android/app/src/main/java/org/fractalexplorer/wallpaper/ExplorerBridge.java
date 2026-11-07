@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 /** Available only to the bundled explorer; encoding stays on one EGL thread. */
@@ -18,6 +19,10 @@ final class ExplorerBridge {
     void saveFile(File file, String name);
 
     void wallpaperPicker();
+
+    default void shareText(String text) throws Exception {
+      throw new IOException("Sharing is unavailable. Use Copy PC link instead.");
+    }
   }
 
   private final android.content.Context context;
@@ -84,6 +89,23 @@ final class ExplorerBridge {
   @JavascriptInterface
   public String wallpaperDisplays() {
     return call(() -> new JSONObject().put("screens", WallpaperDisplays.snapshot(context)));
+  }
+
+  @JavascriptInterface
+  public String shareWallpaperLink(String url) {
+    return call(
+        () -> {
+          if (url == null || url.length() > 12000) throw new IOException("Invalid wallpaper link");
+          java.net.URI address = new java.net.URI(url);
+          if (!"https".equals(address.getScheme())
+              || address.getHost() == null
+              || address.getUserInfo() != null
+              || address.getRawFragment() == null
+              || !address.getRawFragment().matches("w=[gj]1\\.[A-Za-z0-9_-]+"))
+            throw new IOException("Invalid wallpaper link");
+          host.shareText(url);
+          return new JSONObject();
+        });
   }
 
   @JavascriptInterface
@@ -256,7 +278,25 @@ final class ExplorerBridge {
 
   @JavascriptInterface
   public String listWallpapers() {
-    return call(() -> new JSONObject().put("wallpapers", gallery.list()));
+    return call(
+        () -> {
+          synchronized (WallpaperFiles.class) {
+            return new JSONObject()
+                .put("wallpapers", gallery.list())
+                .put("shuffle", gallery.shuffle());
+          }
+        });
+  }
+
+  @JavascriptInterface
+  public String setWallpaperShuffle(String screen, String json, boolean enabled) {
+    return call(
+        () -> {
+          if (json == null || json.length() > PackPolicy.MAX_JSON_BYTES)
+            throw new IOException("Shuffle selection is too large");
+          gallery.setShuffle(screen, new JSONArray(json), enabled);
+          return new JSONObject();
+        });
   }
 
   @JavascriptInterface

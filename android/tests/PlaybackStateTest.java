@@ -15,16 +15,20 @@ public final class PlaybackStateTest {
     require(PlaybackState.modeFor(2504, 2256) == INNER);
     PlaybackState p = new PlaybackState();
     require(p.update(COVER, true, true, true, false, 0, 0) && p.stage == ARRIVAL);
+    require(p.arrivalReveal);
     int stale = p.generation;
     require(!p.update(COVER, true, true, true, false, 0, 100)); // resize must not restart
+    require(!p.arrivalReveal);
     require(p.completed(stale) && p.stage == IDLE);
     require(!p.completed(stale));
     p.update(COVER, false, true, true, false, 0, 200);
     p.update(COVER, true, true, true, false, 0, 700);
     require(p.stage == IDLE); // unlock's brief visibility bounce
+    require(!p.arrivalReveal);
     p.update(COVER, false, true, true, false, 0, 800);
     p.update(COVER, true, true, true, false, 0, 4000);
     require(p.stage == ARRIVAL); // returning home after a while
+    require(p.arrivalReveal);
     p.update(INNER, true, true, true, false, 0, 4100);
     require(p.stage == ARRIVAL && p.clip().equals("inner-arrival.mp4"));
     stale = p.generation;
@@ -32,8 +36,10 @@ public final class PlaybackStateTest {
     require(!p.completed(stale) && p.stage == ARRIVAL); // late result after folding
     p.update(COVER, true, true, true, true, 0, 4300);
     require(p.stage == STILL); // no animation in Battery Saver
+    require(!p.arrivalReveal);
     p.update(COVER, true, true, true, false, 0, 4400);
     require(p.stage == IDLE);
+    require(!p.arrivalReveal);
     p.update(INNER, true, false, true, false, 0, 4500);
     require(p.stage == ARRIVAL);
     require(p.completed(p.generation) && p.stage == STILL); // arrival only
@@ -62,6 +68,16 @@ public final class PlaybackStateTest {
     require(
         cover.stage
             == ARRIVAL); // even a very fast close, without changing this engine's own display mode
+    require(cover.arrivalReveal);
+    cover.update(COVER, true, true, true, false, 1, 21);
+    require(
+        cover.stage == ARRIVAL && !cover.arrivalReveal); // manual artwork changes do not shuffle
+    cover.update(COVER, false, true, true, false, 1, 30);
+    cover.update(COVER, true, true, true, false, 2, 31);
+    require(cover.stage == ARRIVAL && !cover.arrivalReveal); // revision during a short handoff
+    cover.update(COVER, false, true, true, false, 2, 40);
+    cover.update(COVER, true, true, false, false, 2, 3000);
+    require(cover.stage == IDLE && !cover.arrivalReveal); // arrivals disabled
     System.out.println(
         "Playback lifecycle, fold modes, stale callbacks, idle toggle, and power saving passed.");
   }

@@ -75,6 +75,8 @@ Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplore
 Run-Tool $java @('-cp', "$buildRoot\tests", 'PlaybackStateTest')
 Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplorer\wallpaper\PlaybackState.java", "$sourceRoot\java\org\fractalexplorer\wallpaper\DisplayReveals.java", "$PSScriptRoot\tests\DisplayRevealsTest.java")
 Run-Tool $java @('-cp', "$buildRoot\tests", 'org.fractalexplorer.wallpaper.DisplayRevealsTest')
+Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplorer\wallpaper\ShufflePolicy.java", "$PSScriptRoot\tests\ShufflePolicyTest.java")
+Run-Tool $java @('-cp', "$buildRoot\tests", 'org.fractalexplorer.wallpaper.ShufflePolicyTest')
 Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplorer\wallpaper\PackPolicy.java", "$PSScriptRoot\tests\PackPolicyTest.java")
 Run-Tool $java @('-cp', "$buildRoot\tests", 'org.fractalexplorer.wallpaper.PackPolicyTest', $buildRoot)
 Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplorer\wallpaper\NativeWorkQueue.java", "$PSScriptRoot\tests\NativeWorkQueueTest.java")

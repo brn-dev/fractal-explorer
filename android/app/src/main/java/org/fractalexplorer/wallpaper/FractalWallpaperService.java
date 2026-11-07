@@ -66,8 +66,15 @@ public class FractalWallpaperService extends WallpaperService {
       this.width = width;
       this.height = height;
       ready = holder.getSurface().isValid();
-      if (ready && renderer == null)
-        renderer = new VideoRenderer(FractalWallpaperService.this, holder.getSurface());
+      if (ready && renderer == null) {
+        Display target = getDisplayContext().getDisplay();
+        renderer =
+            new VideoRenderer(
+                FractalWallpaperService.this,
+                holder.getSurface(),
+                !isPreview()
+                    && (target == null || target.getDisplayId() == Display.DEFAULT_DISPLAY));
+      }
       update();
     }
 

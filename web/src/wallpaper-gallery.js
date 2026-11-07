@@ -7,6 +7,10 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
   const dialog = $('wallpaper-gallery-dialog'), status = $('wallpaper-gallery-status');
   if (!nativeBridge()) return;
   const screenSelect = $('wallpaper-gallery-screen'); screenSelect.value = 'inner';
+  const shuffleSupported = typeof nativeBridge().setWallpaperShuffle === 'function';
+  const shuffleToggle = $('wallpaper-gallery-shuffle');
+  $('wallpaper-gallery-shuffle-options').hidden = !shuffleSupported;
+  let pools = {};
   const report = action => {
     try { action(); } catch (error) { status.textContent = error.message; }
   };
@@ -16,8 +20,15 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
     node.onclick = () => report(action); return node;
   };
   function refresh() {
-    const { wallpapers } = nativeCall('listWallpapers');
+    const { wallpapers, shuffle = {} } = nativeCall('listWallpapers');
+    pools = Object.fromEntries(['cover', 'inner'].map(screen => [screen, {
+      enabled: !!shuffle[screen]?.enabled,
+      ids: (shuffle[screen]?.ids ?? []).filter(id => wallpapers.some(entry => entry.id === id && (!entry.screen || entry.screen === screen))),
+    }]));
     const screen = screenSelect.value, screenLabel = wallpaperScreenName(screen);
+    const pool = pools[screen];
+    shuffleToggle.checked = pool.enabled; shuffleToggle.disabled = !pool.ids.length && !pool.enabled;
+    $('wallpaper-gallery-shuffle-note').textContent = `${pool.ids.length} selected for ${screenLabel.toLowerCase()}. When enabled, each arrival picks a design at random, avoiding the current design when possible. The transition plays into that design’s own loop. Current screen playback settings apply to all picks. Changes take effect on the next arrival.`;
     const container = $('wallpaper-gallery-cards'); container.replaceChildren();
     const visible = wallpapers.filter(entry => !entry.screen || entry.screen === screen);
     if (!visible.length) status.textContent = `No ${screenLabel.toLowerCase()} designs yet. Create a wallpaper to save your first design.`;
@@ -30,10 +41,10 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
       const detail = document.createElement('p'); detail.className = 'export-note';
       detail.textContent = `${active ? 'Selected · ' : ''}${screenLabel} · ${(entry.bytes / 1024 ** 2).toFixed(1)} MB${entry.editable ? '' : ' · imported videos only'}`;
       const actions = document.createElement('div'); actions.className = 'wallpaper-state-actions';
-      const apply = button(active ? 'Selected' : `Use on ${screen === 'cover' ? 'cover' : 'main'}`, () => {
+      const apply = button(pool.enabled ? 'Use only this' : active ? 'Selected' : `Use on ${screen === 'cover' ? 'cover' : 'main'}`, () => {
         nativeCall('applyWallpaperScreen', entry.id, screen); refresh();
         status.textContent = `${entry.name} selected for ${screenLabel.toLowerCase()}. The other screen is unchanged. Use Set up if Samsung still shows a different wallpaper.`;
-      }); apply.disabled = active;
+      }); apply.disabled = active && !pool.enabled;
       const edit = button('Edit design', () => editWallpaper(nativeCall('wallpaperDraft', entry.id).draft, screen)); edit.disabled = !entry.editable;
       const renameForm = document.createElement('form'); renameForm.className = 'wallpaper-gallery-rename'; renameForm.hidden = true;
       const label = document.createElement('label'); label.className = 'field-label'; label.textContent = 'Wallpaper name';
@@ -49,11 +60,31 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
       confirm.append(question, button('Delete permanently', () => {
         nativeCall('deleteWallpaper', entry.id); refresh(); status.textContent = 'Wallpaper deleted.';
       }), button('Keep wallpaper', () => { confirm.hidden = true; }));
-      const remove = button('Delete', () => { confirm.hidden = false; }); remove.disabled = entry.active;
-      remove.title = entry.active ? 'Select another wallpaper on every screen using this design before deleting it.' : '';
+      const inShuffle = Object.values(pools).some(pool => pool.enabled && pool.ids.includes(entry.id));
+      const remove = button('Delete', () => { confirm.hidden = false; }); remove.disabled = entry.active || inShuffle;
+      remove.title = entry.active ? 'Select another wallpaper on every screen using this design before deleting it.' : inShuffle ? 'Remove this design from shuffle before deleting it.' : '';
       actions.append(apply, edit, rename, remove); content.append(heading, detail, actions, renameForm, confirm); card.append(image, content); container.append(card);
+      if (shuffleSupported) {
+        const label = document.createElement('label'); label.className = 'field-label';
+        const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = pool.ids.includes(entry.id);
+        checkbox.onchange = () => {
+          const ids = checkbox.checked ? [...new Set([...pool.ids, entry.id])] : pool.ids.filter(id => id !== entry.id);
+          saveShuffle(screen, ids, pool.enabled && ids.length > 0);
+        };
+        const text = document.createElement('span'); text.textContent = 'Include in shuffle'; label.append(checkbox, text); content.append(label);
+      }
     }
   }
+  function saveShuffle(screen, ids, enabled) {
+    try {
+      nativeCall('setWallpaperShuffle', screen, JSON.stringify(ids), enabled); refresh();
+      status.textContent = enabled ? 'Shuffle enabled for the next arrival.' : 'Shuffle is off. The current design stays selected.';
+    } catch (error) {
+      try { refresh(); } catch { /* Preserve the original failure. */ }
+      status.textContent = error.message;
+    }
+  }
+  shuffleToggle.onchange = () => { const screen = screenSelect.value; saveShuffle(screen, pools[screen].ids, shuffleToggle.checked); };
   function open() {
     window.fractalGalleryRequested = false;
     if (!canOpen()) return;

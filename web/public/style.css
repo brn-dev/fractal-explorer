@@ -1007,7 +1007,7 @@ dialog .export-note {
 .export-choices .secondary-button { margin:0;justify-content:space-between; }
 #export-title, #image-export-title, #location-export-title { padding-right:24px; }
 #share-dialog h2 { padding-right:20px; }
-#share-link { display:block;width:100%;margin-top:7px;min-height:94px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:6px;background:#ffffff05;color:var(--ink);font:11px/1.6 ui-monospace,monospace;overflow-wrap:anywhere; }
+#share-link, #wallpaper-pc-link { display:block;width:100%;margin-top:7px;min-height:94px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:6px;background:#ffffff05;color:var(--ink);font:11px/1.6 ui-monospace,monospace;overflow-wrap:anywhere; }
 #color-gif-dialog {
   width: min(900px, calc(100vw - 30px));
   padding: 24px;
