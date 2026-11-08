@@ -5,6 +5,7 @@ import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.SurfaceTexture;
+import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.opengl.EGL14;
 import android.opengl.EGLConfig;
@@ -75,6 +76,7 @@ final class VideoRenderer {
   private MediaPlayer player;
   private int videoProgram, posterProgram, posterId, videoId;
   private int width, height, videoWidth = 1, videoHeight = 1, posterWidth = 1, posterHeight = 1;
+  private int arrivalPosterId, arrivalPosterWidth = 1, arrivalPosterHeight = 1;
   private boolean initialized, showVideo;
   private volatile boolean closed;
   private final CountDownLatch closedDone = new CountDownLatch(1);
@@ -278,6 +280,7 @@ final class VideoRenderer {
   private void applyStageContents(boolean keepVideoFrame) {
     stopPlayer(keepVideoFrame && state.stage == PlaybackState.Stage.IDLE);
     if (state.stage == PlaybackState.Stage.HIDDEN) return;
+    if (state.stage == PlaybackState.Stage.ARRIVAL) loadArrivalPoster();
     draw();
     if (state.stage == PlaybackState.Stage.STILL) return;
     final int token = state.generation;
@@ -342,6 +345,7 @@ final class VideoRenderer {
   }
 
   private void loadPoster() throws IOException {
+    resetArrivalPoster();
     Bitmap bitmap;
     File custom = WallpaperFiles.activeFile(context, state.prefix() + "-poster.png");
     if (custom.isFile()) bitmap = BitmapFactory.decodeFile(custom.getAbsolutePath());
@@ -358,6 +362,45 @@ final class VideoRenderer {
     bitmap.recycle();
   }
 
+  private void resetArrivalPoster() {
+    if (arrivalPosterId != 0) GLES20.glDeleteTextures(1, new int[] {arrivalPosterId}, 0);
+    arrivalPosterId = 0;
+  }
+
+  private void loadArrivalPoster() {
+    if (arrivalPosterId != 0) return;
+    Bitmap bitmap = null;
+    try (MediaMetadataRetriever reader = new MediaMetadataRetriever()) {
+      String clip = state.prefix() + "-arrival.mp4";
+      File custom = WallpaperFiles.activeFile(context, clip);
+      if (custom.isFile()) {
+        try (FileInputStream source = new FileInputStream(custom)) {
+          reader.setDataSource(source.getFD());
+        }
+      } else {
+        try (AssetFileDescriptor source = context.getAssets().openFd(clip)) {
+          reader.setDataSource(
+              source.getFileDescriptor(), source.getStartOffset(), source.getLength());
+        }
+      }
+      // Derive the waiting image from the actual encoded clip, including older
+      // packages. Cache one full-size image per artwork; no decoder stays alive.
+      bitmap = reader.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+      if (bitmap == null) throw new IOException("Cannot decode transition start image");
+      arrivalPosterId = texture(GLES20.GL_TEXTURE_2D);
+      GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, arrivalPosterId);
+      GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0);
+      arrivalPosterWidth = bitmap.getWidth();
+      arrivalPosterHeight = bitmap.getHeight();
+    } catch (Exception error) {
+      if (arrivalPosterId != 0) GLES20.glDeleteTextures(1, new int[] {arrivalPosterId}, 0);
+      arrivalPosterId = 0;
+      report(error);
+    } finally {
+      if (bitmap != null) bitmap.recycle();
+    }
+  }
+
   private void draw() {
     if (closed
         || !initialized
@@ -365,9 +408,33 @@ final class VideoRenderer {
         || height <= 0
         || state.stage == PlaybackState.Stage.HIDDEN) return;
     boolean video = showVideo || heldFrame != null;
+    boolean arrivalPoster = !video && state.stage == PlaybackState.Stage.ARRIVAL;
+    if (arrivalPoster && arrivalPosterId == 0) {
+      // A corrupt/unavailable start image must not reveal the steady endpoint
+      // before its transition. The video decoder may still recover normally.
+      GLES20.glClearColor(0, 0, 0, 1);
+      GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+      swapBuffers();
+      return;
+    }
     int selected = video ? videoProgram : posterProgram;
-    int imageWidth = showVideo ? videoWidth : heldFrame != null ? heldFrame.width : posterWidth,
-        imageHeight = showVideo ? videoHeight : heldFrame != null ? heldFrame.height : posterHeight;
+    int imageWidth = posterWidth, imageHeight = posterHeight, imageId = posterId;
+    float[] imageMatrix = posterMatrix;
+    if (showVideo) {
+      imageWidth = videoWidth;
+      imageHeight = videoHeight;
+      imageId = videoId;
+      imageMatrix = videoMatrix;
+    } else if (heldFrame != null) {
+      imageWidth = heldFrame.width;
+      imageHeight = heldFrame.height;
+      imageId = heldFrame.id;
+      imageMatrix = heldFrame.matrix;
+    } else if (arrivalPoster) {
+      imageWidth = arrivalPosterWidth;
+      imageHeight = arrivalPosterHeight;
+      imageId = arrivalPosterId;
+    }
     float ratio = (imageWidth / (float) imageHeight) / (width / (float) height);
     GLES20.glViewport(0, 0, width, height);
     GLES20.glUseProgram(selected);
@@ -382,17 +449,15 @@ final class VideoRenderer {
         ratio > 1 ? 1 / ratio : 1,
         ratio < 1 ? ratio : 1);
     GLES20.glUniformMatrix4fv(
-        GLES20.glGetUniformLocation(selected, "uMatrix"),
-        1,
-        false,
-        showVideo ? videoMatrix : heldFrame != null ? heldFrame.matrix : posterMatrix,
-        0);
+        GLES20.glGetUniformLocation(selected, "uMatrix"), 1, false, imageMatrix, 0);
     GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-    GLES20.glBindTexture(
-        video ? GLES11Ext.GL_TEXTURE_EXTERNAL_OES : GLES20.GL_TEXTURE_2D,
-        showVideo ? videoId : heldFrame != null ? heldFrame.id : posterId);
+    GLES20.glBindTexture(video ? GLES11Ext.GL_TEXTURE_EXTERNAL_OES : GLES20.GL_TEXTURE_2D, imageId);
     GLES20.glUniform1i(GLES20.glGetUniformLocation(selected, "uTexture"), 0);
     GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+    swapBuffers();
+  }
+
+  private void swapBuffers() {
     if (!EGL14.eglSwapBuffers(display, eglSurface))
       throw new IllegalStateException("Wallpaper surface unavailable");
   }
@@ -511,6 +576,7 @@ final class VideoRenderer {
       try {
         stopPlayer();
       } finally {
+        resetArrivalPoster();
         if (display != EGL14.EGL_NO_DISPLAY) {
           EGL14.eglMakeCurrent(
               display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT);
