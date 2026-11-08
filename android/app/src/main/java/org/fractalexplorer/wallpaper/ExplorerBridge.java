@@ -100,7 +100,7 @@ final class ExplorerBridge {
 
   @JavascriptInterface
   public String info() {
-    return "{\"ok\":true,\"version\":2,\"nativeVideo\":true,\"maxEdge\":4096,\"dynamicQuality\":true,\"staticWallpapers\":true}";
+    return "{\"ok\":true,\"version\":2,\"nativeVideo\":true,\"maxEdge\":4096,\"dynamicQuality\":true,\"staticWallpapers\":true,\"shuffleRules\":true}";
   }
 
   @JavascriptInterface
@@ -345,7 +345,8 @@ final class ExplorerBridge {
           synchronized (WallpaperFiles.class) {
             return new JSONObject()
                 .put("wallpapers", gallery.list())
-                .put("shuffle", gallery.shuffle());
+                .put("shuffle", gallery.shuffle())
+                .put("sun", gallery.solarInfo());
           }
         });
   }
@@ -364,6 +365,16 @@ final class ExplorerBridge {
   @JavascriptInterface
   public String wallpaperDraft(String id) {
     return call(() -> new JSONObject().put("draft", gallery.draft(id)));
+  }
+
+  @JavascriptInterface
+  public String setWallpaperShuffleRule(String screen, String id, String json) {
+    return call(
+        () -> {
+          if (json == null || json.length() > 1024) throw new IOException("Invalid shuffle rule");
+          gallery.setShuffleRule(screen, id, new JSONObject(json));
+          return new JSONObject();
+        });
   }
 
   @JavascriptInterface

@@ -79,6 +79,8 @@ Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplore
 Run-Tool $java @('-cp', "$buildRoot\tests", 'org.fractalexplorer.wallpaper.DisplayRevealsTest')
 Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplorer\wallpaper\ShufflePolicy.java", "$PSScriptRoot\tests\ShufflePolicyTest.java")
 Run-Tool $java @('-cp', "$buildRoot\tests", 'org.fractalexplorer.wallpaper.ShufflePolicyTest')
+Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplorer\wallpaper\ViennaSun.java", "$PSScriptRoot\tests\ViennaSunTest.java")
+Run-Tool $java @('-cp', "$buildRoot\tests", 'org.fractalexplorer.wallpaper.ViennaSunTest')
 Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplorer\wallpaper\PackPolicy.java", "$PSScriptRoot\tests\PackPolicyTest.java")
 Run-Tool $java @('-cp', "$buildRoot\tests", 'org.fractalexplorer.wallpaper.PackPolicyTest', $buildRoot)
 Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplorer\wallpaper\NativeWorkQueue.java", "$PSScriptRoot\tests\NativeWorkQueueTest.java")
@@ -93,7 +95,8 @@ Run-Tool $java @('-cp', "$buildRoot\tests;$buildRoot\classes;$jsonJar;$AndroidJa
 $staticTests = Join-Path $buildRoot 'static-tests'
 New-Item -ItemType Directory -Path $staticTests -Force | Out-Null
 $staticSources = @(Get-ChildItem -LiteralPath "$PSScriptRoot\tests\static-host" -Recurse -Filter '*.java' | Select-Object -ExpandProperty FullName)
-$staticSources += @('PackPolicy', 'WallpaperFiles', 'WallpaperGallery', 'ShufflePolicy', 'StaticImageImporter') | ForEach-Object { "$sourceRoot\java\org\fractalexplorer\wallpaper\$_.java" }
-Run-Tool $javac (@('-cp', $jsonJar, '-d', $staticTests) + $staticSources + @("$PSScriptRoot\tests\StaticWallpaperTest.java"))
+$staticSources += @('PackPolicy', 'WallpaperFiles', 'WallpaperGallery', 'ShufflePolicy', 'StaticImageImporter', 'ViennaSun') | ForEach-Object { "$sourceRoot\java\org\fractalexplorer\wallpaper\$_.java" }
+Run-Tool $javac (@('-cp', $jsonJar, '-d', $staticTests) + $staticSources + @("$PSScriptRoot\tests\StaticWallpaperTest.java", "$PSScriptRoot\tests\ShuffleScheduleTest.java", "$PSScriptRoot\tests\ViennaSunTest.java"))
 Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.StaticWallpaperTest', $buildRoot)
+Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.ShuffleScheduleTest', $buildRoot)
 Write-Output "APK ready: $apk"

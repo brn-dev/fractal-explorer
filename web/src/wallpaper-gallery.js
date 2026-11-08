@@ -8,6 +8,7 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
   if (!nativeBridge()) return;
   const screenSelect = $('wallpaper-gallery-screen'); screenSelect.value = 'inner';
   const shuffleSupported = typeof nativeBridge().setWallpaperShuffle === 'function';
+  const rulesSupported = typeof nativeBridge().setWallpaperShuffleRule === 'function';
   const shuffleToggle = $('wallpaper-gallery-shuffle');
   $('wallpaper-gallery-shuffle-options').hidden = !shuffleSupported;
   let pools = {};
@@ -20,15 +21,25 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
     node.onclick = () => report(action); return node;
   };
   function refresh() {
-    const { wallpapers, shuffle = {} } = nativeCall('listWallpapers');
+    const { wallpapers, shuffle = {}, sun } = nativeCall('listWallpapers');
     pools = Object.fromEntries(['cover', 'inner'].map(screen => [screen, {
       enabled: !!shuffle[screen]?.enabled,
       ids: (shuffle[screen]?.ids ?? []).filter(id => wallpapers.some(entry => entry.id === id && (!entry.screen || entry.screen === screen))),
+      rules: shuffle[screen]?.rules ?? {},
     }]));
     const screen = screenSelect.value, screenLabel = wallpaperScreenName(screen);
     const pool = pools[screen];
     shuffleToggle.checked = pool.enabled; shuffleToggle.disabled = !pool.ids.length && !pool.enabled;
-    $('wallpaper-gallery-shuffle-note').textContent = `${pool.ids.length} selected for ${screenLabel.toLowerCase()}. Each screen reveal picks a design at random, avoiding the current design when possible. Static images stay still; animated entries follow this screen's transition and loop settings. Changes take effect on the next reveal.`;
+    $('wallpaper-gallery-shuffle-note').textContent = `${pool.ids.length} selected for ${screenLabel.toLowerCase()}. Equal weights avoid the current design when possible; unequal weights use relative odds and may repeat. Static images stay still; animated entries follow this screen's playback settings.`;
+    const sunNote = $('wallpaper-gallery-sun-note');
+    if (sunNote) {
+      sunNote.hidden = !rulesSupported;
+      const validSun = sun && Number.isFinite(sun.sunrise) && Number.isFinite(sun.sunset);
+      const time = millis => new Intl.DateTimeFormat(undefined, { hour:'2-digit', minute:'2-digit', hourCycle:'h23', timeZone:'Europe/Vienna' }).format(new Date(millis));
+      const eligible = pool.ids.filter(id => !pool.rules[id]?.period || pool.rules[id].period === 'any' || pool.rules[id].period === (sun?.daytime ? 'day' : 'night')).length;
+      sunNote.textContent = validSun ? `Vienna area · ${sun.date}: sunrise ${time(sun.sunrise)}, sunset ${time(sun.sunset)} (Vienna local time). ${eligible} eligible now (${sun.daytime ? 'daytime' : 'nighttime'}). Times follow the seasons and daylight saving time, calculated offline. If none qualify, the wallpaper shows plain black until one becomes eligible.`
+        : 'Time filters use estimated sunrise and sunset near Vienna, calculated offline for each date. With no eligible wallpaper, the screen stays plain black.';
+    }
     const container = $('wallpaper-gallery-cards'); container.replaceChildren();
     const visible = wallpapers.filter(entry => !entry.screen || entry.screen === screen);
     if (!visible.length) status.textContent = `No ${screenLabel.toLowerCase()} designs yet. Create a wallpaper to save your first design.`;
@@ -85,6 +96,30 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
           saveShuffle(screen, ids, pool.enabled && ids.length > 0);
         };
         const text = document.createElement('span'); text.textContent = 'Include in shuffle'; label.append(checkbox, text); content.append(label);
+        if (rulesSupported && pool.ids.includes(entry.id)) {
+          const settings = pool.rules[entry.id] ?? { weight:1, period:'any' };
+          const form = document.createElement('form'); form.className = 'wallpaper-shuffle-rule';
+          const fields = document.createElement('div'); fields.className = 'two-fields';
+          const weightLabel = document.createElement('label'); weightLabel.className = 'field-label'; weightLabel.textContent = 'Shuffle weight · default 1';
+          const weight = document.createElement('input'); weight.type = 'number'; weight.min = '.1'; weight.max = '100'; weight.step = '.1'; weight.required = true; weight.value = settings.weight; weightLabel.append(weight);
+          const periodLabel = document.createElement('label'); periodLabel.className = 'field-label'; periodLabel.textContent = 'Time filter';
+          const period = document.createElement('select');
+          for (const [value, text] of [['any','Any time'],['day','Daytime'],['night','Nighttime']]) {
+            const option = document.createElement('option'); option.value = value; option.textContent = text; period.append(option);
+          }
+          period.value = settings.period; periodLabel.append(period); fields.append(weightLabel, periodLabel);
+          const save = button('Save shuffle settings', () => {
+            const value = Number(weight.value);
+            if (!Number.isFinite(value) || value < .1 || value > 100) { status.textContent = 'Choose a weight between 0.1 and 100.'; weight.focus(); return; }
+            try {
+              nativeCall('setWallpaperShuffleRule', screen, entry.id, JSON.stringify({ weight:value, period:period.value }));
+              refresh(); status.textContent = 'Shuffle weight and time filter saved for this screen.';
+            } catch (error) { try { refresh(); } catch {} status.textContent = error.message; }
+          });
+          form.onsubmit = event => { event.preventDefault(); save.click(); };
+          const help = document.createElement('p'); help.className = 'export-note'; help.textContent = 'Weight 2 has twice the chance of weight 1 when both qualify. Daytime is sunrise to sunset; nighttime is sunset to sunrise.';
+          form.append(fields, help, save); content.append(form);
+        }
       }
     }
   }

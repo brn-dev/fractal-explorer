@@ -37,6 +37,80 @@ final class WallpaperGallery {
         preferences.getStringSet("shuffle_" + screen + "_ids", java.util.Collections.emptySet()));
   }
 
+  private JSONObject shuffleRules(String screen) throws Exception {
+    return new JSONObject(preferences.getString("shuffle_" + screen + "_rules", "{}"));
+  }
+
+  private static ShufflePolicy.Rule rule(JSONObject rules, String id) throws Exception {
+    JSONObject item = rules.optJSONObject(id);
+    return item == null
+        ? new ShufflePolicy.Rule(1, "any")
+        : new ShufflePolicy.Rule(item.getDouble("weight"), item.getString("period"));
+  }
+
+  JSONObject solarInfo() throws Exception {
+    long now = System.currentTimeMillis();
+    ViennaSun sun = ViennaSun.at(now);
+    return new JSONObject()
+        .put("zone", ViennaSun.ZONE.getId())
+        .put("date", sun.date.toString())
+        .put("sunrise", sun.sunrise)
+        .put("sunset", sun.sunset)
+        .put("daytime", sun.daytime(now));
+  }
+
+  String selectionContext(String screen, long wallTime) throws Exception {
+    if (!preferences.getBoolean("shuffle_" + screen, false)) return "";
+    java.util.List<String> ids = new java.util.ArrayList<>(shuffleIds(screen));
+    java.util.Collections.sort(ids);
+    JSONObject rules = shuffleRules(screen);
+    StringBuilder context = new StringBuilder(screen);
+    boolean timed = false;
+    for (String id : ids) {
+      ShufflePolicy.Rule setting = rule(rules, id);
+      timed |= !"any".equals(setting.period);
+      context
+          .append('|')
+          .append(id)
+          .append(':')
+          .append(setting.weight)
+          .append(':')
+          .append(setting.period);
+    }
+    if (timed) context.append(ViennaSun.at(wallTime).daytime(wallTime) ? "|day" : "|night");
+    context.append(SettingsActivity.hasPendingChanges() ? "|pending" : "|ready");
+    return context.toString();
+  }
+
+  long nextScheduleChange(String screen, long wallTime) throws Exception {
+    if (preferences.getBoolean("shuffle_" + screen, false)) {
+      JSONObject rules = shuffleRules(screen);
+      for (String id : shuffleIds(screen))
+        if (!"any".equals(rule(rules, id).period)) return ViennaSun.at(wallTime).next(wallTime);
+    }
+    return Long.MAX_VALUE;
+  }
+
+  void setShuffleRule(String screen, String id, JSONObject item) throws Exception {
+    checkScreen(screen);
+    if (!(item.opt("weight") instanceof Number)) throw new IOException("Enter a numeric weight");
+    ShufflePolicy.Rule setting =
+        new ShufflePolicy.Rule(item.getDouble("weight"), item.getString("period"));
+    synchronized (WallpaperFiles.class) {
+      requireNoImport();
+      JSONObject saved = manifest(folder(id));
+      if (!PackPolicy.supports(saved.optString("screen", ""), screen))
+        throw new IOException("This wallpaper belongs to the other screen");
+      JSONObject rules = shuffleRules(screen);
+      rules.put(id, new JSONObject().put("weight", setting.weight).put("period", setting.period));
+      commit(
+          preferences,
+          preferences.edit().putString("shuffle_" + screen + "_rules", rules.toString()),
+          "shuffle_" + screen + "_rules");
+      shufflePolicy.reset(screen);
+    }
+  }
+
   JSONObject shuffle() throws Exception {
     synchronized (WallpaperFiles.class) {
       JSONObject result = new JSONObject();
@@ -47,7 +121,8 @@ final class WallpaperGallery {
             screen,
             new JSONObject()
                 .put("enabled", preferences.getBoolean("shuffle_" + screen, false))
-                .put("ids", ids));
+                .put("ids", ids)
+                .put("rules", shuffleRules(screen)));
       }
       return result;
     }
@@ -83,30 +158,45 @@ final class WallpaperGallery {
   }
 
   String chooseForArrival(String screen, long event, long now) throws Exception {
+    return chooseForArrival(screen, event, now, System.currentTimeMillis());
+  }
+
+  String chooseForArrival(String screen, long event, long now, long wallTime) throws Exception {
     checkScreen(screen);
     synchronized (WallpaperFiles.class) {
       String active = WallpaperFiles.activeId(preferences, screen);
-      if (!preferences.getBoolean("shuffle_" + screen, false)
-          || SettingsActivity.hasPendingChanges()) return active;
-      Set<String> valid = new java.util.HashSet<>();
+      if (!preferences.getBoolean("shuffle_" + screen, false)) return active;
+      if (SettingsActivity.hasPendingChanges()) {
+        // Imports defer activation, but must not leave out-of-window artwork visible.
+        return shuffleIds(screen).contains(active)
+                && rule(shuffleRules(screen), active)
+                    .eligible(ViennaSun.at(wallTime).daytime(wallTime))
+            ? active
+            : null;
+      }
+      Map<String, Double> valid = new HashMap<>();
       Map<String, JSONObject> saved = new HashMap<>();
+      JSONObject rules = shuffleRules(screen);
+      boolean daytime = ViennaSun.at(wallTime).daytime(wallTime);
       for (String id : shuffleIds(screen))
         try {
           JSONObject item = manifest(folder(id));
-          if (PackPolicy.supports(item.optString("screen", ""), screen)) {
-            valid.add(id);
+          ShufflePolicy.Rule setting = rule(rules, id);
+          if (PackPolicy.supports(item.optString("screen", ""), screen)
+              && setting.eligible(daytime)) {
+            valid.put(id, setting.weight);
             saved.put(id, item);
           }
         } catch (Exception ignored) {
           /* A damaged entry is left intact and skipped. */
         }
-      if (valid.isEmpty()) return active;
-      java.util.List<String> sorted = new java.util.ArrayList<>(valid);
+      if (valid.isEmpty()) return null;
+      java.util.List<String> sorted = new java.util.ArrayList<>(valid.keySet());
       java.util.Collections.sort(sorted);
-      String pool = sorted.toString();
+      String pool = selectionContext(screen, wallTime) + "|eligible=" + sorted;
       String recent = shufflePolicy.recent(screen, pool, active, event, now);
       if (recent != null) return recent;
-      String chosen = ShufflePolicy.pick(valid, active, random);
+      String chosen = ShufflePolicy.weightedPick(valid, active, random);
       if (!chosen.equals(active)) files.activateLocked(chosen, saved.get(chosen), screen, true);
       shufflePolicy.remember(screen, pool, chosen, event, now);
       return chosen;
@@ -380,6 +470,9 @@ final class WallpaperGallery {
       for (String screen : new String[] {"cover", "inner"})
         if (preferences.getBoolean("shuffle_" + screen, false) && shuffleIds(screen).contains(id))
           throw new IOException("Remove this wallpaper from shuffle before deleting it");
+      JSONObject coverRules = shuffleRules("cover"), innerRules = shuffleRules("inner");
+      coverRules.remove(id);
+      innerRules.remove(id);
       // A crash after this rename is recovered by the existing pending-package cleanup.
       File removed = new File(files.root(), "pending-" + WallpaperFiles.newId());
       if (!folder.renameTo(removed)) throw new IOException("Cannot remove this wallpaper");
@@ -394,14 +487,18 @@ final class WallpaperGallery {
                 .remove("gallery_cover_idle_" + id)
                 .remove("gallery_cover_arrival_" + id)
                 .remove("gallery_inner_idle_" + id)
-                .remove("gallery_inner_arrival_" + id),
+                .remove("gallery_inner_arrival_" + id)
+                .putString("shuffle_cover_rules", coverRules.toString())
+                .putString("shuffle_inner_rules", innerRules.toString()),
             "gallery_name_" + id,
             "gallery_idle_" + id,
             "gallery_arrival_" + id,
             "gallery_cover_idle_" + id,
             "gallery_cover_arrival_" + id,
             "gallery_inner_idle_" + id,
-            "gallery_inner_arrival_" + id);
+            "gallery_inner_arrival_" + id,
+            "shuffle_cover_rules",
+            "shuffle_inner_rules");
       } catch (Exception error) {
         folder = PackPolicy.folder(files.root(), id);
         removed.renameTo(folder);

@@ -55,6 +55,9 @@ public class FractalWallpaperService extends WallpaperService {
       filter.addAction(Intent.ACTION_SCREEN_ON);
       filter.addAction(Intent.ACTION_USER_PRESENT);
       filter.addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED);
+      filter.addAction(Intent.ACTION_TIME_CHANGED);
+      filter.addAction(Intent.ACTION_DATE_CHANGED);
+      filter.addAction(Intent.ACTION_TIMEZONE_CHANGED);
       if (Build.VERSION.SDK_INT >= 33)
         registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
       else registerReceiver(receiver, filter);

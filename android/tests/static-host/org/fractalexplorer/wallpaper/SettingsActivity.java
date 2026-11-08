@@ -1,8 +1,10 @@
 package org.fractalexplorer.wallpaper;
 
-/** Host fixture: no Android settings transaction is running during storage tests. */
+/** Host fixture for an in-progress Android settings import. */
 public final class SettingsActivity {
+  static boolean pending;
+
   static boolean hasPendingChanges() {
-    return false;
+    return pending;
   }
 }

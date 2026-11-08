@@ -133,65 +133,121 @@ final class VideoRenderer {
       long screenEvent,
       long now) {
     handler.post(
-        () -> {
-          if (closed) return;
+        () ->
+            configureOnThread(
+                width, height, mode, visible, idle, arrival, saving, revision, screenEvent, now));
+  }
+
+  private void configureOnThread(
+      int width,
+      int height,
+      PlaybackState.Mode mode,
+      boolean visible,
+      boolean idle,
+      boolean arrival,
+      boolean saving,
+      long revision,
+      long screenEvent,
+      long now) {
+    if (closed) return;
+    try {
+      synchronized (WallpaperFiles.class) {
+        this.width = width;
+        this.height = height;
+        boolean newArtwork = state.mode != mode;
+        if (!initialized) initialize();
+        state.screenEvent(screenEvent);
+        long currentRevision = revision;
+        boolean currentIdle = idle, currentArrival = arrival;
+        android.content.SharedPreferences preferences =
+            context.getSharedPreferences("wallpaper", 0);
+        String screen = mode == PlaybackState.Mode.COVER ? "cover" : "inner";
+        if (shuffleAllowed) {
+          // Preference callbacks can be queued before an automatic selection commits.
+          // Resolve content when the renderer executes, never rewind to that old snapshot.
+          currentRevision = WallpaperFiles.revision(preferences, screen);
+          currentIdle = WallpaperFiles.playback(preferences, screen, "idle");
+          currentArrival = WallpaperFiles.playback(preferences, screen, "arrival");
+        }
+        if (WallpaperFiles.isStatic(preferences, screen)) currentIdle = currentArrival = false;
+        boolean changed =
+            state.update(mode, visible, currentIdle, currentArrival, saving, currentRevision, now);
+        if (scheduleTick != null) {
+          handler.removeCallbacks(scheduleTick);
+          scheduleTick = null;
+        }
+        if (shuffleAllowed) {
           try {
-            synchronized (WallpaperFiles.class) {
-              this.width = width;
-              this.height = height;
-              boolean newArtwork = state.mode != mode;
-              if (!initialized) initialize();
-              state.screenEvent(screenEvent);
-              long currentRevision = revision;
-              boolean currentIdle = idle, currentArrival = arrival;
-              android.content.SharedPreferences preferences =
-                  context.getSharedPreferences("wallpaper", 0);
-              String screen = mode == PlaybackState.Mode.COVER ? "cover" : "inner";
-              if (shuffleAllowed) {
-                // Preference callbacks can be queued before an automatic selection commits.
-                // Resolve content when the renderer executes, never rewind to that old snapshot.
-                currentRevision = WallpaperFiles.revision(preferences, screen);
-                currentIdle = WallpaperFiles.playback(preferences, screen, "idle");
-                currentArrival = WallpaperFiles.playback(preferences, screen, "arrival");
-              }
-              if (WallpaperFiles.isStatic(preferences, screen))
-                currentIdle = currentArrival = false;
-              boolean changed =
-                  state.update(
-                      mode, visible, currentIdle, currentArrival, saving, currentRevision, now);
-              if (shuffleAllowed && changed && state.selectionReveal) {
-                try {
-                  new WallpaperGallery(context).chooseForArrival(screen, screenEvent, now);
-                  currentRevision =
-                      WallpaperFiles.revision(context.getSharedPreferences("wallpaper", 0), screen);
-                  currentIdle = WallpaperFiles.playback(preferences, screen, "idle");
-                  currentArrival = WallpaperFiles.playback(preferences, screen, "arrival");
-                  if (WallpaperFiles.isStatic(preferences, screen))
-                    currentIdle = currentArrival = false;
-                  changed |=
-                      state.update(
-                          mode, visible, currentIdle, currentArrival, saving, currentRevision, now);
-                } catch (Exception error) {
-                  report(error);
-                }
-              }
-              if (newArtwork || posterId == 0 || this.revision != currentRevision) {
-                loadPoster();
-                showVideo = false;
-                this.revision = currentRevision;
-              }
-              if (changed) applyStage();
-              else if (state.stage != PlaybackState.Stage.HIDDEN) draw();
+            WallpaperGallery gallery = new WallpaperGallery(context);
+            long wallTime = System.currentTimeMillis();
+            String selection = gallery.selectionContext(screen, wallTime);
+            if (selection.isEmpty()) {
+              shuffleBlank = false;
+              shuffleContext = "";
+            } else if (visible
+                && ((changed && state.selectionReveal) || !selection.equals(shuffleContext))) {
+              shuffleBlank = gallery.chooseForArrival(screen, screenEvent, now, wallTime) == null;
+              shuffleContext = selection;
             }
+            if (visible) {
+              long boundary = gallery.nextScheduleChange(screen, wallTime);
+              if (boundary != Long.MAX_VALUE) {
+                scheduleTick =
+                    new Runnable() {
+                      public void run() {
+                        if (closed || scheduleTick != this) return;
+                        configureOnThread(
+                            width,
+                            height,
+                            mode,
+                            visible,
+                            idle,
+                            arrival,
+                            saving,
+                            revision,
+                            screenEvent,
+                            android.os.SystemClock.elapsedRealtime());
+                      }
+                    };
+                handler.postDelayed(scheduleTick, Math.max(1, boundary - wallTime + 100));
+              }
+            }
+            currentRevision =
+                WallpaperFiles.revision(context.getSharedPreferences("wallpaper", 0), screen);
+            currentIdle = WallpaperFiles.playback(preferences, screen, "idle");
+            currentArrival = WallpaperFiles.playback(preferences, screen, "arrival");
+            if (WallpaperFiles.isStatic(preferences, screen)) currentIdle = currentArrival = false;
+            if (shuffleBlank) currentIdle = currentArrival = false;
+            changed |=
+                state.update(
+                    mode, visible, currentIdle, currentArrival, saving, currentRevision, now);
           } catch (Exception error) {
             report(error);
-            stopPlayer();
-            if (!initialized) close();
+            // A failed scheduled activation must not keep out-of-window artwork visible.
+            shuffleBlank = true;
+            shuffleContext = "";
+            changed |= state.update(mode, visible, false, false, saving, currentRevision, now);
           }
-        });
+        }
+        if (!shuffleBlank && (newArtwork || posterId == 0 || this.revision != currentRevision)) {
+          loadPoster();
+          showVideo = false;
+          this.revision = currentRevision;
+        }
+        if (changed) applyStage();
+        else if (state.stage != PlaybackState.Stage.HIDDEN) draw();
+      }
+    } catch (Exception error) {
+      report(error);
+      stopPlayer();
+      if (!initialized) close();
+    }
   }
 
   private long revision = -1;
+  private String shuffleContext = "";
+  private boolean shuffleBlank;
+  private Runnable scheduleTick;
 
   private void initialize() {
     display = acquireDisplay();
@@ -288,7 +344,9 @@ final class VideoRenderer {
 
   private void applyStageContents(boolean keepVideoFrame) {
     if ((state.stage == PlaybackState.Stage.ARRIVAL || state.stage == PlaybackState.Stage.IDLE)
-        && WallpaperFiles.isStatic(context.getSharedPreferences("wallpaper", 0), state.prefix())) {
+        && (shuffleBlank
+            || WallpaperFiles.isStatic(
+                context.getSharedPreferences("wallpaper", 0), state.prefix()))) {
       // Activation can precede a queued configure. Never fall back to sample
       // videos while an image-only entry is already selected.
       state.failed(state.generation);
@@ -424,7 +482,7 @@ final class VideoRenderer {
         || state.stage == PlaybackState.Stage.HIDDEN) return;
     boolean video = showVideo || heldFrame != null;
     boolean arrivalPoster = !video && state.stage == PlaybackState.Stage.ARRIVAL;
-    if (arrivalPoster && arrivalPosterId == 0) {
+    if (shuffleBlank || (arrivalPoster && arrivalPosterId == 0)) {
       // A corrupt/unavailable start image must not reveal the steady endpoint
       // before its transition. The video decoder may still recover normally.
       GLES20.glClearColor(0, 0, 0, 1);
@@ -587,6 +645,10 @@ final class VideoRenderer {
   }
 
   private void release() {
+    if (scheduleTick != null) {
+      handler.removeCallbacks(scheduleTick);
+      scheduleTick = null;
+    }
     try {
       try {
         stopPlayer();

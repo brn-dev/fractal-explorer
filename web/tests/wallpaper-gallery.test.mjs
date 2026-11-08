@@ -13,7 +13,7 @@ class Element extends EventTarget {
 }
 function setup({ pending = false, allowed = true } = {}) {
   const ids = ['wallpaper-gallery-screen', 'wallpaper-gallery-dialog', 'wallpaper-gallery-status', 'wallpaper-gallery-cards', 'export-dialog', 'open-wallpaper-gallery', 'wallpaper-gallery', 'wallpaper-gallery-new', 'wallpaper-gallery-set'];
-  const elements = Object.fromEntries([...ids,'wallpaper-gallery-shuffle','wallpaper-gallery-shuffle-options','wallpaper-gallery-shuffle-note'].map(id => [id, new Element(id)]));
+  const elements = Object.fromEntries([...ids,'wallpaper-gallery-shuffle','wallpaper-gallery-shuffle-options','wallpaper-gallery-shuffle-note','wallpaper-gallery-sun-note'].map(id => [id, new Element(id)]));
   const entries = [{id:'a',name:'A',bytes:2048,active:true,editable:true}, {id:'b',name:'<B>',bytes:4096,active:false,editable:false}];
   const calls = [], draft = {name:'A',states:{}};
   globalThis.window = new EventTarget(); window.fractalGalleryRequested = pending;
@@ -201,5 +201,40 @@ test('an enabled pool with unavailable entries can still be switched off',()=>{
     t.elements['open-wallpaper-gallery'].click();
     const toggle=t.elements['wallpaper-gallery-shuffle'];assert.equal(toggle.checked,true);assert.equal(toggle.disabled,false);
     toggle.checked=false;toggle.onchange();assert.deepEqual(pool,{enabled:false,ids:[]});
+  } finally {t.cleanup();}
+});
+
+test('shuffle rules default to weight one and any time, save separately by screen, and show Vienna times',()=>{
+  const t=setup();try {
+    const pools={cover:{enabled:false,ids:['a'],rules:{}},inner:{enabled:true,ids:['a'],rules:{}}},calls=[];
+    FractalNative.setWallpaperShuffle=()=>'{"ok":true}';
+    FractalNative.listWallpapers=()=>JSON.stringify({ok:true,wallpapers:t.entries,shuffle:pools,sun:{date:'2026-06-21',sunrise:Date.parse('2026-06-21T02:53Z'),sunset:Date.parse('2026-06-21T18:58Z'),daytime:true}});
+    FractalNative.setWallpaperShuffleRule=(screen,id,json)=>{pools[screen].rules[id]=JSON.parse(json);calls.push([screen,id]);return '{"ok":true}';};
+    setupWallpaperGallery({canOpen:()=>true,newWallpaper(){},editWallpaper(){},beforeOpen(){}});
+    t.elements['open-wallpaper-gallery'].click();
+    const fields=()=>t.content(0).children[6].children[0],weight=()=>fields().children[0].children[0],period=()=>fields().children[1].children[0];
+    assert.equal(weight().value,1);assert.equal(period().value,'any');assert.equal(t.content(1).children.length,6,'unselected entry has no rule controls');
+    assert.match(t.elements['wallpaper-gallery-sun-note'].textContent,/04:53.*20:58.*1 eligible now/);
+    weight().value='3';period().value='night';t.content(0).children[6].children[2].click();
+    assert.deepEqual(calls,[['inner','a']]);assert.deepEqual(pools.inner.rules.a,{weight:3,period:'night'});assert.deepEqual(pools.cover.rules,{});
+    assert.equal(weight().value,3);assert.match(t.elements['wallpaper-gallery-sun-note'].textContent,/0 eligible now/);
+    assert.equal(t.entries[0].active,true);assert.deepEqual(pools.inner.ids,['a']);
+    t.elements['wallpaper-gallery-screen'].value='cover';t.elements['wallpaper-gallery-screen'].onchange();
+    assert.equal(weight().value,1);assert.equal(period().value,'any');
+  } finally {t.cleanup();}
+});
+
+test('invalid or failed rule saves keep the last native rule and selection intact',()=>{
+  const t=setup();try {
+    let calls=0;
+    FractalNative.setWallpaperShuffle=()=>'{"ok":true}';
+    FractalNative.listWallpapers=()=>JSON.stringify({ok:true,wallpapers:t.entries,shuffle:{inner:{enabled:true,ids:['a'],rules:{a:{weight:2,period:'day'}}}}});
+    FractalNative.setWallpaperShuffleRule=()=>{calls++;return '{"ok":false,"error":"Storage full"}';};
+    setupWallpaperGallery({canOpen:()=>true,newWallpaper(){},editWallpaper(){},beforeOpen(){}});
+    t.elements['open-wallpaper-gallery'].click();
+    const form=()=>t.content(0).children[6],weight=()=>form().children[0].children[0].children[0];
+    weight().value='0';form().children[2].click();assert.equal(calls,0);assert.match(t.elements['wallpaper-gallery-status'].textContent,/between 0.1 and 100/);
+    weight().value='4';form().children[2].click();assert.equal(calls,1);assert.equal(weight().value,2);assert.equal(t.elements['wallpaper-gallery-status'].textContent,'Storage full');
+    assert.equal(t.entries[0].active,true);
   } finally {t.cleanup();}
 });
