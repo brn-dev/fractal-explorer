@@ -6,6 +6,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $workspace = Split-Path -Parent $PSScriptRoot
 $toolsRoot = Join-Path $workspace 'artifacts\android-tools'
+$jsonJar = Join-Path $toolsRoot 'json-20240303.jar'
+if (!(Test-Path -LiteralPath $jsonJar) -or (Get-FileHash -LiteralPath $jsonJar -Algorithm SHA256).Hash -ne '3CF6CD6892E32E2B4C1C39E0F52F5248A2F5B37646FDFBB79A66B46B618414ED') { throw 'Prepare the pinned host-test JSON runtime; see android/README.md.' }
 if (!$AndroidJar) { $AndroidJar = Join-Path $toolsRoot 'platform-36_r02\android-36\android.jar' }
 if (!$BuildTools) { $BuildTools = Join-Path $toolsRoot 'build-tools_r36_windows\android-16' }
 foreach ($path in @($AndroidJar, (Join-Path $BuildTools 'aapt2.exe'), (Join-Path $JavaHome 'bin\javac.exe'))) {
@@ -25,7 +27,7 @@ try { & npm.cmd run build; if ($LASTEXITCODE -ne 0) { throw 'Web explorer build 
 finally { Pop-Location }
 $webAssets = Join-Path $buildRoot 'web-assets\explorer'
 New-Item -ItemType Directory -Path $webAssets -Force | Out-Null
-Copy-Item -Path (Join-Path $workspace 'web\dist\*') -Destination $webAssets -Recurse
+Get-ChildItem -LiteralPath (Join-Path $workspace 'web\dist') | Where-Object Name -ne 'android-web' | Copy-Item -Destination $webAssets -Recurse
 foreach ($asset in @('cover-arrival.mp4','cover-idle.mp4','inner-arrival.mp4','inner-idle.mp4','cover-poster.png','inner-poster.png')) {
     if (!(Test-Path -LiteralPath (Join-Path $sourceRoot ('assets\' + $asset)))) { throw 'Render assets first: uv run python scripts/render_wallpaper.py' }
 }
@@ -83,4 +85,8 @@ Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplore
 Run-Tool $java @('-cp', "$buildRoot\tests", 'org.fractalexplorer.wallpaper.NativeWorkQueueTest')
 Run-Tool $javac @('-cp', "$buildRoot\classes;$AndroidJar", '-d', "$buildRoot\tests", "$PSScriptRoot\tests\GalleryPreferencesTest.java")
 Run-Tool $java @('-cp', "$buildRoot\tests;$buildRoot\classes;$AndroidJar", 'org.fractalexplorer.wallpaper.GalleryPreferencesTest')
+Run-Tool $javac @('-cp', $jsonJar, '-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplorer\wallpaper\WebAppUpdates.java", "$PSScriptRoot\tests\WebAppUpdatesTest.java")
+Run-Tool $java @('-cp', "$buildRoot\tests;$jsonJar", 'org.fractalexplorer.wallpaper.WebAppUpdatesTest', $buildRoot, (Join-Path $workspace 'web\dist'))
+Run-Tool $javac @('-cp', "$buildRoot\classes;$jsonJar;$AndroidJar", '-d', "$buildRoot\tests", "$PSScriptRoot\tests\ExplorerUpdatesBridgeTest.java")
+Run-Tool $java @('-cp', "$buildRoot\tests;$buildRoot\classes;$jsonJar;$AndroidJar", 'org.fractalexplorer.wallpaper.ExplorerUpdatesBridgeTest')
 Write-Output "APK ready: $apk"

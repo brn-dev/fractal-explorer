@@ -7,6 +7,7 @@ await copyFile(new URL('../../LICENSE', import.meta.url), resolve(root, 'license
 async function files(dir) {
   const found = [];
   for (const item of await readdir(dir, { withFileTypes: true })) {
+    if (dir === root && ['android-web', 'android-web-info.json'].includes(item.name)) continue;
     const path = resolve(dir, item.name);
     if (item.isDirectory()) found.push(...await files(path));
     else if (item.name !== 'sw.js') found.push(path);

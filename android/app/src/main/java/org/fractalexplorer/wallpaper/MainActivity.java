@@ -1,6 +1,7 @@
 package org.fractalexplorer.wallpaper;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Insets;
 import android.net.Uri;
@@ -27,6 +28,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import org.json.JSONObject;
 
 public final class MainActivity extends Activity implements ExplorerBridge.Host {
   private static final String ORIGIN = "appassets.androidplatform.net";
@@ -34,6 +36,10 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
   private static final int CHOOSE_FILE = 71, SAVE_FILE = 72;
   private WebView web;
   private ExplorerBridge bridge;
+  private static WebAppUpdates sharedUpdates;
+  private WebAppUpdates updates;
+  private volatile WebAppUpdates.Session webSession;
+  private AlertDialog updatesDialog;
   private ValueCallback<Uri[]> fileChooser;
   private File pendingSave;
   private boolean galleryRequested;
@@ -78,6 +84,11 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
     settings.setAllCaps(false);
     settings.setOnClickListener(view -> startActivity(new Intent(this, SettingsActivity.class)));
     toolbar.addView(settings, new LinearLayout.LayoutParams(0, -2, 1));
+    Button updateMenu = new Button(this);
+    updateMenu.setText("⋮");
+    updateMenu.setContentDescription("Explorer updates");
+    updateMenu.setOnClickListener(view -> showWebUpdates());
+    toolbar.addView(updateMenu, new LinearLayout.LayoutParams(-2, -2));
     root.addView(toolbar, new LinearLayout.LayoutParams(-1, -2));
     web = new WebView(this);
     root.addView(web, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -102,6 +113,15 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
     web.addJavascriptInterface(bridge, "FractalNative");
     web.setWebViewClient(
         new WebViewClient() {
+          @Override
+          public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
+            try {
+              bridge.webReloadStarted();
+            } catch (Exception error) {
+              android.util.Log.e("FractalUpdates", "Cannot resume explorer bridge", error);
+            }
+          }
+
           @Override
           public void onPageFinished(WebView view, String url) {
             if (galleryRequested) showGallery();
@@ -151,6 +171,26 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
             }
           }
         });
+    try {
+      synchronized (MainActivity.class) {
+        if (sharedUpdates == null) {
+          android.content.Context app = getApplicationContext();
+          int version =
+              (int) getPackageManager().getPackageInfo(getPackageName(), 0).getLongVersionCode();
+          sharedUpdates =
+              new WebAppUpdates(
+                  new File(app.getFilesDir(), "web-updates"),
+                  name -> app.getAssets().open("explorer/" + name),
+                  version,
+                  WebAppUpdates::fetch,
+                  java.util.concurrent.Executors.newSingleThreadExecutor());
+        }
+        updates = sharedUpdates;
+        webSession = updates.openSession();
+      }
+    } catch (Exception error) {
+      android.util.Log.e("FractalUpdates", "Using APK explorer", error);
+    }
     web.loadUrl(HOME);
     for (Map.Entry<String, ?> job : getSharedPreferences("export-copies", 0).getAll().entrySet()) {
       if (job.getKey().matches("[a-f0-9]{32}\\.(download|mp4)") && job.getValue() instanceof String)
@@ -211,7 +251,14 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
               + " style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; connect-src 'self';"
               + " frame-src 'none'; object-src 'none'; base-uri 'self'");
       return new WebResourceResponse(
-          mime, "UTF-8", 200, "OK", headers, getApplicationContext().getAssets().open(path));
+          mime,
+          "UTF-8",
+          200,
+          "OK",
+          headers,
+          webSession == null
+              ? getApplicationContext().getAssets().open(path)
+              : webSession.open(path.substring("explorer/".length())));
     } catch (Exception error) {
       if (local(uri)) android.util.Log.e("FractalAssets", "Cannot load " + uri, error);
       return new WebResourceResponse(
@@ -223,6 +270,125 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
           new ByteArrayInputStream(
               "Bundled resource unavailable".getBytes(StandardCharsets.UTF_8)));
     }
+  }
+
+  @Override
+  public JSONObject webUpdates(String action, String version) throws Exception {
+    if (isDestroyed()) throw new java.io.IOException("The explorer is closed.");
+    if (updates == null || webSession == null)
+      throw new java.io.IOException(
+          "Web updates are unavailable; the bundled explorer still works offline.");
+    if ("check".equals(action)) updates.check(true);
+    else if ("auto".equals(action)) updates.check(false);
+    else if ("confirm".equals(action)) updates.confirm(webSession, version);
+    else if ("apply".equals(action)) runOnUiThread(() -> reloadWeb(false, true));
+    return updates.status(webSession);
+  }
+
+  private void reloadWeb(boolean bundled, boolean prepared) {
+    if (isDestroyed()) return;
+    try {
+      if (!prepared) bridge.prepareWebReload();
+      web.stopLoading();
+      WebAppUpdates.Session next =
+          bundled ? updates.restoreBundled(webSession) : updates.activate(webSession);
+      webSession = next;
+      web.clearCache(true);
+      web.loadUrl(HOME);
+    } catch (Exception error) {
+      try {
+        bridge.webReloadStarted();
+      } catch (Exception ignored) {
+      }
+      Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();
+    }
+  }
+
+  private void showWebUpdates() {
+    if (updatesDialog != null && updatesDialog.isShowing()) return;
+    if (updates == null || webSession == null) {
+      Toast.makeText(
+              this,
+              "The bundled explorer is available offline. Web updates are unavailable.",
+              Toast.LENGTH_LONG)
+          .show();
+      return;
+    }
+    AlertDialog dialog =
+        new AlertDialog.Builder(this)
+            .setTitle("Explorer updates")
+            .setMessage("Available offline.")
+            .setPositiveButton("Reload update", (d, w) -> requestWebReload())
+            .setNegativeButton("Restore bundled", (d, w) -> reloadWeb(true, false))
+            .setNeutralButton("Check", null)
+            .create();
+    updatesDialog = dialog;
+    android.os.Handler handler = new android.os.Handler(getMainLooper());
+    Runnable refresh =
+        new Runnable() {
+          @Override
+          public void run() {
+            if (!dialog.isShowing()) return;
+            try {
+              JSONObject status = updates.status(webSession);
+              String message =
+                  status.getBoolean("checking")
+                      ? "Checking and downloading web updates…"
+                      : status.getBoolean("available")
+                          ? "A web update is ready to reload. Saved wallpapers stay on your phone."
+                          : status.getInt("requiresApk") > 0
+                              ? "The latest explorer needs a newer Android APK."
+                              : status.optString("error").isEmpty()
+                                  ? "Your explorer is available offline."
+                                  : status.getString("error");
+              dialog.setMessage(
+                  message
+                      + "\n\nExplorer "
+                      + status.getString("version").substring(0, 12)
+                      + (status.getBoolean("bundled") ? " · bundled" : " · updated"));
+              dialog
+                  .getButton(AlertDialog.BUTTON_POSITIVE)
+                  .setEnabled(status.getBoolean("available"));
+            } catch (Exception error) {
+              dialog.setMessage(error.getMessage());
+            }
+            handler.postDelayed(this, 500);
+          }
+        };
+    dialog.setOnShowListener(
+        d -> {
+          dialog
+              .getButton(AlertDialog.BUTTON_NEUTRAL)
+              .setOnClickListener(
+                  v -> {
+                    try {
+                      updates.check(true);
+                    } catch (Exception error) {
+                      dialog.setMessage(error.getMessage());
+                    }
+                  });
+          refresh.run();
+        });
+    dialog.setOnDismissListener(
+        d -> {
+          handler.removeCallbacks(refresh);
+          if (updatesDialog == dialog) updatesDialog = null;
+        });
+    dialog.show();
+  }
+
+  private void requestWebReload() {
+    web.evaluateJavascript(
+        "!!document.querySelector('dialog[open]')||!!(document.getElementById('wallpaper-editing')&&!document.getElementById('wallpaper-editing').hidden)",
+        busy -> {
+          if ("true".equals(busy))
+            Toast.makeText(
+                    this,
+                    "Finish editing or close the open dialog before updating.",
+                    Toast.LENGTH_LONG)
+                .show();
+          else reloadWeb(false, false);
+        });
   }
 
   @Override
@@ -426,13 +592,21 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
   }
 
   @Override
+  protected void onStop() {
+    if (updatesDialog != null) updatesDialog.dismiss();
+    super.onStop();
+  }
+
+  @Override
   protected void onDestroy() {
+    if (updatesDialog != null) updatesDialog.dismiss();
     if (fileChooser != null) fileChooser.onReceiveValue(null);
     if (web != null) {
       web.removeJavascriptInterface("FractalNative");
       web.destroy();
     }
     if (bridge != null) bridge.close();
+    if (webSession != null) webSession.close();
     super.onDestroy();
   }
 }

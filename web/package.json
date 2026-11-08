@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 8766 --strictPort",
-    "build": "vite build && node scripts/offline.mjs",
+    "build": "vite build && node scripts/offline.mjs && node scripts/android-web-bundle.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 8766 --strictPort",
     "pretest": "npm run build",
     "test": "node --test tests/*.test.mjs",

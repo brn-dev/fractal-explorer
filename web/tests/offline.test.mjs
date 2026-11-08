@@ -25,6 +25,7 @@ test('offline installation bypasses stale HTTP caches for the entire bundle',asy
   assert.ok(r.installed.length>6);assert.ok(r.installed.every(request=>request.cache==='reload'));
   assert.ok(r.installed.some(request=>request.url.endsWith('/fractal/')));
   assert.ok(r.installed.some(request=>request.url.includes('/assets/worker-')));
+  assert.ok(r.installed.every(request=>!request.url.includes('/android-web/')&&!request.url.endsWith('/android-web-info.json')),'native release archives are not browser offline-cache assets');
 });
 test('offline document navigation preserves query parameters while loading the cached shell',async()=>{
   const r=runtime(), expected=new Response('cached application shell');r.contents.set('https://example.com/fractal/',expected);

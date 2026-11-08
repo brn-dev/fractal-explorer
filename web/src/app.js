@@ -1405,6 +1405,8 @@ async function init() {
     setRenderIndicator('error', 'Browser renderer could not start');
   }
 }
-init();
-
-if (import.meta.env.PROD) void setupAppUpdates({ saveSession });
+const startup = init();
+if (import.meta.env.PROD) void startup.then(() => setupAppUpdates({ saveSession,
+  canReload: () => !$('wallpaper-editing').hidden ? 'Save your scene or return to the overview before updating.'
+    : document.querySelector('dialog[open]') ? 'Close the open dialog before updating. Finish or cancel any export first.' : true,
+}));

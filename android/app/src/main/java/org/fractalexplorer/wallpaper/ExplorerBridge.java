@@ -13,12 +13,16 @@ import java.util.concurrent.Callable;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Available only to the bundled explorer; encoding stays on one EGL thread. */
+/** Available only to the locally served explorer; encoding stays on one EGL thread. */
 final class ExplorerBridge {
   interface Host {
     void saveFile(File file, String name);
 
     void wallpaperPicker();
+
+    default JSONObject webUpdates(String action, String version) throws Exception {
+      throw new IOException("Web updates require a newer Android app.");
+    }
 
     default void shareText(String text) throws Exception {
       throw new IOException("Sharing is unavailable. Use Copy PC link instead.");
@@ -34,6 +38,7 @@ final class ExplorerBridge {
   private NativeVideoEncoder encoder;
   private String encoderId, encoderSlot;
   private File encoderFile, pack;
+  private boolean webReloading;
 
   ExplorerBridge(android.content.Context context, Host host) {
     this.context = context.getApplicationContext();
@@ -43,10 +48,22 @@ final class ExplorerBridge {
   }
 
   private String call(Callable<JSONObject> action) {
+    return call(action, false);
+  }
+
+  private String call(Callable<JSONObject> action, boolean duringReload) {
     try {
       // Await the actual outcome. A caller-side timeout could report failure while
       // a queued publication still proceeds; codec operations bound their own waits.
-      return worker.call(action).put("ok", true).toString();
+      return worker
+          .call(
+              () -> {
+                if (webReloading && !duringReload)
+                  throw new IOException("The explorer is reloading. Try again shortly.");
+                return action.call();
+              })
+          .put("ok", true)
+          .toString();
     } catch (Exception error) {
       Throwable cause = error.getCause() == null ? error : error.getCause();
       try {
@@ -84,6 +101,51 @@ final class ExplorerBridge {
   @JavascriptInterface
   public String info() {
     return "{\"ok\":true,\"version\":2,\"nativeVideo\":true,\"maxEdge\":4096,\"dynamicQuality\":true}";
+  }
+
+  @JavascriptInterface
+  public String webUpdates(String action, String version) {
+    return call(
+        () -> {
+          if ("apply".equals(action)) {
+            freezeWebReload();
+            try {
+              return host.webUpdates(action, version);
+            } catch (Exception error) {
+              webReloading = false;
+              throw error;
+            }
+          }
+          if (!"status".equals(action)
+              && !"check".equals(action)
+              && !"auto".equals(action)
+              && !"confirm".equals(action)) throw new IOException("Invalid web update action");
+          return host.webUpdates(action, version);
+        },
+        true);
+  }
+
+  private void freezeWebReload() throws IOException {
+    if (webReloading) throw new IOException("The explorer is already reloading.");
+    if (encoder != null || pack != null)
+      throw new IOException("Finish or cancel the current export before updating.");
+    webReloading = true;
+  }
+
+  void prepareWebReload() throws Exception {
+    worker.call(
+        () -> {
+          freezeWebReload();
+          return null;
+        });
+  }
+
+  void webReloadStarted() throws Exception {
+    worker.call(
+        () -> {
+          webReloading = false;
+          return null;
+        });
   }
 
   @JavascriptInterface

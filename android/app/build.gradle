@@ -9,8 +9,8 @@ android {
         applicationId 'org.fractalexplorer.wallpaper'
         minSdk 30
         targetSdk 36
-        versionCode 21
-        versionName '0.11.0'
+        versionCode 22
+        versionName '0.12.0'
     }
     androidResources { noCompress += ['mp4', 'png'] }
     signingConfigs {
@@ -41,6 +41,7 @@ tasks.register('buildExplorer', Exec) {
 tasks.register('bundleExplorer', Sync) {
     dependsOn 'buildExplorer'
     from new File(webRoot, 'dist')
+    exclude 'android-web/**'
     into layout.buildDirectory.dir('generated/explorerAssets/explorer')
 }
 android.sourceSets.main.assets.srcDir layout.buildDirectory.dir('generated/explorerAssets')
