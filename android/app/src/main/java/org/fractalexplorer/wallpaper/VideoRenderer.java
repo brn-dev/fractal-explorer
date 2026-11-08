@@ -53,6 +53,25 @@ final class VideoRenderer {
   private SurfaceTexture videoTexture;
   private SurfaceTexture.OnFrameAvailableListener videoFrameListener;
   private Surface videoSurface;
+  private HeldFrame heldFrame;
+
+  private static final class HeldFrame {
+    final SurfaceTexture texture;
+    final Surface surface;
+    final int id, width, height;
+    final float[] matrix;
+
+    HeldFrame(
+        SurfaceTexture texture, Surface surface, int id, int width, int height, float[] matrix) {
+      this.texture = texture;
+      this.surface = surface;
+      this.id = id;
+      this.width = width;
+      this.height = height;
+      this.matrix = matrix.clone();
+    }
+  }
+
   private MediaPlayer player;
   private int videoProgram, posterProgram, posterId, videoId;
   private int width, height, videoWidth = 1, videoHeight = 1, posterWidth = 1, posterHeight = 1;
@@ -225,6 +244,7 @@ final class VideoRenderer {
             texture.getTransformMatrix(videoMatrix);
             showVideo = true;
             draw();
+            releaseHeldFrame();
           } catch (RuntimeException error) {
             state.failed(state.generation);
             stopPlayer();
@@ -236,8 +256,12 @@ final class VideoRenderer {
   }
 
   private void applyStage() {
+    applyStage(false);
+  }
+
+  private void applyStage(boolean keepVideoFrame) {
     try {
-      applyStageContents();
+      applyStageContents(keepVideoFrame);
     } catch (Exception error) {
       // Completion/error listeners run directly on the renderer thread. A lost
       // surface during handoff must not escape and kill that thread/process.
@@ -251,8 +275,8 @@ final class VideoRenderer {
     }
   }
 
-  private void applyStageContents() {
-    stopPlayer();
+  private void applyStageContents(boolean keepVideoFrame) {
+    stopPlayer(keepVideoFrame && state.stage == PlaybackState.Stage.IDLE);
     if (state.stage == PlaybackState.Stage.HIDDEN) return;
     draw();
     if (state.stage == PlaybackState.Stage.STILL) return;
@@ -297,7 +321,7 @@ final class VideoRenderer {
           });
       current.setOnCompletionListener(
           mp -> {
-            if (!closed && player == mp && state.completed(token)) applyStage();
+            if (!closed && player == mp && state.completed(token)) applyStage(true);
           });
       current.setOnErrorListener(
           (mp, what, extra) -> {
@@ -340,9 +364,10 @@ final class VideoRenderer {
         || width <= 0
         || height <= 0
         || state.stage == PlaybackState.Stage.HIDDEN) return;
-    int selected = showVideo ? videoProgram : posterProgram;
-    int imageWidth = showVideo ? videoWidth : posterWidth,
-        imageHeight = showVideo ? videoHeight : posterHeight;
+    boolean video = showVideo || heldFrame != null;
+    int selected = video ? videoProgram : posterProgram;
+    int imageWidth = showVideo ? videoWidth : heldFrame != null ? heldFrame.width : posterWidth,
+        imageHeight = showVideo ? videoHeight : heldFrame != null ? heldFrame.height : posterHeight;
     float ratio = (imageWidth / (float) imageHeight) / (width / (float) height);
     GLES20.glViewport(0, 0, width, height);
     GLES20.glUseProgram(selected);
@@ -360,12 +385,12 @@ final class VideoRenderer {
         GLES20.glGetUniformLocation(selected, "uMatrix"),
         1,
         false,
-        showVideo ? videoMatrix : posterMatrix,
+        showVideo ? videoMatrix : heldFrame != null ? heldFrame.matrix : posterMatrix,
         0);
     GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
     GLES20.glBindTexture(
-        showVideo ? GLES11Ext.GL_TEXTURE_EXTERNAL_OES : GLES20.GL_TEXTURE_2D,
-        showVideo ? videoId : posterId);
+        video ? GLES11Ext.GL_TEXTURE_EXTERNAL_OES : GLES20.GL_TEXTURE_2D,
+        showVideo ? videoId : heldFrame != null ? heldFrame.id : posterId);
     GLES20.glUniform1i(GLES20.glGetUniformLocation(selected, "uTexture"), 0);
     GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     if (!EGL14.eglSwapBuffers(display, eglSurface))
@@ -373,6 +398,36 @@ final class VideoRenderer {
   }
 
   private void stopPlayer() {
+    stopPlayer(false);
+  }
+
+  private void stopPlayer(boolean keepVideoFrame) {
+    releaseHeldFrame();
+    if (keepVideoFrame
+        && showVideo
+        && videoTexture != null
+        && videoSurface != null
+        && videoId != 0) {
+      try {
+        // Latch any final frame queued ahead of completion, then keep its
+        // consumer texture alive while the next decoder prepares. This avoids
+        // video -> lossless poster -> video sharpness changes at the handoff.
+        videoTexture.updateTexImage();
+        videoTexture.getTransformMatrix(videoMatrix);
+        videoTexture.setOnFrameAvailableListener(null, handler);
+        heldFrame =
+            new HeldFrame(
+                videoTexture, videoSurface, videoId, videoWidth, videoHeight, videoMatrix);
+        videoTexture = null;
+        videoSurface = null;
+        videoFrameListener = null;
+        videoId = 0;
+      } catch (RuntimeException error) {
+        // A vendor may invalidate the last image at EOS. Retain the ordinary
+        // poster fallback rather than preventing the next clip from playing.
+        report(error);
+      }
+    }
     showVideo = false;
     MediaPlayer previous = player;
     player = null;
@@ -394,6 +449,21 @@ final class VideoRenderer {
     if (videoId != 0) {
       GLES20.glDeleteTextures(1, new int[] {videoId}, 0);
       videoId = 0;
+    }
+  }
+
+  private void releaseHeldFrame() {
+    HeldFrame previous = heldFrame;
+    heldFrame = null;
+    if (previous == null) return;
+    try {
+      previous.surface.release();
+    } finally {
+      try {
+        previous.texture.release();
+      } finally {
+        GLES20.glDeleteTextures(1, new int[] {previous.id}, 0);
+      }
     }
   }
 
