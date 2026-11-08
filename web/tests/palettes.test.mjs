@@ -57,8 +57,8 @@ test('custom palette share links round-trip independently of the number of built
 
 test('the expanded preset list preserves original palette indices and all colors can render', async () => {
   const palettes = JSON.parse(await readFile(new URL('../public/palettes.json', import.meta.url)));
-  assert.deepEqual(palettes.slice(0, 6).map(p => p.name), ['Ember & ice', 'Lunar moss', 'Electric dusk', 'Solar flare', 'Oceanic', 'Monochrome']);
-  assert.equal(palettes.length, 12);
+  assert.deepEqual(palettes.slice(0, 12).map(p => p.name), ['Ember & ice', 'Lunar moss', 'Electric dusk', 'Solar flare', 'Oceanic', 'Monochrome', 'Aurora', 'Candy nebula', 'Abyssal glow', 'Desert bloom', 'Rose quartz', 'Prism']);
+  assert.equal(palettes.length, 20);
   assert.equal(new Set(palettes.map(p => p.name)).size, palettes.length);
   for (const preset of palettes) {
     assert.ok(preset.colors.length >= 2);
