@@ -46,6 +46,19 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
         status.textContent = `${entry.name} selected for ${screenLabel.toLowerCase()}. The other screen is unchanged. Use Set up if Samsung still shows a different wallpaper.`;
       }); apply.disabled = active && !pool.enabled;
       const edit = button('Edit design', () => editWallpaper(nativeCall('wallpaperDraft', entry.id).draft, screen)); edit.disabled = !entry.editable;
+      const duplicate = button('Duplicate & edit', () => {
+        const next = structuredClone(nativeCall('wallpaperDraft', entry.id).draft);
+        const names = new Set(wallpapers.filter(item => !item.screen || item.screen === screen).map(item => item.name));
+        const base = entry.name || next.name || 'My fractal wallpaper';
+        for (let number = 1; ; number++) {
+          const suffix = number === 1 ? ' (copy)' : ` (copy ${number})`;
+          next.name = base.slice(0, 80 - suffix.length).trimEnd() + suffix;
+          if (!names.has(next.name)) break;
+        }
+        editWallpaper(next, screen, { copyOf: entry.name });
+      });
+      duplicate.disabled = !entry.editable;
+      duplicate.title = entry.editable ? 'Open an editable copy. Create the wallpaper to save it as a new gallery entry.' : 'This imported wallpaper has no editable fractal design.';
       const renameForm = document.createElement('form'); renameForm.className = 'wallpaper-gallery-rename'; renameForm.hidden = true;
       const label = document.createElement('label'); label.className = 'field-label'; label.textContent = 'Wallpaper name';
       const name = document.createElement('input'); name.value = entry.name; name.maxLength = 80; name.required = true; label.append(name);
@@ -63,7 +76,7 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
       const inShuffle = Object.values(pools).some(pool => pool.enabled && pool.ids.includes(entry.id));
       const remove = button('Delete', () => { confirm.hidden = false; }); remove.disabled = entry.active || inShuffle;
       remove.title = entry.active ? 'Select another wallpaper on every screen using this design before deleting it.' : inShuffle ? 'Remove this design from shuffle before deleting it.' : '';
-      actions.append(apply, edit, rename, remove); content.append(heading, detail, actions, renameForm, confirm); card.append(image, content); container.append(card);
+      actions.append(apply, edit, duplicate, rename, remove); content.append(heading, detail, actions, renameForm, confirm); card.append(image, content); container.append(card);
       if (shuffleSupported) {
         const label = document.createElement('label'); label.className = 'field-label';
         const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = pool.ids.includes(entry.id);

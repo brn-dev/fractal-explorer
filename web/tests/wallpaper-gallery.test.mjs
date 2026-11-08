@@ -28,7 +28,7 @@ function setup({ pending = false, allowed = true } = {}) {
     deleteWallpaper(id) { calls.push(['delete',id]); entries.splice(entries.findIndex(e=>e.id===id),1); return reply(); },
     openWallpaperPicker() { calls.push(['picker']); return reply(); },
   };
-  setupWallpaperGallery({canOpen:()=>allowed,newWallpaper:screen=>calls.push(['new',screen]),editWallpaper:(value,screen)=>calls.push(['edit',value,screen]),beforeOpen:()=>calls.push(['before'])});
+  setupWallpaperGallery({canOpen:()=>allowed,newWallpaper:screen=>calls.push(['new',screen]),editWallpaper:(value,screen,options)=>calls.push(options?['edit',value,screen,options]:['edit',value,screen]),beforeOpen:()=>calls.push(['before'])});
   const cards = () => elements['wallpaper-gallery-cards'].children;
   const content = i => cards()[i].children[1];
   const actions = i => content(i).children[2].children;
@@ -38,7 +38,7 @@ function setup({ pending = false, allowed = true } = {}) {
 test('gallery applies saved videos without requesting a render and protects the active entry',()=>{
   const t = setup(); try {
     t.elements['open-wallpaper-gallery'].click();
-    assert.equal(t.cards().length,2); assert.equal(t.actions(0)[0].disabled,true); assert.equal(t.actions(0)[3].disabled,true);
+    assert.equal(t.cards().length,2); assert.equal(t.actions(0)[0].disabled,true); assert.equal(t.actions(0)[4].disabled,true);
     assert.equal(t.content(1).children[0].textContent,'<B>');
     assert.equal(t.actions(1)[1].disabled,true);
     t.actions(1)[0].click();
@@ -61,17 +61,45 @@ test('gallery labels raw and editable static images and applies them alongside a
     t.actions(1)[1].click();assert.deepEqual(t.calls.at(-1),['edit',t.draft,'inner']);
   } finally {t.cleanup();}
 });
+
+test('duplicate opens a detached named variation without changing native entries or the current selection',()=>{
+  const t=setup();try {
+    t.draft.states={steady:{colors:{definition:{colors:['#000000','#ffffff']}}}};
+    t.entries.push({id:'c',name:'A (copy)',screen:'inner',editable:true,bytes:123});
+    t.entries.push({id:'d',name:'A (copy 2)',screen:'cover',editable:true,bytes:123});
+    const saved=structuredClone(t.draft),entries=structuredClone(t.entries);
+    t.elements['open-wallpaper-gallery'].click();t.actions(0)[2].click();
+    const [action,next,screen,options]=t.calls.at(-1);
+    assert.equal(action,'edit');assert.equal(screen,'inner');assert.deepEqual(options,{copyOf:'A'});
+    assert.equal(next.name,'A (copy 2)');assert.deepEqual(next.states,saved.states);
+    next.states.steady.colors.definition.colors[1]='#112233';
+    assert.deepEqual(t.draft,saved);assert.deepEqual(t.entries,entries);
+    assert.deepEqual(t.calls.map(c=>c[0]),['before','draft','edit']);
+    assert.equal(t.actions(1)[2].disabled,true,'pixel/video-only imports have no design to modify');
+  } finally {t.cleanup();}
+});
+
+test('duplicate uses the current gallery name within the name limit, and read failures preserve the gallery',()=>{
+  const t=setup();try {
+    t.entries[0].name='Renamed '+ 'a'.repeat(72);
+    t.elements['open-wallpaper-gallery'].click();t.actions(0)[2].click();
+    const next=t.calls.at(-1)[1];assert.equal(next.name.length,80);assert.ok(next.name.endsWith(' (copy)'));assert.ok(next.name.startsWith('Renamed '));
+    FractalNative.wallpaperDraft=()=>'{"ok":false,"error":"Cannot read saved design"}';
+    t.actions(0)[2].click();assert.equal(t.elements['wallpaper-gallery-status'].textContent,'Cannot read saved design');
+    assert.equal(t.entries[0].active,true);assert.equal(t.cards().length,2);
+  } finally {t.cleanup();}
+});
 test('gallery renames safely, restores editable designs, and requires explicit deletion',()=>{
   const t = setup(); try {
     t.elements['open-wallpaper-gallery'].click(); t.actions(0)[1].click();
     assert.deepEqual(t.calls.at(-1),['edit',t.draft,'inner']);
-    t.actions(1)[2].click(); const rename = t.content(1).children[3];
+    t.actions(1)[3].click(); const rename = t.content(1).children[3];
     assert.equal(rename.hidden,false); rename.children[0].children[0].value = 'Renamed'; rename.children[1].click();
     assert.equal(t.content(1).children[0].textContent,'Renamed');
-    t.actions(1)[3].click(); const confirm = t.content(1).children[4];
+    t.actions(1)[4].click(); const confirm = t.content(1).children[4];
     assert.equal(confirm.hidden,false); assert.equal(t.entries.length,2);
     confirm.children[2].click(); assert.equal(confirm.hidden,true); assert.equal(t.entries.length,2);
-    t.actions(1)[3].click(); confirm.children[1].click();
+    t.actions(1)[4].click(); confirm.children[1].click();
     assert.equal(t.entries.length,1); assert.equal(t.entries[0].id,'a');
   } finally {t.cleanup();}
 });
@@ -111,7 +139,7 @@ test('gallery selects each screen separately and protects a combined design stil
     FractalNative.applyWallpaperScreen=(id,screen)=>{selected[screen]=id;return '{"ok":true}';};
     t.elements['open-wallpaper-gallery'].click();assert.equal(t.cards().length,2);
     t.actions(1)[0].click();assert.deepEqual(selected,{cover:'a',inner:'b'});
-    assert.equal(t.actions(0)[3].disabled,true,'a is still used by cover');
+    assert.equal(t.actions(0)[4].disabled,true,'a is still used by cover');
     t.elements['wallpaper-gallery-screen'].value='cover';t.elements['wallpaper-gallery-screen'].onchange();
     assert.equal(t.cards().length,3);assert.equal(t.actions(0)[0].disabled,true);
     t.actions(2)[0].click();assert.deepEqual(selected,{cover:'c',inner:'b'});
@@ -140,7 +168,7 @@ test('shuffle membership and enablement are independent per screen, and Use only
     assert.deepEqual(pools.inner,{enabled:false,ids:['a','b']});
     const toggle=t.elements['wallpaper-gallery-shuffle'];toggle.checked=true;toggle.onchange();
     assert.equal(pools.inner.enabled,true);assert.equal(t.actions(0)[0].disabled,false);
-    assert.equal(t.actions(0)[0].textContent,'Use only this');assert.equal(t.actions(1)[3].disabled,true);
+    assert.equal(t.actions(0)[0].textContent,'Use only this');assert.equal(t.actions(1)[4].disabled,true);
     t.elements['wallpaper-gallery-screen'].value='cover';t.elements['wallpaper-gallery-screen'].onchange();
     assert.equal(toggle.checked,false);assert.equal(toggle.disabled,true);assert.equal(member(0).checked,false);
     member(1).checked=true;member(1).onchange();toggle.checked=true;toggle.onchange();

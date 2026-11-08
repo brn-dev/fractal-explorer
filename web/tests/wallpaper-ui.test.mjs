@@ -440,6 +440,40 @@ test('gallery editing extracts the selected screen from a combined design withou
   } finally {await close(elements);delete globalThis.FractalNative;}
 });
 
+test('duplicate protects the working draft until confirmation and creates a separate static/animated variation',async()=>{
+  for(const [screen,kind] of [['cover','animated'],['inner','static']]) {
+    const saved=defaultWallpaperDraft(wallpaperSnapshot(state,palettes));saved.name='Original';saved.kind=kind;
+    saved.transitions={'open-transition':{seconds:.5,easing:'linear'},'closed-transition':{seconds:.5,easing:'ease-out'}};saved.idleSeconds=2;saved.idleFps=10;saved.longest=480;
+    const original=structuredClone(saved),calls=[],committed=[];
+    globalThis.window=new EventTarget();
+    globalThis.FractalNative={info:()=>'{"ok":true,"staticWallpapers":true}',
+      listWallpapers:()=>JSON.stringify({ok:true,wallpapers:[{id:'original',name:saved.name,kind,bytes:123,active:true,editable:true}]}),
+      wallpaperDraft:()=>JSON.stringify({ok:true,draft:saved}),
+      beginPack(){calls.push('begin');return '{"ok":true}';},putPoster(){calls.push('poster');return '{"ok":true}';},
+      commitPack(json){committed.push(JSON.parse(json));calls.push('commit');return '{"ok":true}';},
+    };
+    const {elements,api}=setup();
+    try {
+      elements['open-wallpaper-export'].click();await flush();const working=structuredClone(api.draft());
+      elements['wallpaper-gallery'].click();elements['wallpaper-gallery-screen'].value=screen;elements['wallpaper-gallery-screen'].onchange();
+      const duplicate=()=>elements['wallpaper-gallery-cards'].children[0].children[1].children[2].children[2].click();
+      duplicate();assert.equal(elements['wallpaper-replace-dialog'].open,true);assert.deepEqual(api.draft(),working);
+      elements['wallpaper-replace-dialog'].close();await flush();assert.deepEqual(api.draft(),working);assert.deepEqual(calls,[]);
+      duplicate();elements['wallpaper-replace-continue'].click();await flush();
+      assert.equal(api.draft().screen,screen);assert.equal(api.draft().kind,kind);assert.equal(api.draft().name,'Original (copy)');
+      const prefix=screen==='cover'?'closed':'open';assert.equal(Object.keys(api.draft().states).length,2);
+      assert.deepEqual(api.draft().states[`${prefix}-steady`],saved.states[`${prefix}-steady`]);
+      assert.equal(api.draft().transitions[`${prefix}-transition`].easing,screen==='cover'?'ease-out':'linear');
+      assert.equal(elements['wallpaper-apply'].hidden,true);assert.match(elements['wallpaper-status'].textContent,/Editing a copy.*original is kept/);assert.deepEqual(calls,[]);
+      api.draft().states[`${prefix}-steady`].colors.definition.colors=['#010203','#203040','#010203'];
+      await elements['wallpaper-create'].onclick();
+      assert.equal(committed.length,1);assert.equal(committed[0].screen,screen);assert.equal(committed[0].editor.name,'Original (copy)');
+      assert.deepEqual(committed[0].editor.states[`${prefix}-steady`].colors.definition.colors,['#010203','#203040','#010203']);
+      assert.deepEqual(saved,original,'the saved source is retained after editing/rendering its copy');
+    } finally {await close(elements);delete globalThis.FractalNative;}
+  }
+});
+
 test('cover and main drafts retain separate names, timing, colors and scenes across switches and reload',async()=>{
   const oldStorage=globalThis.localStorage, values=new Map();
   globalThis.localStorage={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)};

@@ -574,14 +574,14 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
   }
   $('wallpaper-create').onclick = () => createWallpaper();
   $('wallpaper-download-image').onclick = () => createWallpaper(true);
-  function replaceWorkingDraft(next, { isCurrent = () => true, fromLink = false } = {}) {
+  function replaceWorkingDraft(next, { isCurrent = () => true, fromLink = false, message = '' } = {}) {
     designPlan(next); wallpaperJSON(next);
     const replace = () => {
       pendingHandoff = null;
       if (!isCurrent()) return;
-      draft = structuredClone(next); draft.resolutionVersion = 1; save(); finishEditing(); selected = wallpaperSlots(draft)[0].key;
+      draft = structuredClone(next); draft.resolutionVersion = 1; renderedDraft = null; save(); finishEditing(); selected = wallpaperSlots(draft)[0].key;
       $('wallpaper-editing').hidden = true; $('wallpaper-apply').hidden = true;
-      $('wallpaper-status').textContent = ''; $('wallpaper-gallery-dialog').close(); open();
+      $('wallpaper-status').textContent = message; $('wallpaper-gallery-dialog').close(); open();
     };
     if (!draft) { replace(); return; }
     const confirm = $('wallpaper-replace-dialog');
@@ -597,7 +597,9 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     },
     beforeOpen: stopPreview,
     newWallpaper: target => replaceWorkingDraft(newWorkingDraft(target)),
-    editWallpaper: (next, target) => replaceWorkingDraft(wallpaperScreenDraft(next, target)),
+    editWallpaper: (next, target, { copyOf } = {}) => replaceWorkingDraft(wallpaperScreenDraft(next, target), {
+      message: copyOf === undefined ? '' : `Editing a copy of “${copyOf}”. Change its scenes or palette, then Create the wallpaper to save a separate gallery entry. Your original is kept.`,
+    }),
   });
   globalThis.window?.addEventListener('hashchange', () => {
     if (pendingHandoff && !pendingHandoff()) { pendingHandoff = null; $('wallpaper-replace-dialog').close(); }
