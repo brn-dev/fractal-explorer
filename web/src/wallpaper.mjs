@@ -23,6 +23,11 @@ export const wallpaperStates = [
   { key: 'open-steady', title: 'Open', description: 'A repeating loop for the large inner screen.', file: 'inner-idle.mp4', screen: 'inner' },
 ];
 export const wallpaperScreenName = screen => screen === 'cover' ? 'Cover screen' : 'Main screen';
+export function wallpaperKind(draft) {
+  const kind = draft.kind ?? 'animated';
+  if (!['animated', 'static'].includes(kind)) throw new Error('Choose an animated or static wallpaper.');
+  return kind;
+}
 // Portrait pixel dimensions: Samsung SM-F976B (Galaxy Z Fold8 Ultra).
 export const wallpaperDisplayProfiles = {
   'fold8-ultra': { name: 'Samsung Galaxy Z Fold8 Ultra', screens: {
@@ -47,6 +52,7 @@ export function wallpaperScreenDraft(draft, screen) {
   return next;
 }
 export function wallpaperColorCycle(draft) {
+  if (wallpaperKind(draft) === 'static') return { enabled: false, seconds: 1, cycles: 0 };
   if (!draft.screen) return null;
   const steady = draft.states[wallpaperSlots(draft).find(slot => !slot.transition).key];
   const seconds = draft.colorSeconds ?? 1 / (steady.speed || .12);
@@ -198,10 +204,20 @@ export function transitionProgress(t, easing) {
 }
 export function wallpaperPlan(draft, { previewLongest } = {}) {
   if (draft.format !== WALLPAPER_FORMAT) throw new Error('This is not a Fractal Explorer wallpaper.');
-  if (!['animated', 'still'].includes(draft.steadyMotion ?? 'animated')) throw new Error('Choose a steady-state playback mode.');
+  const kind = wallpaperKind(draft);
   const supersampling = draft.supersampling ?? 1;
   if (!wallpaperSamplingScales.includes(supersampling)) throw new Error('Choose 1×, 1.5×, 2×, 3× or 4× supersampling.');
   if (draft.longest !== 'native' && ![480, 720, 1080, 1920, 2560, 3840].includes(Number(draft.longest))) throw new Error('Choose a wallpaper resolution.');
+  if (kind === 'static') return wallpaperSlots(draft).filter(slot => !slot.transition).map(slot => {
+    const snapshot = validateWallpaperSnapshot({ ...draft.states[slot.key], automation: {}, wander: false });
+    const dimensions = wallpaperDimensions(draft, slot.screen, previewLongest);
+    return { ...slot, ...dimensions, static: true, file: `${slot.screen}-poster.png`, supersampling,
+      renderWidth: dimensions.width * supersampling, renderHeight: dimensions.height * supersampling,
+      aspect: dimensions.height / dimensions.width, snapshot, destination: snapshot, parameterCycles: {}, frames: 1, fps: 1, duration: 0,
+      sample(index) { if (index !== 0) throw new Error('Invalid wallpaper frame.'); return { view: snapshot.view, colors: snapshot.colors, crossfade: false, amount: 0, from: snapshot, to: snapshot }; },
+    };
+  });
+  if (!['animated', 'still'].includes(draft.steadyMotion ?? 'animated')) throw new Error('Choose a steady-state playback mode.');
   if (!Number.isFinite(draft.arrivalSeconds) || draft.arrivalSeconds < .5 || draft.arrivalSeconds > 10 ||
       !Number.isFinite(draft.idleSeconds) || draft.idleSeconds < 2 || draft.idleSeconds > 20) throw new Error('Choose a 0.5–10 second arrival and a 2–20 second idle loop.');
   if (![15, 24, 30].includes(draft.arrivalFps) || ![10, 15, 24, 30].includes(draft.idleFps)) throw new Error('Choose a wallpaper frame rate.');
@@ -245,6 +261,13 @@ export function wallpaperPlan(draft, { previewLongest } = {}) {
 }
 
 export function wallpaperManifest(draft, clips) {
+  if (wallpaperKind(draft) === 'static') {
+    const manifest = { format: WALLPAPER_FORMAT, version: 1, kind: 'static', name: String(draft.name || 'My fractal wallpaper').slice(0,80),
+      ...(draft.screen ? {screen:draft.screen} : {}), steadyMotion:'still', clips:{},
+      images: Object.fromEntries(clips.map(plan => [plan.screen,{file:plan.file,width:plan.width,height:plan.height}])),
+      posters: Object.fromEntries(clips.map(plan=>[plan.screen,plan.file])), editor:draft };
+    wallpaperJSON(manifest); return manifest;
+  }
   const manifest = { format: WALLPAPER_FORMAT, version: 1, name: String(draft.name || 'My fractal wallpaper').slice(0, 80), steadyMotion: draft.steadyMotion ?? 'animated',
     ...(draft.screen ? { screen: draft.screen } : {}),
     playback: Object.fromEntries((draft.screen ? [draft.screen] : ['cover', 'inner']).map(screen => screen === 'cover' ? ['just-closed', ['closed-transition', 'closed-steady']] : ['just-opened', ['open-transition', 'open-steady']])),

@@ -232,7 +232,8 @@ final class WallpaperGallery {
         new JSONObject(new String(Files.readAllBytes(json.toPath()), StandardCharsets.UTF_8));
     if (!"fractal-wallpaper/v1".equals(manifest.optString("format"))
         || manifest.optInt("version") != 1) throw new IOException("Unsupported saved wallpaper");
-    for (String name : PackPolicy.files(manifest.optString("screen", "")))
+    for (String name :
+        PackPolicy.files(manifest.optString("screen", ""), manifest.optString("kind", "animated")))
       if (!PackPolicy.child(folder, name).isFile() || PackPolicy.child(folder, name).length() == 0)
         throw new IOException("Saved wallpaper is missing " + name);
     return manifest;
@@ -257,7 +258,9 @@ final class WallpaperGallery {
         try {
           JSONObject manifest = manifest(folder);
           long size = 0;
-          for (String file : PackPolicy.files(manifest.optString("screen", "")))
+          for (String file :
+              PackPolicy.files(
+                  manifest.optString("screen", ""), manifest.optString("kind", "animated")))
             size += PackPolicy.child(folder, file).length();
           boolean cover = id.equals(WallpaperFiles.activeId(preferences, "cover"));
           boolean inner = id.equals(WallpaperFiles.activeId(preferences, "inner"));
@@ -266,6 +269,7 @@ final class WallpaperGallery {
                   .put("id", id)
                   .put("name", name(id, manifest))
                   .put("screen", manifest.optString("screen", ""))
+                  .put("kind", manifest.optString("kind", "animated"))
                   .put("active", cover || inner)
                   .put("activeCover", cover)
                   .put("activeInner", inner)

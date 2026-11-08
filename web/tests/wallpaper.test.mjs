@@ -7,6 +7,35 @@ import { decimal, compare } from '../src/decimal.mjs';
 const view = { fractal:'julia', x:'0', y:'0', span:'3.6', julia_x:'-.8', julia_y:'.156', iterations:200, bailout:64 };
 const snapshot = () => wallpaperSnapshot({ view, colors:{palette:0,density:1,phase:.2}, speed:.12, wander:true, automation:{} }, [{name:'Test',colors:['#001122','#aabbcc','#001122']}]);
 
+test('static wallpaper exports one constant PNG at native pixels with sampling and editable scene',()=>{
+  for(const screen of ['cover','inner']) {
+    const draft=defaultWallpaperDraft(snapshot(),screen);draft.kind='static';draft.displayProfile='fold8-ultra';draft.longest='native';draft.supersampling=2;
+    const steady=screen==='cover'?'closed-steady':'open-steady';
+    draft.states[steady].automation={julia_x:{enabled:true,target:'-.7',speed:.25,shape:'sine'}};
+    const original=structuredClone(draft),plans=wallpaperPlan(draft),[plan]=plans;
+    assert.equal(plans.length,1);assert.equal(plan.static,true);assert.equal(plan.transition,undefined);
+    assert.equal(plan.file,`${screen}-poster.png`);assert.equal(plan.frames,1);assert.equal(plan.duration,0);
+    assert.deepEqual([plan.width,plan.height],screen==='cover'?[1080,2520]:[2256,2504]);
+    assert.equal(plan.renderWidth,plan.width*2);assert.equal(plan.renderHeight,plan.height*2);
+    assert.deepEqual(plan.snapshot.automation,{});assert.equal(plan.snapshot.wander,false);
+    assert.deepEqual(plan.sample(0).view,original.states[steady].view);assert.deepEqual(plan.sample(0).colors,original.states[steady].colors);
+    assert.throws(()=>plan.sample(1),/frame/);assert.deepEqual(draft,original);
+    const manifest=wallpaperManifest(draft,plans);assert.equal(manifest.kind,'static');assert.deepEqual(manifest.clips,{});
+    assert.deepEqual(manifest.images,{[screen]:{file:plan.file,width:plan.width,height:plan.height}});
+    assert.deepEqual(manifest.posters,{[screen]:plan.file});assert.deepEqual(manifest.editor,original);
+    assert.deepEqual(wallpaperColorCycle(draft),{enabled:false,seconds:1,cycles:0});
+    assert.equal(Math.max(...['width','height'].map(k=>wallpaperPlan(draft,{previewLongest:480})[0][k])),480);
+  }
+});
+
+test('static rendering ignores video settings but still validates image resolution and sampling',()=>{
+  const draft=defaultWallpaperDraft(snapshot(),'cover');draft.kind='static';
+  Object.assign(draft,{quality:'invalid',bitrateMbps:0,idleSeconds:NaN,idleFps:NaN,arrivalSeconds:NaN,arrivalFps:NaN,colorSeconds:NaN,transitions:null});
+  assert.doesNotThrow(()=>wallpaperPlan(draft));draft.supersampling=1.7;assert.throws(()=>wallpaperPlan(draft),/supersampling/);
+  draft.supersampling=1;draft.longest='native';assert.throws(()=>wallpaperPlan(draft),/resolution/);
+  draft.longest=480;draft.kind='unknown';assert.throws(()=>wallpaperPlan(draft),/animated or static/);
+});
+
 test('moderate dynamic modes share quality across clips and use output pixels for a bounded fallback',()=>{
   const draft=defaultWallpaperDraft(snapshot(),'inner');assert.equal(draft.quality,'dynamic-high');
   draft.longest='native';draft.screenSizes={inner:{width:2256,height:2504}};draft.supersampling=2;

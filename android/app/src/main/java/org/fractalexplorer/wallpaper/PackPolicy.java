@@ -40,11 +40,24 @@ final class PackPolicy {
   }
 
   static Set<String> files(String screen) {
+    return files(screen, "animated");
+  }
+
+  static boolean isStatic(String kind) {
+    if ("static".equals(kind)) return true;
+    if ("animated".equals(kind)) return false;
+    throw new IllegalArgumentException("Unknown wallpaper type");
+  }
+
+  static Set<String> files(String screen, String kind) {
+    boolean image = isStatic(kind);
     Set<String> result = new HashSet<>();
     result.add("wallpaper.json");
     for (String target : screens(screen)) {
-      result.add(target + "-arrival.mp4");
-      result.add(target + "-idle.mp4");
+      if (!image) {
+        result.add(target + "-arrival.mp4");
+        result.add(target + "-idle.mp4");
+      }
       result.add(target + "-poster.png");
     }
     return result;

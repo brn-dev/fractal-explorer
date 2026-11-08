@@ -513,17 +513,21 @@
     <dialog id="wallpaper-dialog" aria-labelledby="wallpaper-title">
       <form method="dialog"><button class="dialog-close icon-button" aria-label="Close wallpaper editor">×</button></form>
       <div class="eyebrow">ONE SCREEN, ONE DESIGN</div>
-      <h2 id="wallpaper-title">Create a living wallpaper.</h2>
+      <h2 id="wallpaper-title">Create a wallpaper.</h2>
       <button id="wallpaper-gallery" class="secondary-button" type="button" hidden>Saved wallpapers</button>
-      <p>Create and save a wallpaper for one screen at a time. Each has a transition and a steady scene. Your other screen's wallpaper stays unchanged.</p>
+      <p>Create and save a wallpaper for one screen at a time. Choose an animated design or a single static image. Your other screen's wallpaper stays unchanged.</p>
       <label class="field-label">Design for<select id="wallpaper-screen"><option value="inner">Main screen</option><option value="cover">Cover screen</option></select></label>
       <label class="field-label">Target device<select id="wallpaper-device"><option value="auto">Saved or detected screen</option><option value="fold8-ultra">Samsung Galaxy Z Fold8 Ultra</option></select></label>
-      <p class="export-note">Each transition runs from its saved START scene to the matching saved END / steady scene. Use the explicit scene buttons below to edit or preview either endpoint.</p>
+      <label class="field-label">Wallpaper type<select id="wallpaper-kind"><option value="animated">Animated · transition and steady scene</option><option value="static">Static image · no video</option></select></label>
+      <p id="wallpaper-static-note" class="export-note" hidden>Creates one lossless PNG using your target resolution and supersampling. Static images can join animated designs in the phone's shuffle selection.</p>
+      <p class="export-note wallpaper-motion-option">Each transition runs from its saved START scene to the matching saved END / steady scene. Use the explicit scene buttons below to edit or preview either endpoint.</p>
       <label class="field-label">Name<input id="wallpaper-name" maxlength="80" value="My fractal wallpaper"></label>
       <div id="wallpaper-preview-stage"><canvas id="wallpaper-preview" aria-label="Selected wallpaper state preview"></canvas></div>
       <p id="wallpaper-preview-status" class="export-note" role="status"></p>
       <button id="wallpaper-preview-play" class="secondary-button" type="button">Play preview</button>
+      <button id="wallpaper-download-image" class="secondary-button" type="button" hidden>Download PNG image</button>
       <div id="wallpaper-state-cards"></div>
+      <div class="wallpaper-motion-option">
       <p class="export-note">Copy start → end or Copy end → start replaces the destination scene. Start scenes use still parameter values; set loop motion in the end / steady scene.</p>
       <label class="field-label">Steady states<select id="wallpaper-steady-motion"><option value="still">Still images · transitions only</option><option value="animated">Animated loops while visible</option></select></label>
       <p class="export-note">Transitions only plays the opening or closing clip once, then holds the steady image with video playback stopped. Idle loops stay in the package so you can enable them later in Wallpaper settings.</p>
@@ -537,21 +541,24 @@
         <label class="field-label">Color cycle · seconds<input id="wallpaper-color-seconds" type="number" min="0.5" max="20" step="0.1" value="8"></label>
       </div>
       <p id="wallpaper-color-note" class="export-note"></p>
+      </div>
       <div class="two-fields">
         <label class="field-label">Resolution<select id="wallpaper-size"><option value="native">Match target screen exactly</option><option value="480">480 px · quick draft</option><option value="720">720 px</option><option value="1080" selected>1080 px</option><option value="1920">1920 px</option><option value="2560">2560 px</option><option value="3840">3840 px</option></select></label>
-        <label class="field-label">Idle frame rate<select id="wallpaper-idle-fps"><option value="10">10 fps</option><option value="15" selected>15 fps</option><option value="24">24 fps</option><option value="30">30 fps</option></select></label>
+        <label class="field-label wallpaper-motion-option">Idle frame rate<select id="wallpaper-idle-fps"><option value="10">10 fps</option><option value="15" selected>15 fps</option><option value="24">24 fps</option><option value="30">30 fps</option></select></label>
       </div>
       <p id="wallpaper-resolution-note" class="export-note"></p>
       <button id="wallpaper-detect-resolution" class="secondary-button" type="button">Detect resolution</button>
+      <div class="wallpaper-motion-option">
       <div class="two-fields">
         <label class="field-label">Video quality<select id="wallpaper-quality"><option value="dynamic-balanced">Dynamic · Balanced · smaller files</option><option value="dynamic-high" selected>Dynamic · High · recommended</option><option value="draft">Draft · variable bitrate</option><option value="balanced">Balanced · variable bitrate</option><option value="high">High · variable bitrate</option><option value="ultra">Ultra · variable bitrate</option><option value="extreme">Extreme · variable bitrate</option><option value="maximum">Maximum · dynamic bitrate</option><option value="custom">Custom variable bitrate</option></select></label>
         <label class="field-label">Custom bitrate · Mbps<input id="wallpaper-bitrate" type="number" min="0.5" max="600" step="0.5" value="40"></label>
       </div>
       <p class="export-note">Dynamic High and Balanced target moderate constant quality, using fewer bits in easily compressed sections. File size varies; there is no strict bitrate cap. If constant quality is unavailable, the displayed moderate variable-bitrate target is used. Android quality scales are device-specific. Ordinary presets and Custom also use variable bitrate. Maximum retains its highest-quality behavior.</p>
+      </div>
       <p id="wallpaper-encoding-note" class="export-note" role="status"></p>
       <label class="field-label">Fractal supersampling<select id="wallpaper-supersampling"><option value="1">1× · one sample per output pixel</option><option value="1.5">1.5×</option><option value="2">2× · four samples per pixel</option><option value="3">3× · nine samples per pixel</option><option value="4">4× · sixteen samples per pixel</option></select></label>
-      <p class="export-note">Renders larger fractal frames and downsamples the colored image. Your explorer choice is captured when saving a scene. This increases creation time; finished videos keep the selected output resolution. Oversized requests are reported instead of silently reducing sampling.</p>
-      <p class="export-note">Arrival plays once at 30 fps. Matching formulas morph; different formulas blend. Palette edits in either scene apply to both. Color timing fits whole cycles in the steady loop and continues at the same speed through the transition, meeting the exact first loop frame.</p>
+      <p class="export-note">Renders larger fractal frames and downsamples the colored image. Your explorer choice is captured when saving a scene. This increases creation time; finished images and videos keep the selected output resolution. Oversized requests are reported instead of silently reducing sampling.</p>
+      <p class="export-note wallpaper-motion-option">Arrival plays once at 30 fps. Matching formulas morph; different formulas blend. Palette edits in either scene apply to both. Color timing fits whole cycles in the steady loop and continues at the same speed through the transition, meeting the exact first loop frame.</p>
       <div class="export-choices">
         <button id="wallpaper-create" class="primary-button" type="button">Download wallpaper package</button>
         <button id="wallpaper-pc" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="wallpaper-pc-dialog">Render on PC…</button>
@@ -591,7 +598,7 @@
       <p>Choose cover and main wallpapers independently, without rendering again. Older combined designs are available in both lists.</p>
       <label class="field-label">Wallpapers for<select id="wallpaper-gallery-screen"><option value="inner">Main screen</option><option value="cover">Cover screen</option></select></label>
       <div id="wallpaper-gallery-shuffle-options">
-        <label class="field-label"><input id="wallpaper-gallery-shuffle" type="checkbox"> Shuffle on each arrival</label>
+        <label class="field-label"><input id="wallpaper-gallery-shuffle" type="checkbox"> Shuffle on each reveal</label>
         <p id="wallpaper-gallery-shuffle-note" class="export-note"></p>
       </div>
       <div class="wallpaper-state-actions">

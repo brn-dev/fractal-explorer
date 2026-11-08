@@ -136,46 +136,53 @@ final class VideoRenderer {
         () -> {
           if (closed) return;
           try {
-            this.width = width;
-            this.height = height;
-            boolean newArtwork = state.mode != mode;
-            if (!initialized) initialize();
-            state.screenEvent(screenEvent);
-            long currentRevision = revision;
-            boolean currentIdle = idle, currentArrival = arrival;
-            if (shuffleAllowed) {
+            synchronized (WallpaperFiles.class) {
+              this.width = width;
+              this.height = height;
+              boolean newArtwork = state.mode != mode;
+              if (!initialized) initialize();
+              state.screenEvent(screenEvent);
+              long currentRevision = revision;
+              boolean currentIdle = idle, currentArrival = arrival;
               android.content.SharedPreferences preferences =
                   context.getSharedPreferences("wallpaper", 0);
               String screen = mode == PlaybackState.Mode.COVER ? "cover" : "inner";
-              // Preference callbacks can be queued before an automatic selection commits.
-              // Resolve content when the renderer executes, never rewind to that old snapshot.
-              currentRevision = WallpaperFiles.revision(preferences, screen);
-              currentIdle = WallpaperFiles.playback(preferences, screen, "idle");
-              currentArrival = WallpaperFiles.playback(preferences, screen, "arrival");
-            }
-            boolean changed =
-                state.update(
-                    mode, visible, currentIdle, currentArrival, saving, currentRevision, now);
-            if (shuffleAllowed && changed && state.arrivalReveal) {
-              try {
-                String screen = state.prefix();
-                new WallpaperGallery(context).chooseForArrival(screen, screenEvent, now);
-                currentRevision =
-                    WallpaperFiles.revision(context.getSharedPreferences("wallpaper", 0), screen);
-                changed |=
-                    state.update(
-                        mode, visible, currentIdle, currentArrival, saving, currentRevision, now);
-              } catch (Exception error) {
-                report(error);
+              if (shuffleAllowed) {
+                // Preference callbacks can be queued before an automatic selection commits.
+                // Resolve content when the renderer executes, never rewind to that old snapshot.
+                currentRevision = WallpaperFiles.revision(preferences, screen);
+                currentIdle = WallpaperFiles.playback(preferences, screen, "idle");
+                currentArrival = WallpaperFiles.playback(preferences, screen, "arrival");
               }
+              if (WallpaperFiles.isStatic(preferences, screen))
+                currentIdle = currentArrival = false;
+              boolean changed =
+                  state.update(
+                      mode, visible, currentIdle, currentArrival, saving, currentRevision, now);
+              if (shuffleAllowed && changed && state.selectionReveal) {
+                try {
+                  new WallpaperGallery(context).chooseForArrival(screen, screenEvent, now);
+                  currentRevision =
+                      WallpaperFiles.revision(context.getSharedPreferences("wallpaper", 0), screen);
+                  currentIdle = WallpaperFiles.playback(preferences, screen, "idle");
+                  currentArrival = WallpaperFiles.playback(preferences, screen, "arrival");
+                  if (WallpaperFiles.isStatic(preferences, screen))
+                    currentIdle = currentArrival = false;
+                  changed |=
+                      state.update(
+                          mode, visible, currentIdle, currentArrival, saving, currentRevision, now);
+                } catch (Exception error) {
+                  report(error);
+                }
+              }
+              if (newArtwork || posterId == 0 || this.revision != currentRevision) {
+                loadPoster();
+                showVideo = false;
+                this.revision = currentRevision;
+              }
+              if (changed) applyStage();
+              else if (state.stage != PlaybackState.Stage.HIDDEN) draw();
             }
-            if (newArtwork || posterId == 0 || this.revision != currentRevision) {
-              loadPoster();
-              showVideo = false;
-              this.revision = currentRevision;
-            }
-            if (changed) applyStage();
-            else if (state.stage != PlaybackState.Stage.HIDDEN) draw();
           } catch (Exception error) {
             report(error);
             stopPlayer();
@@ -263,7 +270,9 @@ final class VideoRenderer {
 
   private void applyStage(boolean keepVideoFrame) {
     try {
-      applyStageContents(keepVideoFrame);
+      synchronized (WallpaperFiles.class) {
+        applyStageContents(keepVideoFrame);
+      }
     } catch (Exception error) {
       // Completion/error listeners run directly on the renderer thread. A lost
       // surface during handoff must not escape and kill that thread/process.
@@ -278,6 +287,12 @@ final class VideoRenderer {
   }
 
   private void applyStageContents(boolean keepVideoFrame) {
+    if ((state.stage == PlaybackState.Stage.ARRIVAL || state.stage == PlaybackState.Stage.IDLE)
+        && WallpaperFiles.isStatic(context.getSharedPreferences("wallpaper", 0), state.prefix())) {
+      // Activation can precede a queued configure. Never fall back to sample
+      // videos while an image-only entry is already selected.
+      state.failed(state.generation);
+    }
     stopPlayer(keepVideoFrame && state.stage == PlaybackState.Stage.IDLE);
     if (state.stage == PlaybackState.Stage.HIDDEN) return;
     if (state.stage == PlaybackState.Stage.ARRIVAL) loadArrivalPoster();

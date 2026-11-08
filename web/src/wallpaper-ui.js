@@ -1,5 +1,5 @@
 import { BrowserEngine } from './engine.js';
-import { wallpaperStates, wallpaperSlots, wallpaperScreenDraft, wallpaperScreenName, wallpaperScreenSize, wallpaperDimensions, wallpaperColorCycle, wallpaperSnapshot, validateWallpaperSnapshot, defaultWallpaperDraft, wallpaperPlan, wallpaperManifest, wallpaperJSON, MAX_WALLPAPER_JSON_BYTES, wallpaperTransition, transitionCurves } from './wallpaper.mjs';
+import { wallpaperStates, wallpaperSlots, wallpaperScreenDraft, wallpaperScreenName, wallpaperScreenSize, wallpaperDimensions, wallpaperKind, wallpaperColorCycle, wallpaperSnapshot, validateWallpaperSnapshot, defaultWallpaperDraft, wallpaperPlan, wallpaperManifest, wallpaperJSON, MAX_WALLPAPER_JSON_BYTES, wallpaperTransition, transitionCurves } from './wallpaper.mjs';
 import { wrapPhase } from './export-utils.mjs';
 import { wallpaperZip } from './zip-store.mjs';
 import { nativeBridge, nativeCall } from './native-bridge.mjs';
@@ -28,6 +28,8 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
   let screen = 'inner', cardsScreen = null;
   const drafts = {};
   const designPlan = value => wallpaperPlan(value, { previewLongest: 480 });
+  const imageMode = () => wallpaperKind(draft) === 'static';
+  const designSlots = () => wallpaperSlots(draft).filter(slot => !imageMode() || !slot.transition);
   function screenSizes() {
     if (!nativeBridge() || typeof nativeBridge().wallpaperDisplays !== 'function') return {};
     try { return nativeCall('wallpaperDisplays').screens ?? {}; } catch { return {}; }
@@ -56,6 +58,7 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     try {
       const plans = wallpaperPlan(draft), first = plans[0];
       const resolution = `${first.width} × ${first.height}`;
+      if (first.static) { $('wallpaper-encoding-note').textContent = `${resolution} · Lossless PNG · ${first.supersampling}× supersampling. No video encoding.`; return; }
       const describe = plan => {
         if (typeof nativeBridge()?.supportsVideo === 'function') {
           const request = JSON.stringify({ width: plan.width, height: plan.height, fps: plan.fps, bitrate: plan.bitrate, quantizer: plan.quantizer });
@@ -103,7 +106,7 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     catch { $('wallpaper-status').textContent = 'Draft storage is unavailable. Use Save draft to keep a copy.'; }
   }
   function readOptions() {
-    const transitions = Object.fromEntries(wallpaperSlots(draft).filter(slot => slot.transition).map(slot => [slot.key, {
+    const transitions = imageMode() ? draft.transitions : Object.fromEntries(wallpaperSlots(draft).filter(slot => slot.transition).map(slot => [slot.key, {
       seconds: Number($(`wallpaper-${slot.key}-seconds`).value), easing: $(`wallpaper-${slot.key}-easing`).value,
     }]));
     const next = { ...draft, transitions, name: $('wallpaper-name').value,
@@ -120,6 +123,12 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     $('wallpaper-bitrate').disabled = !!job || loadingDraft || draft.quality !== 'custom';
     updateResolutionNote();
     encodingSummary();
+    if (imageMode()) { $('wallpaper-loop-note').textContent = ''; $('wallpaper-color-note').textContent = 'The saved image uses one still color state.'; }
+    dialog.classList.toggle('wallpaper-static', imageMode());
+    $('wallpaper-static-note').hidden = !imageMode();
+    $('wallpaper-preview-play').hidden = imageMode();
+    $('wallpaper-download-image').hidden = !imageMode() || !!nativeBridge();
+    for (const id of ['wallpaper-idle-seconds','wallpaper-idle-fps','wallpaper-steady-motion','wallpaper-color-motion','wallpaper-color-seconds','wallpaper-quality','wallpaper-bitrate']) $(id).disabled = !!job || loadingDraft || imageMode() || (id === 'wallpaper-bitrate' && draft.quality !== 'custom');
   }
   function updateResolutionNote() {
     const size = wallpaperScreenSize(draft, draft.screen);
@@ -136,9 +145,9 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     if (draft) { assignScreenSizes(draft); updateResolutionNote(); }
   }
   function capture(key) {
-    const visible = draft.steadyMotion === 'still' || wallpaperStates.some(slot => slot.key === key && slot.transition);
+    const visible = imageMode() || draft.steadyMotion === 'still' || wallpaperStates.some(slot => slot.key === key && slot.transition);
     const snapshot = wallpaperSnapshot(getState(), palettes, { visible });
-    if (wallpaperStates.some(slot => slot.key === key && slot.transition)) {
+    if (imageMode() || wallpaperStates.some(slot => slot.key === key && slot.transition)) {
       snapshot.automation = {}; snapshot.wander = false;
     }
     return snapshot;
@@ -183,6 +192,7 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     $('wallpaper-cancel').hidden = !value; $('wallpaper-cancel').disabled = false;
     $('wallpaper-cancel').textContent = loadingDraft ? 'Cancel import' : 'Cancel export';
     $('wallpaper-bitrate').disabled = value || draft?.quality !== 'custom';
+    if (draft && imageMode()) for (const id of ['wallpaper-idle-seconds','wallpaper-idle-fps','wallpaper-steady-motion','wallpaper-color-motion','wallpaper-color-seconds','wallpaper-quality','wallpaper-bitrate']) $(id).disabled = true;
     $('wallpaper-create').textContent = `${nativeBridge() ? 'Create' : 'Download'} ${screen === 'cover' ? 'cover' : 'main'} wallpaper`;
   }
   async function renderSample(renderer, canvas, plan, index, fields, signal) {
@@ -224,7 +234,8 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     fields.writable = false;
     controller.signal.addEventListener('abort', () => fields.dispose().catch(() => {}), { once: true });
     playing = play; $('wallpaper-preview-play').textContent = play ? 'Stop preview' : 'Play preview';
-    const initial = plans.find(p => p.key === selected), steady = initial.transition ? plans.find(p => p.key === initial.target) : initial;
+    const initial = plans.find(p => p.key === selected) ?? plans[0], steady = initial.transition ? plans.find(p => p.key === initial.target) : initial;
+    if (initial.static) play = playing = false;
     const canvas = $('wallpaper-preview'); canvas.width = initial.width; canvas.height = initial.height;
     $('wallpaper-preview-stage').style.setProperty('--wallpaper-aspect', String(initial.aspect));
     $('wallpaper-preview-status').textContent = 'Preparing preview…';
@@ -235,7 +246,7 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
         if (preview !== current || controller.signal.aborted) return;
         if (play && time < nextAt) { current.raf = requestAnimationFrame(t => tick(t).catch(showError)); return; }
         const p = active;
-        const still = draft.steadyMotion === 'still' && !p.transition;
+        const still = p.static || draft.steadyMotion === 'still' && !p.transition;
         await renderSample(renderer, canvas, p, index, fields, controller.signal); check(controller.signal);
         $('wallpaper-preview-status').textContent = !play && previewCaption ? previewCaption : `${p.title} · ${p.transition ? 'saved start → ' + steady.title + ' first frame' : still ? 'still image' : 'steady loop'} · preview`;
         if (play && !still && !document.hidden) {
@@ -258,17 +269,23 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
       const slot = wallpaperStates.find(slot => slot.key === key);
       const snapshot = validateWallpaperSnapshot(draft.states[key]);
       snapshot.supersampling = draft.supersampling ?? 1;
-      if (slot.transition) { snapshot.automation = {}; snapshot.wander = false; snapshot.colors = designPlan(draft).find(plan => plan.key === key).sample(0).colors; }
+      if (imageMode()) { snapshot.automation = {}; snapshot.wander = false; }
+      else if (slot.transition) { snapshot.automation = {}; snapshot.wander = false; snapshot.colors = designPlan(draft).find(plan => plan.key === key).sample(0).colors; }
       else { snapshot.wander = draft.colorWander ?? snapshot.wander; snapshot.speed = 1 / wallpaperColorCycle(draft).seconds; }
       let target;
       try { target = wallpaperDimensions(draft, slot.screen); }
       catch { target = { ...wallpaperDimensions(draft, slot.screen, 1080), approximate: true }; }
-      onSceneEditingChange(slot, { idleSeconds: draft.idleSeconds, idleFps: draft.idleFps, target }); entered = true;
+      onSceneEditingChange(slot, { idleSeconds: draft.idleSeconds, idleFps: draft.idleFps, target, static: imageMode() }); entered = true;
       applyState(snapshot); editing = key; dialog.close();
       $('wallpaper-editing-label').textContent = slot.transition ? `Editing START scene · ${slot.title}` : `Editing END / steady scene · ${slot.title}`;
       $('wallpaper-editing-help').textContent = slot.transition ? `Choose the start geometry. Parameter animation is disabled here; the transition curve moves it into ${wallpaperStates.find(s => s.key === slot.target).title}. Palette changes also update the steady scene; color cycling is shared in the overview.`
         : `This is the transition endpoint and the ${slot.screen === 'cover' ? 'cover' : 'main'} loop's first frame. Palette and color speed also apply to the transition.`;
       $('wallpaper-save-state').textContent = slot.transition ? 'Save start scene' : 'Save end / steady scene';
+      if (imageMode()) {
+        $('wallpaper-editing-label').textContent = `Editing STATIC image · ${wallpaperScreenName(slot.screen)}`;
+        $('wallpaper-editing-help').textContent = 'Compose one still image inside the target frame. Parameter animation and color cycling are disabled.';
+        $('wallpaper-save-state').textContent = 'Save image scene';
+      }
       if (fromTransition) selected = fromTransition;
       $('wallpaper-editing').hidden = false;
     } catch (error) { if (entered) onSceneEditingChange(null); $('wallpaper-status').textContent = error.message; }
@@ -280,15 +297,18 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
   function showScene(key, caption) { selected = key; previewCaption = caption; startPreview(); $('wallpaper-preview-stage').scrollIntoView({block:'nearest'}); }
   function cards() {
     const container = $('wallpaper-state-cards');
-    if (cardsScreen !== draft.screen) { container.replaceChildren(); cardsScreen = draft.screen; }
-    for (const [index, slot] of wallpaperSlots(draft).entries()) {
+    const signature = `${draft.screen}:${wallpaperKind(draft)}`;
+    if (cardsScreen !== signature) { container.replaceChildren(); cardsScreen = signature; }
+    for (const [index, slot] of designSlots().entries()) {
       const section = document.createElement('section'); section.className = 'wallpaper-state';
       const heading = document.createElement('h3'); heading.textContent = slot.title;
       const end = wallpaperStates.find(s => s.key === slot.target);
       const description = document.createElement('p'); description.textContent = slot.transition ? `START: saved ${slot.title} scene → END: ${end.title}, the ${slot.screen === 'cover' ? 'cover' : 'inner'} steady scene.`
         : `Transition endpoint + first frame of the ${slot.screen === 'cover' ? 'cover' : 'inner'} ${draft.steadyMotion === 'still' ? 'still image' : 'loop'}.`;
       const current = draft.states[slot.key], automated = Object.values(current.automation ?? {}).some(p => p?.enabled);
+      if (imageMode()) { heading.textContent = 'Static image'; description.textContent = 'One still image. No transition or loop clips.'; }
       const detail = document.createElement('p'); detail.className = 'export-note'; detail.textContent = slot.transition ? `Start: ${current.view.fractal} → End: ${draft.states[slot.target].view.fractal} · linked to ${end.title}` : `${current.view.fractal} · ${slot.screen === 'cover' ? 'small screen' : 'large screen'} · ${draft.steadyMotion === 'still' ? 'still image' : automated ? 'parameter loop' : (draft.colorWander ?? current.wander) ? 'color loop' : 'still view'}`;
+      if (imageMode()) detail.textContent = `${current.view.fractal} · ${wallpaperScreenName(slot.screen)} · lossless PNG`;
       // Keep the buttons mounted: a number input can emit change on blur between a
       // button's pointer-down and click, and replacing it would swallow that click.
       const existing = container.children[index];
@@ -301,7 +321,10 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
         continue;
       }
       const actions = document.createElement('div'); actions.className = 'wallpaper-state-actions';
-      for (const [label, action] of [
+      for (const [label, action] of imageMode() ? [
+        ['Edit image', () => editScene(slot.key)],
+        ['Use current view as image', () => { try { storeScene(slot.key); open(); showScene(slot.key, 'Saved static image scene'); } catch (error) { $('wallpaper-status').textContent = error.message; } }],
+      ] : [
         [slot.transition ? 'Play transition' : 'Play steady preview', () => { selected = slot.key; previewCaption = ''; startPreview(true); $('wallpaper-preview-stage').scrollIntoView({ block: 'nearest' }); }],
         [slot.transition ? 'Edit start scene' : 'Edit end / steady scene', () => editScene(slot.key)],
         [slot.transition ? 'Use current view as start' : 'Use current view as end', () => { try { storeScene(slot.key); open(); showScene(slot.key, slot.transition ? `${slot.title} · saved START scene` : `${slot.title} · saved END / steady first frame`); } catch (error) { $('wallpaper-status').textContent = error.message; } }],
@@ -346,6 +369,7 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
       if (!draft.states[selected]) selected = wallpaperSlots(draft)[0].key;
       $('wallpaper-screen').value = screen;
       $('wallpaper-device').value = draft.displayProfile ?? 'auto';
+      $('wallpaper-kind').value = wallpaperKind(draft);
       $('wallpaper-name').value = draft.name;
       $('wallpaper-idle-seconds').value = draft.idleSeconds;
       $('wallpaper-size').value = draft.longest; $('wallpaper-idle-fps').value = draft.idleFps;
@@ -383,6 +407,13 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
       assignScreenSizes(next); designPlan(next); draft = next;
       $('wallpaper-size').value = draft.longest; readOptions(); startPreview();
     } catch (error) { $('wallpaper-device').value = draft.displayProfile ?? 'auto'; $('wallpaper-status').textContent = error.message; }
+  };
+  $('wallpaper-kind').onchange = () => {
+    if (job || loadingDraft) return;
+    const before = structuredClone(draft);
+    try {
+      readOptions(); draft = { ...draft, kind: $('wallpaper-kind').value }; designPlan(draft); save(); open();
+    } catch (error) { draft = before; $('wallpaper-kind').value = wallpaperKind(draft); $('wallpaper-status').textContent = error.message; }
   };
   $('wallpaper-detect-resolution').onclick = () => {
     if (job || loadingDraft) return;
@@ -461,7 +492,7 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     } catch (error) { if (version === draftLoadVersion && dialog.open) $('wallpaper-status').textContent = error.message; }
     finally { if (version === draftLoadVersion) { loadingDraft = false; busy(false); } event.target.value = ''; }
   };
-  $('wallpaper-create').onclick = async () => {
+  async function createWallpaper(imageOnly = false) {
     if (job || loadingDraft) return;
     refreshSizes();
     let renderer, video, fields, pack = false;
@@ -469,9 +500,11 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     stopPreview(); $('wallpaper-apply').hidden = true; busy(true);
     try {
       readOptions(); const saved = structuredClone(draft), plans = wallpaperPlan(saved), native = !!nativeBridge();
+      if (imageOnly && (!imageMode() || native)) throw new Error('PNG download is available for static designs in the browser.');
+      if (native && imageMode() && !nativeCall('info').staticWallpapers) throw new Error('Install the latest Android app to create static image wallpapers.');
       const manifest = wallpaperManifest(saved, plans); // Check metadata size before rendering any video.
-      const { mp4Encoder, supportsMP4 } = await import('./video-export.js');
-      for (const p of plans) if (!await supportsMP4({ ...p, ...(native ? { nativeTarget: p.key } : {}) })) throw new Error('This encoder cannot use the selected resolution and quality. Choose a smaller size or another quality; your settings have not been lowered.');
+      const codecs = imageMode() ? null : await import('./video-export.js');
+      if (codecs) for (const p of plans) if (!await codecs.supportsMP4({ ...p, ...(native ? { nativeTarget: p.key } : {}) })) throw new Error('This encoder cannot use the selected resolution and quality. Choose a smaller size or another quality; your settings have not been lowered.');
       check(signal);
       if (native) { nativeCall('beginPack'); pack = true; }
       renderer = new BrowserEngine(document.createElement('canvas'), palettes);
@@ -492,7 +525,14 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
       const total = plans.reduce((sum, p) => sum + p.frames, 0); let complete = 0;
       for (const p of plans) {
         canvas.width = p.width; canvas.height = p.height;
-        video = await mp4Encoder(canvas, { ...p, nativeTarget: p.key });
+        if (p.static) {
+          check(signal); $('wallpaper-status').textContent = 'Rendering static image…';
+          await renderSample(renderer, canvas, p, 0, fields, signal); check(signal);
+          if (native) nativeCall('putPoster', p.screen, canvas.toDataURL('image/png').split(',')[1]);
+          else entries.push([p.file, await png(canvas)]);
+          complete++; continue;
+        }
+        video = await codecs.mp4Encoder(canvas, { ...p, nativeTarget: p.key });
         if (video.encodingInfo?.qualityMode) {
           actualEncoding.set(p.key, videoRateDescription(video.encodingInfo));
           showActualEncoding();
@@ -517,7 +557,10 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
       check(signal);
       if (native) {
         nativeCall('commitPack', wallpaperJSON(manifest)); pack = false; renderedDraft = JSON.stringify(saved); $('wallpaper-apply').hidden = false;
-        $('wallpaper-status').textContent = `${wallpaperScreenName(saved.screen)} transition and loop saved and selected. The other screen is unchanged. Use Set up if Samsung still shows another wallpaper.`;
+        $('wallpaper-status').textContent = `${wallpaperScreenName(saved.screen)} ${imageMode() ? 'static image' : 'transition and loop'} saved and selected. The other screen is unchanged. Use Set up if Samsung still shows another wallpaper.`;
+      } else if (imageOnly) {
+        await downloadBlob(entries[0][1], `${saved.screen}-fractal-wallpaper.png`);
+        $('wallpaper-status').textContent = 'PNG image ready. Import it with Import static image in the Android app. Save the draft or wallpaper package to keep the editable scene.';
       } else {
         entries.push(['wallpaper.json', new Blob([wallpaperJSON(manifest)], { type: 'application/json' })]);
         const blob = await wallpaperZip(entries); check(signal); await downloadBlob(blob, 'fractal-wallpaper.zip');
@@ -528,7 +571,9 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
       await video?.cancel().catch(() => {}); if (pack) { try { nativeCall('cancelPack'); } catch {} }
       renderer?.destroy(); await fields?.dispose().catch(() => {}); job = null; busy(false);
     }
-  };
+  }
+  $('wallpaper-create').onclick = () => createWallpaper();
+  $('wallpaper-download-image').onclick = () => createWallpaper(true);
   function replaceWorkingDraft(next, { isCurrent = () => true, fromLink = false } = {}) {
     designPlan(next); wallpaperJSON(next);
     const replace = () => {

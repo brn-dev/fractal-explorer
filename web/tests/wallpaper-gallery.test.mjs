@@ -47,6 +47,20 @@ test('gallery applies saved videos without requesting a render and protects the 
     assert.match(t.elements['wallpaper-gallery-status'].textContent,/selected/);
   } finally {t.cleanup();}
 });
+
+test('gallery labels raw and editable static images and applies them alongside animated entries',()=>{
+  const t=setup();try {
+    t.entries[1].kind='static';
+    t.elements['open-wallpaper-gallery'].click();
+    assert.match(t.content(0).children[1].textContent,/Animated/);
+    assert.match(t.content(1).children[1].textContent,/Static image.*imported image/);
+    assert.equal(t.actions(1)[1].disabled,true);
+    t.actions(1)[0].click();assert.deepEqual(t.calls.at(-1),['apply','b','inner']);
+    t.entries[1].editable=true;t.elements['open-wallpaper-gallery'].click();
+    assert.doesNotMatch(t.content(1).children[1].textContent,/imported image/);
+    t.actions(1)[1].click();assert.deepEqual(t.calls.at(-1),['edit',t.draft,'inner']);
+  } finally {t.cleanup();}
+});
 test('gallery renames safely, restores editable designs, and requires explicit deletion',()=>{
   const t = setup(); try {
     t.elements['open-wallpaper-gallery'].click(); t.actions(0)[1].click();

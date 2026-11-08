@@ -28,9 +28,12 @@ public final class SettingsActivity extends Activity {
   };
   private static final int PICK_VIDEO = 41;
   private static final int PICK_PACKAGE = 42;
+  private static final int PICK_IMAGE = 43;
   private SharedPreferences preferences;
   private TextView status;
   private String pendingSlot;
+  private String pendingImageScreen;
+  private Button imagePicker;
   private final List<Button> importButtons = new ArrayList<>();
   private boolean importing;
   // Main-thread state shared across recreated/multiple settings activities.
@@ -55,6 +58,7 @@ public final class SettingsActivity extends Activity {
     setTitle("Wallpaper settings");
     preferences = getSharedPreferences("wallpaper", MODE_PRIVATE);
     if (saved != null) pendingSlot = saved.getString("pendingSlot");
+    if (saved != null) pendingImageScreen = saved.getString("pendingImageScreen");
     if (saved != null) settingsScreen = saved.getString("settingsScreen", "inner");
     ScrollView scroll = new ScrollView(this);
     LinearLayout column = new LinearLayout(this);
@@ -123,8 +127,31 @@ public final class SettingsActivity extends Activity {
           settingsScreen = checked == coverScreen.getId() ? "cover" : "inner";
           syncSteady();
           syncArrival();
+          syncImagePicker();
         });
     add(column, screens);
+    imagePicker =
+        button(
+            column,
+            "Import static image for "
+                + ("cover".equals(settingsScreen) ? "cover" : "main")
+                + " screen",
+            () -> {
+              pendingImageScreen = settingsScreen;
+              Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+              intent.setType("image/*");
+              intent.putExtra(
+                  Intent.EXTRA_MIME_TYPES, new String[] {"image/png", "image/jpeg", "image/webp"});
+              intent.addCategory(Intent.CATEGORY_OPENABLE);
+              startActivityForResult(intent, PICK_IMAGE);
+            });
+    importButtons.add(imagePicker);
+    text(
+        column,
+        "Static images can share a shuffle selection with animated wallpapers. Imported images are"
+            + " center-cropped to this screen. The animation controls below apply to animated"
+            + " entries.",
+        14);
     arrivalSwitch = toggle(column, "Play arrival animation", "arrival");
     text(column, "After the transition", 18);
     steady = new RadioGroup(this);
@@ -251,8 +278,10 @@ public final class SettingsActivity extends Activity {
           }
         }
         edit.putString("active_" + screen, "")
+            .putBoolean(screen + "_static", false)
             .putLong(screen + "_revision", WallpaperFiles.revision(preferences, screen) + 1);
         keys.add("active_" + screen);
+        keys.add(screen + "_static");
         keys.add(screen + "_revision");
       }
       keys.add("active_pack");
@@ -364,9 +393,18 @@ public final class SettingsActivity extends Activity {
     }
   }
 
+  private void syncImagePicker() {
+    if (imagePicker != null)
+      imagePicker.setText(
+          "Import static image for "
+              + ("cover".equals(settingsScreen) ? "cover" : "main")
+              + " screen");
+  }
+
   @Override
   protected void onSaveInstanceState(Bundle state) {
     state.putString("pendingSlot", pendingSlot);
+    state.putString("pendingImageScreen", pendingImageScreen);
     state.putString("settingsScreen", settingsScreen);
     super.onSaveInstanceState(state);
   }
@@ -374,8 +412,50 @@ public final class SettingsActivity extends Activity {
   @Override
   protected void onActivityResult(int request, int result, Intent data) {
     super.onActivityResult(request, result, data);
+    if (request == PICK_IMAGE) {
+      final String screen = pendingImageScreen;
+      pendingImageScreen = null;
+      if (result != RESULT_OK || data == null || data.getData() == null || screen == null) return;
+      if (!beginWork("Importing static image…")) return;
+      final android.net.Uri uri = data.getData();
+      new Thread(
+              () -> {
+                String message;
+                try {
+                  String name = "Imported image";
+                  try (android.database.Cursor cursor =
+                      getContentResolver()
+                          .query(
+                              uri,
+                              new String[] {android.provider.OpenableColumns.DISPLAY_NAME},
+                              null,
+                              null,
+                              null)) {
+                    if (cursor != null && cursor.moveToFirst()) {
+                      String label = cursor.getString(0);
+                      if (label != null) name = label;
+                    }
+                  } catch (Exception ignored) {
+                  }
+                  InputStream source = getContentResolver().openInputStream(uri);
+                  if (source == null) throw new java.io.IOException("Cannot read this image");
+                  StaticImageImporter.importImage(getApplicationContext(), source, screen, name);
+                  message =
+                      "Static image imported for "
+                          + ("cover".equals(screen) ? "cover" : "main")
+                          + " screen. Include it in shuffle from Wallpaper gallery.";
+                } catch (Exception error) {
+                  message = "Could not import image: " + error.getMessage();
+                }
+                final String text = message;
+                runOnUiThread(() -> finishWork(text));
+              },
+              "Static wallpaper import")
+          .start();
+      return;
+    }
     if (request == PICK_PACKAGE && result == RESULT_OK && data != null && data.getData() != null) {
-      if (!beginWork("Importing all four wallpaper states…")) return;
+      if (!beginWork("Importing wallpaper package…")) return;
       final android.net.Uri uri = data.getData();
       new Thread(
               () -> {

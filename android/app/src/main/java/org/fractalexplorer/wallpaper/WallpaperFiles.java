@@ -51,7 +51,8 @@ final class WallpaperFiles {
       File[] abandoned = new File(context.getCacheDir(), "clip-imports").listFiles();
       if (abandoned != null)
         for (File file : abandoned)
-          if (file.isFile() && file.getName().matches("[a-f0-9]{32}\\.(mp4|png)")) file.delete();
+          if (file.isFile() && file.getName().matches("[a-f0-9]{32}\\.(mp4|png|image)"))
+            file.delete();
       // Once per process: later activity recreation must not remove active imports.
       importsRecovered = true;
     }
@@ -92,21 +93,27 @@ final class WallpaperFiles {
     return preferences.getBoolean(screen + "_" + key, preferences.getBoolean(key, true));
   }
 
+  static boolean isStatic(SharedPreferences preferences, String screen) {
+    return preferences.getBoolean(screen + "_static", false);
+  }
+
   static long revision(SharedPreferences preferences, String screen) {
     return preferences.getLong(screen + "_revision", preferences.getLong("revision", 0));
   }
 
   void validate(File folder, JSONObject manifest) throws Exception {
+    String kind = manifest.optString("kind", "animated");
+    boolean image = PackPolicy.isStatic(kind);
     String motion = manifest.optString("steadyMotion", "animated");
     if (!"still".equals(motion) && !"animated".equals(motion))
       throw new IOException("Invalid steady-state playback mode");
     if (!"fractal-wallpaper/v1".equals(manifest.getString("format"))
         || manifest.getInt("version") != 1) throw new IOException("Unsupported wallpaper package");
-    JSONObject clips = manifest.getJSONObject("clips");
+    JSONObject clips = image ? new JSONObject() : manifest.getJSONObject("clips");
     String scope = manifest.optString("screen", "");
     PackPolicy.screens(scope);
     for (int i = 0; i < PackPolicy.KEYS.length; i++) {
-      if (!PackPolicy.files(scope).contains(PackPolicy.VIDEOS[i])) continue;
+      if (!PackPolicy.files(scope, kind).contains(PackPolicy.VIDEOS[i])) continue;
       JSONObject expected = clips.getJSONObject(PackPolicy.KEYS[i]);
       if (!PackPolicy.VIDEOS[i].equals(expected.getString("file")))
         throw new IOException("Unexpected wallpaper clip");
@@ -145,6 +152,13 @@ final class WallpaperFiles {
           || options.outHeight < 16
           || Math.max(options.outWidth, options.outHeight) > 4096)
         throw new IOException("Invalid wallpaper poster");
+      if (image) {
+        JSONObject expected = manifest.getJSONObject("images").getJSONObject(screen);
+        if (!name.equals(expected.getString("file"))
+            || expected.getInt("width") != options.outWidth
+            || expected.getInt("height") != options.outHeight)
+          throw new IOException("Static image does not match its manifest");
+      }
     }
   }
 
@@ -194,7 +208,10 @@ final class WallpaperFiles {
         selectedScreen == null ? PackPolicy.screens(scope) : PackPolicy.screens(selectedScreen);
     SharedPreferences.Editor edit = preferences.edit();
     java.util.List<String> keys = new java.util.ArrayList<>();
+    boolean staticWallpaper = PackPolicy.isStatic(manifest.optString("kind", "animated"));
     for (String screen : screens) {
+      edit.putBoolean(screen + "_static", staticWallpaper);
+      keys.add(screen + "_static");
       if (!keepPlayback) {
         edit.putBoolean("shuffle_" + screen, false);
         keys.add("shuffle_" + screen);
@@ -208,7 +225,7 @@ final class WallpaperFiles {
                 ? "animated".equals(manifest.getString("steadyMotion"))
                 : playback(preferences, screen, key);
         boolean value =
-            keepPlayback
+            keepPlayback || staticWallpaper
                 ? playback(preferences, screen, key)
                 : preferences.getBoolean(
                     saved + id, preferences.getBoolean("gallery_" + key + "_" + id, fallback));
@@ -245,6 +262,8 @@ final class WallpaperFiles {
       boolean complete = false;
       try {
         String prefix = slot.substring(0, slot.indexOf('-'));
+        if (isStatic(context.getSharedPreferences("wallpaper", 0), prefix))
+          throw new IOException("Choose an animated wallpaper before replacing its video clips.");
         JSONObject selectedSteady = new JSONObject();
         String activeId = activeId(context.getSharedPreferences("wallpaper", 0), prefix);
         File activeManifest =
@@ -368,9 +387,11 @@ final class WallpaperFiles {
       byte[] bytes =
           java.nio.file.Files.readAllBytes(PackPolicy.child(folder, "wallpaper.json").toPath());
       JSONObject manifest = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
-      if (!seen.equals(PackPolicy.files(manifest.optString("screen", ""))))
+      if (!seen.equals(
+          PackPolicy.files(
+              manifest.optString("screen", ""), manifest.optString("kind", "animated"))))
         throw new IOException(
-            "Wallpaper package must contain its screen's transition, loop, poster, and manifest");
+            "Wallpaper package does not contain the files required for its type and screen");
       publish(folder, manifest);
       complete = true;
     } finally {

@@ -14,6 +14,21 @@ public final class PackPolicyTest {
     require(PackPolicy.files("cover").size() == 4);
     require(PackPolicy.files("inner").size() == 4);
     require(PackPolicy.files("").equals(PackPolicy.FILES));
+    require(
+        PackPolicy.files("cover", "static")
+            .equals(
+                new java.util.HashSet<>(
+                    java.util.Arrays.asList("wallpaper.json", "cover-poster.png"))));
+    require(PackPolicy.files("inner", "static").size() == 2);
+    require(PackPolicy.files("", "static").size() == 3);
+    require(PackPolicy.files("inner", "animated").equals(PackPolicy.files("inner")));
+    boolean badKind = false;
+    try {
+      PackPolicy.files("inner", "unknown");
+    } catch (IllegalArgumentException expected) {
+      badKind = true;
+    }
+    require(badKind);
     require(PackPolicy.files("cover").contains("cover-poster.png"));
     require(!PackPolicy.files("cover").contains("inner-idle.mp4"));
     require(PackPolicy.supports("", "cover") && PackPolicy.supports("", "inner"));

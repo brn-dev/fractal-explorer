@@ -481,6 +481,10 @@ public final class WebAppUpdatesTest {
           "published static file and native payload stay identical: " + file.getString("name"));
     }
     Fixture f = new Fixture("actual-node-package");
+    if (manifest.getInt("minVersionCode") > 22) {
+      f.session.close();
+      f.restart(manifest.getInt("minVersionCode"));
+    }
     Bundle actual = new Bundle(2, 2000, 22);
     for (String key : new ArrayList<>(actual.manifest.keySet())) actual.manifest.remove(key);
     for (String key : manifest.keySet()) actual.manifest.put(key, manifest.get(key));

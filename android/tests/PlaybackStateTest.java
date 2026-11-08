@@ -78,6 +78,14 @@ public final class PlaybackStateTest {
     cover.update(COVER, false, true, true, false, 2, 40);
     cover.update(COVER, true, true, false, false, 2, 3000);
     require(cover.stage == IDLE && !cover.arrivalReveal); // arrivals disabled
+    require(
+        cover.selectionReveal); // still/video carousel advances independently of arrival playback
+    cover.update(COVER, true, false, false, false, 3, 3001);
+    require(!cover.selectionReveal && cover.stage == STILL); // manual artwork changes do not rotate
+    cover.update(COVER, false, false, false, true, 3, 3100);
+    cover.screenEvent(4);
+    cover.update(COVER, true, false, false, true, 3, 3101);
+    require(cover.selectionReveal && !cover.arrivalReveal && cover.stage == STILL);
     System.out.println(
         "Playback lifecycle, fold modes, stale callbacks, idle toggle, and power saving passed.");
   }

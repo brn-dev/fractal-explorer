@@ -1234,12 +1234,12 @@ function setupControls() {
       wallpaperTarget = slot ? { ...context.target, screen: slot.screen } : null;
       updateWallpaperFrame();
       cancelNavigationGesture(); navigationPreviewView = null;
-      wallpaperStartEditing = !!slot?.transition;
-      wallpaperSteadyContext = slot && !slot.transition ? { ...context, colorOrigin: null, colorElapsed: 0, colorTimeBase: 0 } : null;
+      wallpaperStartEditing = !!slot && (!!slot.transition || !!context.static);
+      wallpaperSteadyContext = slot && !slot.transition && !context.static ? { ...context, colorOrigin: null, colorElapsed: 0, colorTimeBase: 0 } : null;
       $('wandering-speed').step = wallpaperSteadyContext ? 'any' : '.01';
-      automationControls.setDisabled(wallpaperStartEditing, 'Start scenes are still images. Set motion with the transition curve.');
+      automationControls.setDisabled(wallpaperStartEditing, context?.static ? 'Static wallpapers use one still scene.' : 'Start scenes are still images. Set motion with the transition curve.');
       $('animate').disabled = wallpaperStartEditing || reducedMotion;
-      $('animate').title = wallpaperStartEditing ? 'Choose a still start color; the transition controls its movement.' : reducedMotion ? 'Disabled by your reduced motion preference' : '';
+      $('animate').title = wallpaperStartEditing ? context?.static ? 'Static wallpapers use still colors.' : 'Choose a still start color; the transition controls its movement.' : reducedMotion ? 'Disabled by your reduced motion preference' : '';
       $('wandering-speed').disabled = wallpaperStartEditing;
       requestRender();
     },

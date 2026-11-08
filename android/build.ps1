@@ -89,4 +89,11 @@ Run-Tool $javac @('-cp', $jsonJar, '-d', "$buildRoot\tests", "$sourceRoot\java\o
 Run-Tool $java @('-cp', "$buildRoot\tests;$jsonJar", 'org.fractalexplorer.wallpaper.WebAppUpdatesTest', $buildRoot, (Join-Path $workspace 'web\dist'))
 Run-Tool $javac @('-cp', "$buildRoot\classes;$jsonJar;$AndroidJar", '-d', "$buildRoot\tests", "$PSScriptRoot\tests\ExplorerUpdatesBridgeTest.java")
 Run-Tool $java @('-cp', "$buildRoot\tests;$buildRoot\classes;$jsonJar;$AndroidJar", 'org.fractalexplorer.wallpaper.ExplorerUpdatesBridgeTest')
+# Keep Android/ImageIO host fixtures separate from SDK-compiled classes and other host suites.
+$staticTests = Join-Path $buildRoot 'static-tests'
+New-Item -ItemType Directory -Path $staticTests -Force | Out-Null
+$staticSources = @(Get-ChildItem -LiteralPath "$PSScriptRoot\tests\static-host" -Recurse -Filter '*.java' | Select-Object -ExpandProperty FullName)
+$staticSources += @('PackPolicy', 'WallpaperFiles', 'WallpaperGallery', 'ShufflePolicy', 'StaticImageImporter') | ForEach-Object { "$sourceRoot\java\org\fractalexplorer\wallpaper\$_.java" }
+Run-Tool $javac (@('-cp', $jsonJar, '-d', $staticTests) + $staticSources + @("$PSScriptRoot\tests\StaticWallpaperTest.java"))
+Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.StaticWallpaperTest', $buildRoot)
 Write-Output "APK ready: $apk"

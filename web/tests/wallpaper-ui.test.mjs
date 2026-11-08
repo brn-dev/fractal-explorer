@@ -25,7 +25,7 @@ globalThis.TestEngine = class {
   destroy() { this.destroyCalls++; this.destroyed=true; this.pending?.reject(new DOMException('cancel','AbortError')); }
 };
 class Element extends EventTarget {
-  constructor(id) { super(); this.id=id; this.tag=id; this.children=[]; this.open=false; this.value=''; this.style={setProperty(){}}; }
+  constructor(id) { super(); this.id=id; this.tag=id; this.children=[]; this.open=false; this.value=''; this.style={setProperty(){}};const classes=new Set();this.classList={toggle:(name,on)=>{if(on)classes.add(name);else classes.delete(name);},contains:name=>classes.has(name)}; }
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
   focus() {}
@@ -53,7 +53,7 @@ function setup(reset=true, overrides={}) {
   hold=null;
   if (!globalThis.FractalNative) globalThis.window=new EventTarget();
   if(reset){const draft=defaultWallpaperDraft(wallpaperSnapshot(state,palettes));draft.states['open-steady'].view.x='-.12345';storage=JSON.stringify(draft);}
-  const extra=['wallpaper-device','wallpaper-gallery-screen','wallpaper-gallery-dialog','wallpaper-gallery-status','wallpaper-gallery-cards','open-wallpaper-gallery','wallpaper-gallery','wallpaper-gallery-new','wallpaper-gallery-set','wallpaper-replace-dialog','wallpaper-replace-continue','wallpaper-editing-help'];
+  const extra=['wallpaper-kind','wallpaper-static-note','wallpaper-download-image','wallpaper-device','wallpaper-gallery-screen','wallpaper-gallery-dialog','wallpaper-gallery-status','wallpaper-gallery-cards','open-wallpaper-gallery','wallpaper-gallery','wallpaper-gallery-new','wallpaper-gallery-set','wallpaper-replace-dialog','wallpaper-replace-continue','wallpaper-editing-help'];
   const elements=Object.fromEntries([...ids,...extra,'wallpaper-supersampling','wallpaper-gallery-shuffle','wallpaper-gallery-shuffle-options','wallpaper-gallery-shuffle-note','wallpaper-renderer-note','wallpaper-pc','wallpaper-pc-dialog','wallpaper-pc-link','wallpaper-pc-status','wallpaper-pc-summary','wallpaper-pc-copy','wallpaper-pc-share','wallpaper-pc-file'].map(id=>[id,new Element(id)]));
   const find=(node,id)=>node.id===id?node:node.children.map(child=>find(child,id)).find(Boolean);
   globalThis.document={hidden:false,getElementById:id=>elements[id]??Object.values(elements).map(node=>find(node,id)).find(Boolean),createElement:tag=>new Element(tag),addEventListener(){}};
@@ -62,6 +62,62 @@ function setup(reset=true, overrides={}) {
   return {elements,api};
 }
 async function close(elements){elements['wallpaper-dialog'].close();await flush();}
+
+test('static mode edits one still target scene and preserves animation settings when toggled back',async()=>{
+  const applied=[],contexts=[];
+  const {elements,api}=setup(true,{applyState:s=>applied.push(s),onSceneEditingChange:(slot,context)=>contexts.push({slot,context})});
+  try {
+    elements['open-wallpaper-export'].click();await flush();
+    const original=structuredClone(api.draft());
+    elements['wallpaper-kind'].value='static';elements['wallpaper-kind'].onchange();await flush();
+    assert.equal(api.draft().kind,'static');assert.equal(elements['wallpaper-state-cards'].children.length,1);
+    assert.equal(elements['wallpaper-preview-play'].hidden,true);assert.equal(elements['wallpaper-download-image'].hidden,false);
+    assert.equal(elements['wallpaper-quality'].disabled,true);assert.equal(elements['wallpaper-dialog'].classList.contains('wallpaper-static'),true);
+    elements['wallpaper-state-cards'].children[0].children[3].children[0].click();await flush();
+    assert.equal(contexts.at(-1).context.static,true);assert.equal(contexts.at(-1).slot.key,'open-steady');
+    assert.deepEqual(applied.at(-1).automation,{});assert.equal(applied.at(-1).wander,false);assert.equal(elements['wallpaper-save-state'].textContent,'Save image scene');
+    elements['wallpaper-overview'].click();await flush();
+    elements['wallpaper-kind'].value='animated';elements['wallpaper-kind'].onchange();await flush();
+    assert.equal(elements['wallpaper-state-cards'].children.length,2);assert.deepEqual(api.draft().states,original.states);
+    assert.deepEqual(api.draft().transitions,original.transitions);assert.equal(api.draft().idleSeconds,original.idleSeconds);
+    assert.equal(elements['wallpaper-quality'].disabled,false);assert.equal(elements['wallpaper-download-image'].hidden,true);
+  } finally {await close(elements);}
+});
+
+test('static browser export renders once without a codec and offers an editable ZIP or raw PNG',async()=>{
+  const oldVideo=globalThis.testVideo,downloads=[];
+  globalThis.testVideo={supportsMP4(){throw Error('must not probe video');},mp4Encoder(){throw Error('must not encode video');}};
+  const {elements}=setup(true,{downloadBlob:async(blob,name)=>downloads.push({blob,name})});
+  try {
+    elements['open-wallpaper-export'].click();await flush();
+    elements['wallpaper-kind'].value='static';elements['wallpaper-kind'].onchange();await flush();
+    elements['wallpaper-size'].value='480';elements['wallpaper-supersampling'].value='2';
+    const before=renderedSizes.length;await elements['wallpaper-create'].onclick();
+    assert.equal(renderedSizes.length,before+1);assert.equal(downloads[0].name,'fractal-wallpaper.zip');
+    const bytes=Buffer.from(await downloads[0].blob.arrayBuffer()),text=bytes.toString();
+    assert.match(text,/inner-poster.png/);assert.match(text,/"kind":"static"/);assert.doesNotMatch(text,/\.mp4/);
+    const end=bytes.length-22;assert.equal(bytes.readUInt16LE(end+10),2,'only PNG and editable manifest');
+    await elements['wallpaper-download-image'].onclick();assert.equal(downloads[1].name,'inner-fractal-wallpaper.png');
+    assert.equal(await downloads[1].blob.text(),'png');assert.match(elements['wallpaper-status'].textContent,/Import static image/);
+  } finally {globalThis.testVideo=oldVideo;await close(elements);}
+});
+
+test('native static creation publishes one image and manifest, never video, for either screen',async()=>{
+  const calls=[];
+  globalThis.window=new EventTarget();
+  globalThis.FractalNative={info:()=>'{"ok":true,"staticWallpapers":true}',beginPack:()=>{calls.push('begin');return '{"ok":true}';},putPoster:(screen)=>{calls.push(screen);return '{"ok":true}';},commitPack:json=>{calls.push(JSON.parse(json));return '{"ok":true}';}};
+  const {elements}=setup();
+  try {
+    elements['open-wallpaper-export'].click();await flush();
+    for(const screen of ['inner','cover']) {
+      elements['wallpaper-screen'].value=screen;elements['wallpaper-screen'].onchange();await flush();
+      elements['wallpaper-kind'].value='static';elements['wallpaper-kind'].onchange();await flush();
+      elements['wallpaper-size'].value='480';assert.equal(elements['wallpaper-download-image'].hidden,true);
+      await elements['wallpaper-create'].onclick();assert.equal(elements['wallpaper-apply'].hidden,false);
+      const [begin,poster,manifest]=calls.splice(0);assert.equal(begin,'begin');assert.equal(poster,screen);assert.equal(manifest.kind,'static');assert.equal(manifest.screen,screen);assert.deepEqual(manifest.clips,{});
+    }
+  } finally {await close(elements);delete globalThis.FractalNative;}
+});
 
 test('PC device preset creates exact Fold dimensions and supplies them while editing both endpoints',async()=>{
   const changes=[];

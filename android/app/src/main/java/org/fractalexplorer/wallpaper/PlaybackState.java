@@ -18,6 +18,7 @@ public final class PlaybackState {
   public Mode mode = null;
   public int generation = 0;
   public boolean arrivalReveal;
+  public boolean selectionReveal;
   private boolean idle = true, arrival = true, saving = false;
   private long revision = -1, hiddenAt = Long.MIN_VALUE;
   private boolean pendingArrival = true;
@@ -55,6 +56,7 @@ public final class PlaybackState {
             || newArrival
             || (wasHidden && (hiddenAt == Long.MIN_VALUE || now - hiddenAt >= 2000));
     arrivalReveal = false;
+    selectionReveal = active && reveal;
     if (changedMode || changedContent) pendingArrival = true;
     idle = nextIdle;
     arrival = nextArrival;

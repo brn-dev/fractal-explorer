@@ -1296,6 +1296,8 @@ dialog .export-note {
 .wallpaper-gallery-rename button { margin-right:8px; }
 @media(max-width:520px) { .wallpaper-gallery-card { flex-direction:column; } .wallpaper-gallery-card > img { width:100%; height:160px; } }
 #wallpaper-state-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:18px 0; }
+.wallpaper-static .wallpaper-motion-option { display:none; }
+.wallpaper-static #wallpaper-state-cards { grid-template-columns:minmax(0,1fr); }
 .wallpaper-state { min-width:0; border:1px solid var(--line); border-radius:12px; padding:16px; }
 .wallpaper-state h3 { margin:0 0 8px; }
 .wallpaper-state p { font-size:13px; }

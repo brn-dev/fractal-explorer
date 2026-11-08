@@ -100,7 +100,7 @@ final class ExplorerBridge {
 
   @JavascriptInterface
   public String info() {
-    return "{\"ok\":true,\"version\":2,\"nativeVideo\":true,\"maxEdge\":4096,\"dynamicQuality\":true}";
+    return "{\"ok\":true,\"version\":2,\"nativeVideo\":true,\"maxEdge\":4096,\"dynamicQuality\":true,\"staticWallpapers\":true}";
   }
 
   @JavascriptInterface
