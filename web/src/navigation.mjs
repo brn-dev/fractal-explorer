@@ -1,7 +1,7 @@
 import { add, decimal, divide, navigate, text } from './decimal.mjs';
 
-export function screenPoint(x, y, { width, height, aspect = height / width }) {
-  return { dx: x / width - .5, dy: (.5 - y / height) * aspect };
+export function screenPoint(x, y, { width, height, left = 0, top = 0, aspect = height / width }) {
+  return { dx: (x - left) / width - .5, dy: (.5 - (y - top) / height) * aspect };
 }
 
 // A pinch keeps the point under the initial midpoint under the moving midpoint.

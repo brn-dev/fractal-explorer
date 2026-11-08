@@ -29,6 +29,7 @@
         <span class="ruler-center"></span>
       </div>
     </main>
+    <div id="wallpaper-target-frame" hidden><span id="wallpaper-target-label"></span></div>
     <header>
       <div class="header-right">
         <button id="toggle-rulers" class="icon-button visibility-button" type="button" title="Show centering rulers (G)" aria-label="Show centering rulers" aria-pressed="false" aria-controls="centering-rulers" aria-keyshortcuts="G">
@@ -516,6 +517,7 @@
       <button id="wallpaper-gallery" class="secondary-button" type="button" hidden>Saved wallpapers</button>
       <p>Create and save a wallpaper for one screen at a time. Each has a transition and a steady scene. Your other screen's wallpaper stays unchanged.</p>
       <label class="field-label">Design for<select id="wallpaper-screen"><option value="inner">Main screen</option><option value="cover">Cover screen</option></select></label>
+      <label class="field-label">Target device<select id="wallpaper-device"><option value="auto">Saved or detected screen</option><option value="fold8-ultra">Samsung Galaxy Z Fold8 Ultra</option></select></label>
       <p class="export-note">Each transition runs from its saved START scene to the matching saved END / steady scene. Use the explicit scene buttons below to edit or preview either endpoint.</p>
       <label class="field-label">Name<input id="wallpaper-name" maxlength="80" value="My fractal wallpaper"></label>
       <div id="wallpaper-preview-stage"><canvas id="wallpaper-preview" aria-label="Selected wallpaper state preview"></canvas></div>
@@ -536,7 +538,7 @@
       </div>
       <p id="wallpaper-color-note" class="export-note"></p>
       <div class="two-fields">
-        <label class="field-label">Resolution<select id="wallpaper-size"><option value="native">Match this screen exactly</option><option value="480">480 px · quick draft</option><option value="720">720 px</option><option value="1080" selected>1080 px</option><option value="1920">1920 px</option><option value="2560">2560 px</option><option value="3840">3840 px</option></select></label>
+        <label class="field-label">Resolution<select id="wallpaper-size"><option value="native">Match target screen exactly</option><option value="480">480 px · quick draft</option><option value="720">720 px</option><option value="1080" selected>1080 px</option><option value="1920">1920 px</option><option value="2560">2560 px</option><option value="3840">3840 px</option></select></label>
         <label class="field-label">Idle frame rate<select id="wallpaper-idle-fps"><option value="10">10 fps</option><option value="15" selected>15 fps</option><option value="24">24 fps</option><option value="30">30 fps</option></select></label>
       </div>
       <p id="wallpaper-resolution-note" class="export-note"></p>

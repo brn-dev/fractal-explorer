@@ -53,7 +53,7 @@ function setup(reset=true, overrides={}) {
   hold=null;
   if (!globalThis.FractalNative) globalThis.window=new EventTarget();
   if(reset){const draft=defaultWallpaperDraft(wallpaperSnapshot(state,palettes));draft.states['open-steady'].view.x='-.12345';storage=JSON.stringify(draft);}
-  const extra=['wallpaper-gallery-screen','wallpaper-gallery-dialog','wallpaper-gallery-status','wallpaper-gallery-cards','open-wallpaper-gallery','wallpaper-gallery','wallpaper-gallery-new','wallpaper-gallery-set','wallpaper-replace-dialog','wallpaper-replace-continue','wallpaper-editing-help'];
+  const extra=['wallpaper-device','wallpaper-gallery-screen','wallpaper-gallery-dialog','wallpaper-gallery-status','wallpaper-gallery-cards','open-wallpaper-gallery','wallpaper-gallery','wallpaper-gallery-new','wallpaper-gallery-set','wallpaper-replace-dialog','wallpaper-replace-continue','wallpaper-editing-help'];
   const elements=Object.fromEntries([...ids,...extra,'wallpaper-supersampling','wallpaper-gallery-shuffle','wallpaper-gallery-shuffle-options','wallpaper-gallery-shuffle-note','wallpaper-renderer-note','wallpaper-pc','wallpaper-pc-dialog','wallpaper-pc-link','wallpaper-pc-status','wallpaper-pc-summary','wallpaper-pc-copy','wallpaper-pc-share','wallpaper-pc-file'].map(id=>[id,new Element(id)]));
   const find=(node,id)=>node.id===id?node:node.children.map(child=>find(child,id)).find(Boolean);
   globalThis.document={hidden:false,getElementById:id=>elements[id]??Object.values(elements).map(node=>find(node,id)).find(Boolean),createElement:tag=>new Element(tag),addEventListener(){}};
@@ -62,6 +62,41 @@ function setup(reset=true, overrides={}) {
   return {elements,api};
 }
 async function close(elements){elements['wallpaper-dialog'].close();await flush();}
+
+test('PC device preset creates exact Fold dimensions and supplies them while editing both endpoints',async()=>{
+  const changes=[];
+  const {elements,api}=setup(true,{onSceneEditingChange:(slot,context)=>changes.push({key:slot?.key??null,context})});
+  try {
+    elements['open-wallpaper-export'].click();await flush();
+    for(const [screen,size] of [['inner',{width:2256,height:2504}],['cover',{width:1080,height:2520}]]) {
+      elements['wallpaper-screen'].value=screen;elements['wallpaper-screen'].onchange();await flush();
+      elements['wallpaper-device'].value='fold8-ultra';elements['wallpaper-device'].onchange();await flush();
+      assert.equal(api.draft().longest,'native');assert.equal(api.draft().displayProfile,'fold8-ultra');assert.deepEqual(api.draft().screenSizes[screen],size);
+      assert.match(elements['wallpaper-resolution-note'].textContent,new RegExp(`${size.width} × ${size.height}`));
+      for(const index of [0,1]) {
+        elements['wallpaper-state-cards'].children[index].children[3].children[1].click();await flush();
+        assert.deepEqual(changes.at(-1).context.target,size);
+        elements['wallpaper-overview'].click();await flush();assert.equal(changes.at(-1).key,null);
+      }
+      elements['wallpaper-detect-resolution'].click();assert.equal(api.draft().displayProfile,'fold8-ultra','PC detect cannot replace the preset');
+    }
+  } finally {await close(elements);}
+});
+
+test('an explicit device preset survives native refresh; Detect resolution selects the current phone instead',async()=>{
+  globalThis.window=new EventTarget();
+  globalThis.FractalNative={info(){},wallpaperDisplays:()=>JSON.stringify({ok:true,screens:{inner:{width:1968,height:2184}}})};
+  const {elements,api}=setup();
+  try {
+    elements['open-wallpaper-export'].click();await flush();
+    elements['wallpaper-device'].value='fold8-ultra';elements['wallpaper-device'].onchange();await flush();
+    window.dispatchEvent(new Event('wallpaper-displays-changed'));await flush();
+    assert.deepEqual(api.draft().screenSizes.inner,{width:2256,height:2504});
+    elements['wallpaper-detect-resolution'].click();await flush();
+    assert.equal(api.draft().displayProfile,undefined);assert.equal(elements['wallpaper-device'].value,'auto');
+    assert.deepEqual(api.draft().screenSizes.inner,{width:1968,height:2184});
+  } finally {await close(elements);delete globalThis.FractalNative;}
+});
 
 test('PC handoff captures native dimensions and sampling without starting an export, and file matches link',async()=>{
   const downloads=[],shared=[];

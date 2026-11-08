@@ -23,6 +23,16 @@ export const wallpaperStates = [
   { key: 'open-steady', title: 'Open', description: 'A repeating loop for the large inner screen.', file: 'inner-idle.mp4', screen: 'inner' },
 ];
 export const wallpaperScreenName = screen => screen === 'cover' ? 'Cover screen' : 'Main screen';
+// Portrait pixel dimensions: Samsung SM-F976B (Galaxy Z Fold8 Ultra).
+export const wallpaperDisplayProfiles = {
+  'fold8-ultra': { name: 'Samsung Galaxy Z Fold8 Ultra', screens: {
+    cover: { width: 1080, height: 2520 }, inner: { width: 2256, height: 2504 },
+  } },
+};
+export function wallpaperScreenSize(draft, screen) {
+  if (draft.displayProfile !== undefined && !Object.hasOwn(wallpaperDisplayProfiles, draft.displayProfile)) throw new Error('Choose a supported target device.');
+  return draft.displayProfile ? { ...wallpaperDisplayProfiles[draft.displayProfile].screens[screen] } : draft.screenSizes?.[screen];
+}
 export function wallpaperSlots(draft) {
   if (draft.screen === undefined) return wallpaperStates;
   if (!['cover', 'inner'].includes(draft.screen)) throw new Error('Choose cover or main screen.');
@@ -31,6 +41,7 @@ export function wallpaperSlots(draft) {
 export function wallpaperScreenDraft(draft, screen) {
   if (!['cover', 'inner'].includes(screen) || (draft.screen !== undefined && draft.screen !== screen)) throw new Error('This design belongs to the other screen.');
   const next = structuredClone(draft); next.screen = screen;
+  if (next.displayProfile) next.screenSizes = { ...next.screenSizes, [screen]: wallpaperScreenSize(next, screen) };
   next.states = Object.fromEntries(wallpaperSlots(next).map(slot => [slot.key, next.states[slot.key]]));
   next.transitions = Object.fromEntries(wallpaperSlots(next).filter(slot => slot.transition).map(slot => [slot.key, wallpaperTransition(draft, slot.key)]));
   return next;
@@ -57,7 +68,7 @@ export function wallpaperLoopTiming(view, settings, seconds, fps) {
   return { frames, duration: frames / fps };
 }
 export function wallpaperDimensions(draft, screen, previewLongest) {
-  const size = draft.screenSizes?.[screen];
+  const size = wallpaperScreenSize(draft, screen);
   const valid = size && [size.width, size.height].every(value => Number.isInteger(value) && value >= 16 && value <= 4096 && value % 2 === 0);
   if (size && !valid) throw new Error('Screen dimensions must be even pixels from 16 to 4096.');
   const native = draft.longest === 'native';

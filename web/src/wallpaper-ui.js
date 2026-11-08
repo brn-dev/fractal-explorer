@@ -1,5 +1,5 @@
 import { BrowserEngine } from './engine.js';
-import { wallpaperStates, wallpaperSlots, wallpaperScreenDraft, wallpaperScreenName, wallpaperColorCycle, wallpaperSnapshot, validateWallpaperSnapshot, defaultWallpaperDraft, wallpaperPlan, wallpaperManifest, wallpaperJSON, MAX_WALLPAPER_JSON_BYTES, wallpaperTransition, transitionCurves } from './wallpaper.mjs';
+import { wallpaperStates, wallpaperSlots, wallpaperScreenDraft, wallpaperScreenName, wallpaperScreenSize, wallpaperDimensions, wallpaperColorCycle, wallpaperSnapshot, validateWallpaperSnapshot, defaultWallpaperDraft, wallpaperPlan, wallpaperManifest, wallpaperJSON, MAX_WALLPAPER_JSON_BYTES, wallpaperTransition, transitionCurves } from './wallpaper.mjs';
 import { wrapPhase } from './export-utils.mjs';
 import { wallpaperZip } from './zip-store.mjs';
 import { nativeBridge, nativeCall } from './native-bridge.mjs';
@@ -34,6 +34,9 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
   }
   let detectedSizes = screenSizes();
   function assignScreenSizes(profile) {
+    if (profile.displayProfile) {
+      profile.screenSizes = { [profile.screen]: wallpaperScreenSize(profile, profile.screen) }; return;
+    }
     // Native resolution means this device, not dimensions embedded by an
     // imported draft from another phone. Browser exports may use saved sizes.
     profile.screenSizes = typeof nativeBridge()?.wallpaperDisplays === 'function'
@@ -119,8 +122,8 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     encodingSummary();
   }
   function updateResolutionNote() {
-    const size = draft.screenSizes?.[draft.screen];
-    $('wallpaper-resolution-note').textContent = size ? `${wallpaperScreenName(draft.screen)}: ${size.width} × ${size.height} pixels.${draft.longest === 'native' ? ' Export uses this exact resolution.' : ' Export keeps this screen’s proportions.'}` : `Open the app on the ${wallpaperScreenName(draft.screen).toLowerCase()} once, then tap Detect resolution. Smaller export sizes remain available.`;
+    const size = wallpaperScreenSize(draft, draft.screen);
+    $('wallpaper-resolution-note').textContent = size ? `${wallpaperScreenName(draft.screen)}: ${size.width} × ${size.height} pixels.${draft.longest === 'native' ? ' Export uses this exact resolution.' : ' Export keeps this screen’s proportions.'}` : `Choose a target device, or open the phone app on the ${wallpaperScreenName(draft.screen).toLowerCase()} and tap Detect resolution. Smaller export sizes remain available.`;
   }
   function rendererNote(renderer = engine) {
     $('wallpaper-renderer-note').textContent = renderer.gpu ? `GPU rendering${renderer.deviceName ? ' · ' + renderer.deviceName : ''}. Creation runs on this device; the finished package can be imported on your phone.`
@@ -257,7 +260,10 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
       snapshot.supersampling = draft.supersampling ?? 1;
       if (slot.transition) { snapshot.automation = {}; snapshot.wander = false; snapshot.colors = designPlan(draft).find(plan => plan.key === key).sample(0).colors; }
       else { snapshot.wander = draft.colorWander ?? snapshot.wander; snapshot.speed = 1 / wallpaperColorCycle(draft).seconds; }
-      onSceneEditingChange(slot, { idleSeconds: draft.idleSeconds, idleFps: draft.idleFps }); entered = true;
+      let target;
+      try { target = wallpaperDimensions(draft, slot.screen); }
+      catch { target = { ...wallpaperDimensions(draft, slot.screen, 1080), approximate: true }; }
+      onSceneEditingChange(slot, { idleSeconds: draft.idleSeconds, idleFps: draft.idleFps, target }); entered = true;
       applyState(snapshot); editing = key; dialog.close();
       $('wallpaper-editing-label').textContent = slot.transition ? `Editing START scene · ${slot.title}` : `Editing END / steady scene · ${slot.title}`;
       $('wallpaper-editing-help').textContent = slot.transition ? `Choose the start geometry. Parameter animation is disabled here; the transition curve moves it into ${wallpaperStates.find(s => s.key === slot.target).title}. Palette changes also update the steady scene; color cycling is shared in the overview.`
@@ -339,6 +345,7 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
       screen = draft.screen;
       if (!draft.states[selected]) selected = wallpaperSlots(draft)[0].key;
       $('wallpaper-screen').value = screen;
+      $('wallpaper-device').value = draft.displayProfile ?? 'auto';
       $('wallpaper-name').value = draft.name;
       $('wallpaper-idle-seconds').value = draft.idleSeconds;
       $('wallpaper-size').value = draft.longest; $('wallpaper-idle-fps').value = draft.idleFps;
@@ -366,7 +373,23 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     screen = $('wallpaper-screen').value; draft = drafts[screen]; renderedDraft = null;
     $('wallpaper-apply').hidden = true; open();
   };
-  $('wallpaper-detect-resolution').onclick = () => { refreshSizes(); if (!job && !loadingDraft) { readOptions(); startPreview(); } };
+  $('wallpaper-device').onchange = () => {
+    if (job || loadingDraft) return;
+    try {
+      readOptions();
+      const next = structuredClone(draft), profile = $('wallpaper-device').value;
+      if (profile === 'auto') delete next.displayProfile;
+      else { next.displayProfile = profile; next.longest = 'native'; }
+      assignScreenSizes(next); designPlan(next); draft = next;
+      $('wallpaper-size').value = draft.longest; readOptions(); startPreview();
+    } catch (error) { $('wallpaper-device').value = draft.displayProfile ?? 'auto'; $('wallpaper-status').textContent = error.message; }
+  };
+  $('wallpaper-detect-resolution').onclick = () => {
+    if (job || loadingDraft) return;
+    if (typeof nativeBridge()?.wallpaperDisplays !== 'function') { $('wallpaper-status').textContent = 'No phone display detected here. Choose a target device or open a phone draft.'; return; }
+    delete draft.displayProfile; $('wallpaper-device').value = 'auto';
+    refreshSizes(); readOptions(); startPreview();
+  };
   globalThis.window?.addEventListener('wallpaper-displays-changed', () => { refreshSizes(); if (dialog.open && !job && !loadingDraft) { readOptions(); startPreview(); } });
   for (const id of ['wallpaper-name', 'wallpaper-idle-seconds', 'wallpaper-size', 'wallpaper-idle-fps', 'wallpaper-steady-motion', 'wallpaper-color-motion', 'wallpaper-color-seconds', 'wallpaper-quality', 'wallpaper-bitrate', 'wallpaper-supersampling']) $(id).onchange = () => {
     try { readOptions(); cards(); startPreview(); }

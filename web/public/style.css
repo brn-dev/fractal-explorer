@@ -98,6 +98,33 @@ canvas {
 #fractal-canvas {
   transform-origin: center;
 }
+.wallpaper-scene-editing #viewport,
+#wallpaper-target-frame {
+  inset: var(--wallpaper-frame-top) auto auto var(--wallpaper-frame-left);
+  width: var(--wallpaper-frame-width);
+  height: var(--wallpaper-frame-height);
+}
+#wallpaper-target-frame {
+  position: fixed;
+  outline: 1px solid #d5efa3cc;
+  box-shadow: 0 0 0 100vmax #08100fbb;
+  pointer-events: none;
+}
+#wallpaper-target-frame[hidden] { display: none; }
+#wallpaper-target-label {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--lime);
+  text-shadow: 0 1px 4px #000;
+}
+.wallpaper-scene-editing .intro,
+.wallpaper-scene-editing #destinations,
+.wallpaper-scene-editing #navigation,
+.wallpaper-scene-editing .vignette { display: none; }
 #centering-rulers {
   position: absolute;
   inset: 0;

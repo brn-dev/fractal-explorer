@@ -8,7 +8,7 @@ const encoder = new TextEncoder();
 export function wallpaperHandoff(draft) {
   if (!['cover', 'inner'].includes(draft?.screen)) throw new Error('Choose cover or main screen before sending a design to your PC.');
   const next = wallpaperScreenDraft(draft, draft.screen);
-  wallpaperPlan(next); // Native dimensions must be known on the sending phone.
+  wallpaperPlan(next); // Exact dimensions come from a device preset or a saved phone display.
   wallpaperJSON(next);
   return next;
 }

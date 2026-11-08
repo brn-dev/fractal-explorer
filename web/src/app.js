@@ -5,7 +5,8 @@ import { BrowserEngine } from './engine.js';
 import { renderDimensions, qualityScales } from './resolution.mjs';
 import { setupExports } from './export-ui.js';
 import { setupWallpaper } from './wallpaper-ui.js';
-import { wallpaperLoopTiming } from './wallpaper.mjs';
+import { wallpaperLoopTiming, wallpaperScreenName } from './wallpaper.mjs';
+import { wallpaperFrame } from './wallpaper-frame.mjs';
 import { nativeBridge, nativeDownload } from './native-bridge.mjs';
 import { advancePhase } from './export-utils.mjs';
 import { fractals, defaultView, parameterDefaults, hasConstant, fractalParameters } from './fractals.mjs';
@@ -62,6 +63,22 @@ async function openCurrentWallpaperHandoff() {
 }
 let wallpaperStartEditing = false;
 let wallpaperSteadyContext = null;
+let wallpaperTarget = null, wallpaperFrameGeometry = null, wallpaperPanelWasCollapsed = null;
+function updateWallpaperFrame() {
+  const frame = $('wallpaper-target-frame');
+  if (!wallpaperTarget) {
+    document.body.classList.remove('wallpaper-scene-editing'); frame.hidden = true;
+    const changed = wallpaperFrameGeometry !== null; wallpaperFrameGeometry = null; return changed;
+  }
+  const toolbarHeight = $('wallpaper-editing').getBoundingClientRect().height + (innerWidth <= 760 ? 56 : 0);
+  const box = wallpaperFrame(innerWidth, innerHeight, wallpaperTarget, toolbarHeight);
+  document.body.classList.add('wallpaper-scene-editing'); frame.hidden = false;
+  $('wallpaper-target-label').textContent = `${wallpaperScreenName(wallpaperTarget.screen)} · ${wallpaperTarget.approximate ? 'screen proportions' : `${wallpaperTarget.width} × ${wallpaperTarget.height}`}`;
+  if (JSON.stringify(box) === JSON.stringify(wallpaperFrameGeometry)) return false;
+  wallpaperFrameGeometry = box;
+  for (const key of ['left', 'top', 'width', 'height']) document.documentElement.style.setProperty(`--wallpaper-frame-${key}`, `${box[key]}px`);
+  return true;
+}
 let reconnectingGPU = false;
 function syncHardware() {
   $('hardware').textContent = engine.gpu ? engine.deviceName.toUpperCase() : 'LOCAL CPU · WASM';
@@ -665,7 +682,8 @@ async function render() {
     snapshot = currentRenderView(),
     settingsSnapshot = { ...renderSettings };
   const quality = parameterPreview ? Math.min(1, Number($("quality").value)) : $("quality").value;
-  const { width, height, capped } = renderDimensions(innerWidth, innerHeight, quality, { gpu: engine.gpu, mobile: engine.mobile, limits: engine.renderLimits });
+  const viewport = $('viewport').getBoundingClientRect();
+  const { width, height, capped } = renderDimensions(viewport.width, viewport.height, quality, { gpu: engine.gpu, mobile: engine.mobile, limits: engine.renderLimits });
   $("quality-note").textContent = `${parameterPreview ? 'Preview · ' : ''}${width.toLocaleString()} × ${height.toLocaleString()} pixels${capped ? ' · resolution limit reached' : ''}. Higher quality smooths fine edges; increase iterations for more fractal detail.`;
   try {
     const plan = wallpaperStartEditing || (automationPlayer.paused && pausedStatic) ? null : animationPlan(snapshot, automationSettings, LIVE_FPS, pausedStatic?.frameOffset ?? 0);
@@ -736,8 +754,9 @@ async function render() {
 }
 function navigationViewport() {
   const quality = parameterPreview ? Math.min(1, Number($('quality').value)) : $('quality').value;
-  const dimensions = renderDimensions(innerWidth, innerHeight, quality, { gpu: engine.gpu, mobile: engine.mobile, limits: engine.renderLimits });
-  return { width: innerWidth, height: innerHeight, aspect: dimensions.height / dimensions.width };
+  const { left, top, width, height } = $('viewport').getBoundingClientRect();
+  const dimensions = renderDimensions(width, height, quality, { gpu: engine.gpu, mobile: engine.mobile, limits: engine.renderLimits });
+  return { left, top, width, height, aspect: dimensions.height / dimensions.width };
 }
 function updateNavigationPreview() {
   if (!imageView || !navigationPreviewView) { canvas.style.transform = ''; return; }
@@ -890,6 +909,7 @@ function setupNavigation() {
     }
   });
   addEventListener("resize", () => {
+    updateWallpaperFrame();
     cancelNavigationGesture(); navigationPreviewView = view;
     updateNavigationPreview(); requestRender(250);
   });
@@ -1204,6 +1224,16 @@ function setupControls() {
   };
   wallpaperUI = setupWallpaper({ engine, palettes, paint, downloadBlob, getState: snapshotState,
     onSceneEditingChange(slot, context) {
+      if (slot && !wallpaperTarget) {
+        wallpaperPanelWasCollapsed = $('panel-content').hidden;
+        $('panel-content').scrollTop = 0;
+        if (innerWidth <= 760) setPanelCollapsed(true);
+      } else if (!slot && wallpaperPanelWasCollapsed !== null) {
+        setPanelCollapsed(wallpaperPanelWasCollapsed); wallpaperPanelWasCollapsed = null;
+      }
+      wallpaperTarget = slot ? { ...context.target, screen: slot.screen } : null;
+      updateWallpaperFrame();
+      cancelNavigationGesture(); navigationPreviewView = null;
       wallpaperStartEditing = !!slot?.transition;
       wallpaperSteadyContext = slot && !slot.transition ? { ...context, colorOrigin: null, colorElapsed: 0, colorTimeBase: 0 } : null;
       $('wandering-speed').step = wallpaperSteadyContext ? 'any' : '.01';
@@ -1211,6 +1241,7 @@ function setupControls() {
       $('animate').disabled = wallpaperStartEditing || reducedMotion;
       $('animate').title = wallpaperStartEditing ? 'Choose a still start color; the transition controls its movement.' : reducedMotion ? 'Disabled by your reduced motion preference' : '';
       $('wandering-speed').disabled = wallpaperStartEditing;
+      requestRender();
     },
     applyState(snapshot) {
       if (qualityScales.includes(snapshot.supersampling)) $('quality').value = String(snapshot.supersampling);
@@ -1228,6 +1259,11 @@ function setupControls() {
       fitWallpaperColorTiming();
     },
   });
+  if (typeof ResizeObserver === 'function') new ResizeObserver(() => {
+    if (wallpaperTarget && updateWallpaperFrame()) {
+      cancelNavigationGesture(); navigationPreviewView = null; updateNavigationPreview(); requestRender();
+    }
+  }).observe($('wallpaper-editing'));
   setupExports({
     engine, palettes, paint, colorTable, downloadBlob,
     setAudioPreview: active => audio.setPreviewing(active),
