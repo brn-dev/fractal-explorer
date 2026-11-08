@@ -409,6 +409,70 @@ test('opening a legacy main draft then reloading preserves the unvisited cover d
   } finally {globalThis.localStorage=oldStorage;}
 });
 
+test('copy start to end replaces either screen independently and the copied geometry can be edited separately',async()=>{
+  const {elements,api}=setup();elements['open-wallpaper-export'].click();await flush();
+  try {
+    for(const [screen,prefix]of [['inner','open'],['cover','closed']]) {
+      elements['wallpaper-screen'].value=screen;elements['wallpaper-screen'].onchange();await flush();
+      const from=api.draft().states[`${prefix}-transition`];from.automation={iterations:{enabled:true,target:'200',speed:.25,shape:'sine'}};
+      const before=structuredClone(from);
+      const startCard=elements['wallpaper-state-cards'].children[0],copy=startCard.children[3].children[3];
+      assert.equal(copy.textContent,'Copy start → end');copy.click();await flush();
+      const end=api.draft().states[`${prefix}-steady`];assert.deepEqual(end.view,before.view);assert.deepEqual(end.settings,before.settings);
+      assert.deepEqual(end.automation,{},'ignored start motion must not become a steady loop');
+      assert.match(elements['wallpaper-state-cards'].children[1].children[2].textContent,/color loop/);
+      assert.deepEqual(api.draft().states[`${prefix}-transition`],before);
+      assert.notEqual(end.view,api.draft().states[`${prefix}-transition`].view);
+      end.view.x='.123';assert.equal(api.draft().states[`${prefix}-transition`].view.x,before.view.x);
+      assert.match(elements['wallpaper-preview-status'].textContent,/copied END/);
+      const {wallpaperPlan}=await import(pathToFileURL(root+'wallpaper.mjs')),plans=wallpaperPlan(api.draft());
+      assert.deepEqual(plans[0].sample(plans[0].frames-1).view,plans[1].sample(0).view);
+    }
+    elements['wallpaper-screen'].value='inner';elements['wallpaper-screen'].onchange();await flush();
+    assert.equal(api.draft().states['open-steady'].view.x,'.123','copying cover must not replace the main draft');
+  } finally {await close(elements);}
+});
+
+test('copy end to start preserves the source loop but strips motion from the copied start',async()=>{
+  const {elements,api}=setup();elements['open-wallpaper-export'].click();await flush();
+  try {
+    const draft=api.draft(),end=draft.states['open-steady'];end.view.fractal='julia';end.settings={arithmetic:'double-single'};
+    end.automation={julia_x:{enabled:true,target:'-.7',speed:.25,shape:'sine'}};end.wander=true;
+    const before=structuredClone(end),options={quality:draft.quality,supersampling:draft.supersampling,transitions:structuredClone(draft.transitions),colorSeconds:draft.colorSeconds,colorWander:draft.colorWander};
+    const copy=elements['wallpaper-state-cards'].children[1].children[3].children[3];assert.equal(copy.textContent,'Copy end → start');copy.click();await flush();
+    const next=api.draft(),start=next.states['open-transition'];assert.deepEqual(start.view,before.view);assert.deepEqual(start.settings,before.settings);
+    assert.deepEqual(start.automation,{});assert.equal(start.wander,false);assert.deepEqual(next.states['open-steady'],before);
+    assert.deepEqual({quality:next.quality,supersampling:next.supersampling,transitions:next.transitions,colorSeconds:next.colorSeconds,colorWander:next.colorWander},options);
+    start.view.x='.25';assert.equal(next.states['open-steady'].view.x,before.view.x);
+    assert.match(elements['wallpaper-status'].textContent,/end \/ steady.*start/);assert.match(elements['wallpaper-preview-status'].textContent,/copied START/);
+  } finally {await close(elements);}
+});
+
+test('copying is blocked during export setup even if a stale click is delivered',async()=>{
+  const {elements,api}=setup();elements['open-wallpaper-export'].click();await flush();
+  elements['wallpaper-dialog'].append(elements['wallpaper-state-cards']);
+  const oldVideo=globalThis.testVideo;let release;
+  try {
+    const before=structuredClone(api.draft().states);
+    const gate=new Promise(resolve=>{release=resolve;});globalThis.testVideo={...oldVideo,supportsMP4:()=>gate};
+    const job=elements['wallpaper-create'].onclick();await flush();
+    const copy=elements['wallpaper-state-cards'].children[0].children[3].children[3];assert.equal(copy.disabled,true);copy.click();assert.deepEqual(api.draft().states,before);
+    elements['wallpaper-cancel'].click();release(true);await job;
+  } finally {release?.(true);globalThis.testVideo=oldVideo;await close(elements);}
+});
+
+test('copying over a rendered endpoint invalidates Apply and requests new rendering',async()=>{
+  globalThis.window=new EventTarget();
+  globalThis.FractalNative={info(){},beginPack:()=>'{"ok":true}',putPoster:()=>'{"ok":true}',commitPack:()=>'{"ok":true}'};
+  const {elements}=setup();elements['open-wallpaper-export'].click();await flush();
+  try {
+    document.getElementById('wallpaper-open-transition-seconds').value='.5';elements['wallpaper-idle-seconds'].value='2';elements['wallpaper-idle-fps'].value='10';
+    await elements['wallpaper-create'].onclick();assert.equal(elements['wallpaper-apply'].hidden,false);
+    elements['wallpaper-state-cards'].children[0].children[3].children[3].click();await flush();
+    assert.equal(elements['wallpaper-apply'].hidden,true);assert.match(elements['wallpaper-status'].textContent,/Create the wallpaper again/);
+  } finally {await close(elements);delete globalThis.FractalNative;}
+});
+
 test('transition start and end edit different saved scenes and the banner names their role',async()=>{
   let applied;
   const chosen={...state,view:{...state.view,x:'-.3456'}};

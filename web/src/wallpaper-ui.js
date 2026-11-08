@@ -154,6 +154,23 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     draft.states[key] = snapshot;
     save();
   }
+  function copyScene(fromKey, toKey) {
+    if (job || loadingDraft) return;
+    try {
+      readOptions();
+      const source = wallpaperStates.find(slot => slot.key === fromKey), target = wallpaperStates.find(slot => slot.key === toKey);
+      const next = structuredClone(draft), snapshot = validateWallpaperSnapshot(draft.states[fromKey]);
+      snapshot.supersampling = draft.supersampling ?? 1;
+      // Starts contain still parameter values. Do not promote ignored legacy
+      // start automation into a loop, or copy a loop's motion into a start.
+      if (source.transition || target.transition) { snapshot.automation = {}; snapshot.wander = false; }
+      next.states[toKey] = snapshot;
+      designPlan(next); wallpaperJSON(next); draft = next; save(); cards();
+      showScene(toKey, target.transition ? `${target.title} · copied START scene` : `${target.title} · copied END / steady first frame`);
+      const needsRender = renderedDraft !== null && JSON.stringify(draft) !== renderedDraft;
+      $('wallpaper-status').textContent = `Copied saved ${source.transition ? 'start' : 'end / steady'} scene to ${target.transition ? 'start' : 'end / steady'}. You can edit the copied scene now.${needsRender ? ' Create the wallpaper again to update its rendered animations.' : ''}`;
+    } catch (error) { $('wallpaper-status').textContent = error.message; }
+  }
   function stopPreview() {
     playing = false; $('wallpaper-preview-play').textContent = 'Play preview';
     if (preview) { preview.controller.abort(); cancelAnimationFrame(preview.raf); preview.renderer.destroy(); preview = null; }
@@ -265,7 +282,7 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
       const description = document.createElement('p'); description.textContent = slot.transition ? `START: saved ${slot.title} scene → END: ${end.title}, the ${slot.screen === 'cover' ? 'cover' : 'inner'} steady scene.`
         : `Transition endpoint + first frame of the ${slot.screen === 'cover' ? 'cover' : 'inner'} ${draft.steadyMotion === 'still' ? 'still image' : 'loop'}.`;
       const current = draft.states[slot.key], automated = Object.values(current.automation ?? {}).some(p => p?.enabled);
-      const detail = document.createElement('p'); detail.className = 'export-note'; detail.textContent = slot.transition ? `Start: ${current.view.fractal} → End: ${draft.states[slot.target].view.fractal} · linked to ${end.title}` : `${current.view.fractal} · ${slot.screen === 'cover' ? 'small screen' : 'large screen'} · ${draft.steadyMotion === 'still' ? 'still image' : automated ? 'parameter loop' : current.wander ? 'color loop' : 'still view'}`;
+      const detail = document.createElement('p'); detail.className = 'export-note'; detail.textContent = slot.transition ? `Start: ${current.view.fractal} → End: ${draft.states[slot.target].view.fractal} · linked to ${end.title}` : `${current.view.fractal} · ${slot.screen === 'cover' ? 'small screen' : 'large screen'} · ${draft.steadyMotion === 'still' ? 'still image' : automated ? 'parameter loop' : (draft.colorWander ?? current.wander) ? 'color loop' : 'still view'}`;
       // Keep the buttons mounted: a number input can emit change on blur between a
       // button's pointer-down and click, and replacing it would swallow that click.
       const existing = container.children[index];
@@ -282,6 +299,7 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
         [slot.transition ? 'Play transition' : 'Play steady preview', () => { selected = slot.key; previewCaption = ''; startPreview(true); $('wallpaper-preview-stage').scrollIntoView({ block: 'nearest' }); }],
         [slot.transition ? 'Edit start scene' : 'Edit end / steady scene', () => editScene(slot.key)],
         [slot.transition ? 'Use current view as start' : 'Use current view as end', () => { try { storeScene(slot.key); open(); showScene(slot.key, slot.transition ? `${slot.title} · saved START scene` : `${slot.title} · saved END / steady first frame`); } catch (error) { $('wallpaper-status').textContent = error.message; } }],
+        [slot.transition ? 'Copy start → end' : 'Copy end → start', () => copyScene(slot.key, slot.transition ? slot.target : wallpaperStates.find(start => start.target === slot.key).key)],
       ]) {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary-button'; button.textContent = label; button.onclick = action; actions.append(button);
       }
