@@ -21,6 +21,7 @@ import { setupAppUpdates } from './update-ui.js';
 import { validateCustomPalette, customPaletteDefinition, paletteSelection } from './palettes.mjs';
 import { setupPaletteEditor } from './palette-ui.js';
 import { normalizeRotation } from './rotation.mjs';
+import { setupTouchControls } from './touch-controls.js';
 const $ = (id) => document.getElementById(id);
 let canvas = $("fractal-canvas");
 const base = {
@@ -1403,6 +1404,7 @@ async function init() {
   if (!openedShared) showLocationIntro();
   setupNavigation();
   setupControls();
+  setupTouchControls();
   audio = setupAudioControls({ requestAnalysis: requestAudioAnalysis });
   majorSceneChange('initial');
   if (shareError) toast(shareError);

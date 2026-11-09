@@ -71,6 +71,8 @@ input:focus-visible {
   outline: 2px solid var(--lime);
   outline-offset: 4px;
 }
+input[type="range"] { touch-action:pan-y pinch-zoom; }
+@media (pointer:coarse) { input[type="range"] { min-height:32px; } }
 button:disabled {
   opacity: 0.5;
   cursor: wait;
