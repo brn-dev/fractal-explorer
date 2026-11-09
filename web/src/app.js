@@ -20,6 +20,7 @@ import { MAX_CUSTOM_CONSTANTS } from './custom-constants.mjs';
 import { setupAppUpdates } from './update-ui.js';
 import { validateCustomPalette, customPaletteDefinition, paletteSelection } from './palettes.mjs';
 import { setupPaletteEditor } from './palette-ui.js';
+import { normalizeRotation } from './rotation.mjs';
 const $ = (id) => document.getElementById(id);
 let canvas = $("fractal-canvas");
 const base = {
@@ -489,6 +490,8 @@ function syncView() {
   $("center-x").value = view.x;
   $("center-y").value = view.y;
   $("span").value = view.span;
+  $('view-rotation').value = view.rotation ?? 0;
+  $('view-rotation-slider').value = view.rotation ?? 0;
   $("julia-x").value = view.julia_x;
   $("julia-y").value = view.julia_y;
   for (const axis of ['x', 'y']) {
@@ -760,10 +763,11 @@ function navigationViewport() {
 }
 function updateNavigationPreview() {
   if (!imageView || !navigationPreviewView) { canvas.style.transform = ''; return; }
-  if (['x', 'y', 'span'].every(key => imageView[key] === navigationPreviewView[key])) { canvas.style.transform = ''; return; }
+  if (['x', 'y', 'span'].every(key => imageView[key] === navigationPreviewView[key]) && (imageView.rotation ?? 0) === (navigationPreviewView.rotation ?? 0)) { canvas.style.transform = ''; return; }
   const transform = previewTransform(imageView, navigationPreviewView, navigationViewport(), meta.height / meta.width);
-  canvas.style.transform = transform
-    ? `translate(${transform.x}px, ${transform.y}px) scale(${transform.scaleX}, ${transform.scaleY})` : '';
+  canvas.style.transform = !transform ? '' : 'a' in transform
+    ? `matrix(${transform.a},${transform.b},${transform.c},${transform.d},${transform.x},${transform.y})`
+    : `translate(${transform.x}px, ${transform.y}px) scale(${transform.scaleX}, ${transform.scaleY})`;
 }
 function commitNavigation(next) {
   cancelNavigationGesture();
@@ -878,6 +882,7 @@ function setupNavigation() {
       x: defaultView(base, view.fractal).x,
       y: defaultView(base, view.fractal).y,
       span: defaultView(base, view.fractal).span,
+      rotation: 0,
     }, -1, false, 'reset');
   document.addEventListener("keydown", (e) => {
     if (isInput(e) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('dialog[open]')) return;
@@ -1106,6 +1111,23 @@ function setupControls() {
   };
   $('iterations-slider').oninput = () => loadView({ ...view, iterations: Number($('iterations-slider').value) }, -1, true);
   $('iterations-slider').onchange = finishParameterPreview;
+  const applyRotation = (angle, preview = false) => {
+    try { loadView(validate({ ...view, rotation: normalizeRotation(angle) }), -1, preview); }
+    catch (error) { toast(error.message); syncView(); }
+  };
+  const readRotation = () => {
+    if (!$('view-rotation').value.trim()) { syncView(); return; }
+    const angle = Number($('view-rotation').value);
+    if (angle !== (view.rotation ?? 0)) applyRotation(angle);
+  };
+  $('view-rotation').onchange = readRotation;
+  $('view-rotation').onblur = readRotation;
+  $('view-rotation').onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); readRotation(); } };
+  $('view-rotation-slider').oninput = () => applyRotation(Number($('view-rotation-slider').value), true);
+  $('view-rotation-slider').onchange = finishParameterPreview;
+  $('view-rotate-left').onclick = () => applyRotation((view.rotation ?? 0)-90);
+  $('view-rotate-right').onclick = () => applyRotation((view.rotation ?? 0)+90);
+  $('view-rotation-reset').onclick = () => applyRotation(0);
   for (const axis of ["x", "y"]) {
     const input = $(`julia-${axis}`), field = `julia_${axis}`;
     const applyConstant = () => {

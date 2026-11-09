@@ -12,6 +12,7 @@ import { computePipeline, renderPipeline, gpuBackendFailure, GPUBackendError, sp
 
 import { kinds } from './fractals.mjs';
 import { sampleField } from './audio/reactive-analysis.mjs';
+import { rotationBasis } from './rotation.mjs';
 const now = () => performance.now();
 const makeAbort = () => new DOMException('A newer view is ready.', 'AbortError');
 
@@ -260,6 +261,9 @@ export class BrowserEngine {
     customConstantNames.forEach((name, index) => {
       const value = Number(view[name] ?? 1), hi = Math.fround(value);
       float(240 + index * 8, hi); float(244 + index * 8, value - hi);
+    });
+    rotationBasis(view.rotation).forEach((value,index) => {
+      const hi = Math.fround(value); float(368+index*8,hi); float(372+index*8,value-hi);
     });
     return bytes;
   }

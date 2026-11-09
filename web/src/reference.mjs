@@ -2,6 +2,7 @@ import { init } from 'gmp-wasm/dist/index.esm.js';
 import { decimal, order, validate, pixelView } from './decimal.mjs';
 import { ZERO, wide, packComplex } from './wide.mjs';
 import { prepareApproximation } from './approximation.mjs';
+import { rotationBasis } from './rotation.mjs';
 
 let library;
 const references = new Map(), preparations = new Map();
@@ -89,13 +90,20 @@ export async function exactPixels(view, points, width, height, extra = 80) {
     const f = value => ctx.Float(value).mpfr_t;
     const cx = f(view.x), cy = f(view.y), span = f(view.span), jx = f(view.julia_x), jy = f(view.julia_y);
     const x = f(0), y = f(0), cr = f(0), ci = f(0), zr = f(0), zi = f(0), xx = f(0), yy = f(0), xy = f(0), nr = f(0), ni = f(0), t = f(0);
+    const basis = rotationBasis(view.rotation), cosine = f(String(basis[0])), sine = f(String(basis[1])), rx = f(0), ry = f(0);
     const values = new Float32Array(points.length);
     let lastYield = performance.now();
     for (let p = 0; p < points.length; p++) {
       const [col, row] = points[p];
       // Rational pixel offsets are constructed before rounding at MPFR precision.
-      b.mpfr_mul_si(x, span, 2 * col + 1 - width, 0); b.mpfr_div_ui(x, x, 2 * width, 0); b.mpfr_add(x, x, cx, 0);
-      b.mpfr_mul_si(y, span, height - 2 * row - 1, 0); b.mpfr_div_ui(y, y, 2 * width, 0); b.mpfr_add(y, y, cy, 0);
+      b.mpfr_mul_si(x, span, 2 * col + 1 - width, 0); b.mpfr_div_ui(x, x, 2 * width, 0);
+      b.mpfr_mul_si(y, span, height - 2 * row - 1, 0); b.mpfr_div_ui(y, y, 2 * width, 0);
+      if (basis[0] !== 1 || basis[1] !== 0) {
+        b.mpfr_mul(rx, x, cosine, 0); b.mpfr_mul(t, y, sine, 0); b.mpfr_sub(rx, rx, t, 0);
+        b.mpfr_mul(ry, x, sine, 0); b.mpfr_mul(t, y, cosine, 0); b.mpfr_add(ry, ry, t, 0);
+        b.mpfr_set(x, rx, 0); b.mpfr_set(y, ry, 0);
+      }
+      b.mpfr_add(x, x, cx, 0); b.mpfr_add(y, y, cy, 0);
       const julia = view.fractal === 'julia' || view.fractal === 'cubic';
       b.mpfr_set(cr, julia ? jx : x, 0); b.mpfr_set(ci, julia ? jy : y, 0);
       if (julia) { b.mpfr_set(zr, x, 0); b.mpfr_set(zi, y, 0); }

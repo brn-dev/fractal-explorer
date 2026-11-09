@@ -1290,6 +1290,9 @@ dialog .export-note {
 #wallpaper-gallery-cards { display:grid; gap:14px; margin:18px 0; }
 .wallpaper-shuffle-rule { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
 .wallpaper-shuffle-rule select, .wallpaper-shuffle-rule input { min-width:0; width:100%; }
+.view-rotation-control { margin-top:18px; }
+.view-rotation-control .wallpaper-state-actions { margin-top:8px; display:grid; grid-template-columns:auto minmax(0,1fr) auto; }
+.view-rotation-control .wallpaper-state-actions button { width:auto; min-width:0; }
 .wallpaper-gallery-card { display:flex; gap:16px; border:1px solid var(--line); border-radius:12px; padding:14px; min-width:0; }
 .wallpaper-gallery-card > img { width:108px; height:120px; object-fit:cover; border-radius:8px; flex:none; }
 .wallpaper-gallery-card > div { min-width:0; flex:1; }

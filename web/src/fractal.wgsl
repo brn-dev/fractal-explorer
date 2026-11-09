@@ -3,7 +3,7 @@ struct Params {
   bailout:f32,perturb:u32,series_n:u32,series_order:u32,
   span:Wide,center:vec4f,julia:vec4f,
   origin:vec2f,reserved:vec2u,tile:vec4u,
-  options:vec4u,logs:vec4f,offsets:array<vec4u,4>,extra:vec4f,relaxation:vec2f,custom_constants:array<vec4f,8>
+  options:vec4u,logs:vec4f,offsets:array<vec4u,4>,extra:vec4f,relaxation:vec2f,custom_constants:array<vec4f,8>,rotation:vec4f
 }
 struct Reference {native:vec4f,z:Complex}
 struct Bilinear {a:Complex,b:Complex,logs:vec4f}
@@ -75,8 +75,13 @@ fn iterate(@builtin(global_invocation_id) gid:vec3u) {
   if(any(gid.xy>=p.tile.zw) || any(pos>=p.size)){return;}
   let id=pos.y*p.size.x+pos.x;
   if(p.options.x!=0u && field[id] > -1.5){return;}
-  let ux=rd(rf(f32(pos.x)+.5-p.origin.x),rf(f32(p.size.x)));
-  let uy=rd(rf(p.origin.y-f32(pos.y)-.5),rf(f32(p.size.x)));
+  let px=rd(rf(f32(pos.x)+.5-p.origin.x),rf(f32(p.size.x)));
+  let py=rd(rf(p.origin.y-f32(pos.y)-.5),rf(f32(p.size.x)));
+  var ux=px;var uy=py;
+  if(p.rotation.x!=1 || p.rotation.y!=0 || p.rotation.z!=0 || p.rotation.w!=0) {
+    ux=rs(rm(px,p.rotation.xy),rm(py,p.rotation.zw));
+    uy=ra(rm(px,p.rotation.zw),rm(py,p.rotation.xy));
+  }
   let u=Complex(wn(ux,0),wn(uy,0));let offset=Complex(wm(p.span,u.r),wm(p.span,u.i));
   var steps=0u;var skipped=0u;
   if(p.perturb==0u) {

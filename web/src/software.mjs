@@ -4,6 +4,7 @@ import { decimal, order } from './decimal.mjs';
 import { iterateAdditional } from './formulas.mjs';
 import { parameterDefaults } from './fractals.mjs';
 import { createCustomIterator } from './custom-formula.mjs';
+import { rotationBasis } from './rotation.mjs';
 
 function finish(n, mag, power = 2) { return Math.max(0, n + 1 - Math.log(Math.log(Math.sqrt(mag))) / Math.log(power)); }
 export async function softwareRender(view, width, height, mode = 'series') {
@@ -15,9 +16,11 @@ export async function softwareRender(view, width, height, mode = 'series') {
   const orbit = prepared?.orbit, approximation = prepared?.approximation;
   const field = new Float32Array(width * height), glitches = [];
   let minimum = Infinity, skipped = 0, lastYield = performance.now();
+  const [cosine,sine] = rotationBasis(view.rotation);
   for (let row = 0; row < height; row++) {
     for (let col = 0; col < width; col++) {
-      const ux = (col + .5) / width - .5, uy = (height / 2 - row - .5) / width;
+      const px = (col + .5 - width / 2) / width, py = (height / 2 - row - .5) / width;
+      const ux = px*cosine-py*sine, uy = px*sine+py*cosine;
       let answer = -1;
       if (!perturb) {
         const x = Number(view.x) + ux * Number(view.span), y = Number(view.y) + uy * Number(view.span);

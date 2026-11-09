@@ -1,4 +1,5 @@
 import { add, decimal, divide, navigate, text } from './decimal.mjs';
+import { rotationBasis } from './rotation.mjs';
 
 export function screenPoint(x, y, { width, height, left = 0, top = 0, aspect = height / width }) {
   return { dx: (x - left) / width - .5, dy: (.5 - (y - top) / height) * aspect };
@@ -24,7 +25,13 @@ export function previewTransform(source, target, { width, height, aspect = heigh
   };
   const scaleX = ratio(decimal(source.span));
   const scaleY = scaleX * sourceAspect / aspect;
-  const x = ratio(difference(source.x, target.x)) * width;
-  const y = ratio(difference(target.y, source.y)) * height / aspect;
-  return [scaleX, scaleY, x, y].every(Number.isFinite) ? { scaleX, scaleY, x, y } : null;
+  const dx = ratio(difference(source.x, target.x)), dy = ratio(difference(source.y, target.y));
+  const [tc,ts] = rotationBasis(target.rotation);
+  const translatedX = (dx*tc+dy*ts)*width, translatedY = (dx*ts-dy*tc)*height/aspect;
+  if (![scaleX, scaleY, translatedX, translatedY].every(Number.isFinite)) return null;
+  const x = translatedX || 0, y = translatedY || 0;
+  const [c,s] = rotationBasis((source.rotation ?? 0)-(target.rotation ?? 0));
+  if (c === 1 && s === 0) return { scaleX, scaleY, x, y };
+  const matrix = { a:scaleX*c, b:-scaleX*s*height/(aspect*width), c:scaleX*s*sourceAspect*width/height, d:scaleY*c, x, y };
+  return Object.values(matrix).every(Number.isFinite) ? matrix : null;
 }

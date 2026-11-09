@@ -21,6 +21,7 @@ export function sharedState(data, paletteCount) {
   if (!data || data.version !== 1) throw new Error('Unsupported share-link version.');
   const validated = validate(data.view ?? {});
   const keys = ['fractal', 'x', 'y', 'span', 'iterations', 'bailout', 'julia_x', 'julia_y', ...fractalParameters(validated).map(p => p.key)];
+  if (validated.rotation !== undefined) keys.push('rotation');
   if (validated.fractal === 'custom') keys.push('custom_formula', 'custom_mode');
   if (validated.fractal === 'custom' && validated.custom_mode === 'advanced') keys.push('custom_inputs');
   if (validated.fractal === 'custom' && validated.custom_constant_count) keys.push('custom_constant_count');

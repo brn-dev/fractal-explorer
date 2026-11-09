@@ -1,6 +1,7 @@
 import { fractals, minimumSpan, parameterDefaults, fractalParameters } from './fractals.mjs';
 import { compileFormula, compileCustomInputs } from './custom-formula.mjs';
 import { MAX_CUSTOM_CONSTANTS, customConstantNames } from './custom-constants.mjs';
+import { normalizeRotation, rotationBasis } from './rotation.mjs';
 // Decimal navigation uses integers throughout, including widths below Number's range.
 export function decimal(text) {
   text = String(text).trim();
@@ -76,6 +77,7 @@ export function compare(a, b) {
 export function validate(view) {
   if (!Object.hasOwn(fractals, view.fractal)) throw new Error('Unknown fractal.');
   const out = parameterDefaults(view);
+  if (out.rotation !== undefined) out.rotation = normalizeRotation(out.rotation);
   if (view.fractal === 'custom') {
     if (!['mandelbrot', 'julia', 'advanced'].includes(out.custom_mode)) throw new Error('Choose Mandelbrot, Julia, or Advanced pixel input.');
     const formula = compileFormula(out.custom_formula), variables = [...formula.variables];
@@ -116,13 +118,19 @@ export function navigate({ view, dx = 0, dy = 0, factor = 1 }) {
   if (compare(next, minimum) < 0) next = minimum;
   if (compare(next, decimal(16)) > 0) next = decimal(16);
   const shift = factor === 1 ? span : add(span, { n: -next.n, e: next.e });
+  const [c,s] = rotationBasis(view.rotation);
+  const rotatedX = add(multiply(decimal(dx), decimal(c)), multiply(decimal(dy), decimal(-s)));
+  const rotatedY = add(multiply(decimal(dx), decimal(s)), multiply(decimal(dy), decimal(c)));
   return validate({ ...view,
-    x: text(add(decimal(view.x), multiply(decimal(dx), shift))),
-    y: text(add(decimal(view.y), multiply(decimal(dy), shift))), span: text(next) });
+    x: text(add(decimal(view.x), multiply(rotatedX, shift))),
+    y: text(add(decimal(view.y), multiply(rotatedY, shift))), span: text(next) });
 }
 export function pixelView(view, col, row, width, height) {
   const s = decimal(view.span), digits = Math.max(80, -order(s) + 50);
+  const [c,sine] = rotationBasis(view.rotation), dx = decimal(2 * col + 1 - width), dy = decimal(height - 2 * row - 1);
+  const nx = add(multiply(dx, decimal(c)), multiply(dy, decimal(-sine)));
+  const ny = add(multiply(dx, decimal(sine)), multiply(dy, decimal(c)));
   return validate({ ...view,
-    x: text(add(decimal(view.x), divide(multiply(s, decimal(2 * col + 1 - width)), decimal(2 * width), digits))),
-    y: text(add(decimal(view.y), divide(multiply(s, decimal(height - 2 * row - 1)), decimal(2 * width), digits))) });
+    x: text(add(decimal(view.x), divide(multiply(s, nx), decimal(2 * width), digits))),
+    y: text(add(decimal(view.y), divide(multiply(s, ny), decimal(2 * width), digits))) });
 }

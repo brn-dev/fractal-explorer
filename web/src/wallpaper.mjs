@@ -3,6 +3,7 @@ import { decimal, add, multiply, compare, order, plainText, text, boundedText, v
 import { exportDimensions, wrapPhase } from './export-utils.mjs';
 import { customPaletteDefinition, validateCustomPalette } from './palettes.mjs';
 import { exportQualities } from './animation-export.mjs';
+import { normalizeRotation, rotationDelta } from './rotation.mjs';
 
 export const WALLPAPER_FORMAT = 'fractal-wallpaper/v1';
 export const MAX_WALLPAPER_JSON_BYTES = 4 * 1024 ** 2;
@@ -155,7 +156,7 @@ function mixSpan(a, b, t) {
   return boundedText(compare(mixed, low) < 0 ? low : compare(mixed, high) > 0 ? high : mixed);
 }
 export function wallpaperViewPath(from, to) {
-  const keys = new Map([['x', {}], ['y', {}], ['span', {}], ['bailout', { numeric: true }],
+  const keys = new Map([['x', {}], ['y', {}], ['span', {}], ['rotation', {}], ['bailout', { numeric: true }],
     ...animationParameters(to).map(p => [p.key, { numeric: !p.decimal, integer: p.step === 1 || p.key === 'iterations' }])]);
   const compatible = from.fractal === to.fractal && [...new Set([...Object.keys(from), ...Object.keys(to)])]
     .every(key => keys.has(key) || JSON.stringify(from[key]) === JSON.stringify(to[key]));
@@ -165,6 +166,11 @@ export function wallpaperViewPath(from, to) {
     if (!compatible) return null;
     const out = { ...from };
     for (const [key, p] of keys) {
+      if (key === 'rotation') {
+        if (from.rotation !== undefined || to.rotation !== undefined)
+          out.rotation = normalizeRotation((from.rotation ?? 0) + rotationDelta(from.rotation, to.rotation) * amount);
+        continue;
+      }
       if (from[key] === undefined || to[key] === undefined || from[key] === to[key]) continue;
       if (key === 'span') out[key] = mixSpan(from[key], to[key], amount);
       else if (p.numeric) {

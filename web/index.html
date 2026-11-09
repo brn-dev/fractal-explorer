@@ -219,6 +219,16 @@
             <p class="custom-note">Use x1…x16 anywhere in the recurrence or input expressions. New constants start at 1. Referencing one creates its control automatically. Click its loop button to automate it.</p>
           </div>
           <div id="fractal-parameters"></div>
+          <div class="view-rotation-control">
+            <label class="field-label" for="view-rotation">View rotation · degrees clockwise</label>
+            <input id="view-rotation" type="number" min="0" max="360" step="0.1" value="0" />
+            <input id="view-rotation-slider" class="parameter-slider" type="range" min="0" max="360" step="0.1" value="0" aria-label="View rotation slider" aria-controls="view-rotation" />
+            <div class="wallpaper-state-actions">
+              <button id="view-rotate-left" class="secondary-button" type="button" aria-label="Rotate view 90 degrees counterclockwise">−90°</button>
+              <button id="view-rotation-reset" class="secondary-button" type="button">Reset rotation</button>
+              <button id="view-rotate-right" class="secondary-button" type="button" aria-label="Rotate view 90 degrees clockwise">+90°</button>
+            </div>
+          </div>
           <div id="automation-status" class="automation-status" hidden>
             <div class="automation-status-heading"><span id="automation-progress-text">Preparing animation…</span></div>
             <progress id="automation-progress" max="1" value="0" aria-label="Frames cached"></progress>
