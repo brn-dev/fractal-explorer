@@ -6,7 +6,7 @@ import { fractals, defaultView } from '../src/fractals.mjs';
 import { animationParameters, defaultAutomation, cycleShapes } from '../src/animation.mjs';
 
 const view={fractal:'multijulia',x:'-.743643887037151',y:'.13182590420533',span:'0.0001',iterations:800,bailout:64,julia_x:'-.8',julia_y:'.156',power:4};
-const state={version:1,view,automation:{julia_x:{enabled:true,target:'-.7',speed:.25,shape:'smooth-middle'},power:{enabled:true,target:'8',speed:.15,shape:'hold'}},palette:3,density:1.3,phase:.45,wanderingSpeed:.35,wander:true,vignetteEnabled:false,paused:true};
+const state={version:1,view,automation:{julia_x:{enabled:true,target:'-.7',speed:.25,shape:'smooth-middle'},power:{enabled:true,target:'8',speed:.15,shape:'hold'}},palette:3,density:1.3,phase:.45,interiorColor:'#123456',wanderingSpeed:.35,wander:true,vignetteEnabled:false,paused:true};
 const base='https://example.com/fractal/';
 const raw=data=>`${base}#s=j1.${Buffer.from(JSON.stringify(data)).toString('base64url')}`;
 
@@ -21,6 +21,8 @@ test('compressed and uncompressed links round-trip exact location, colors, curve
     const source={...state,vignetteEnabled};
     assert.equal((await readShareURL(raw(source),6)).vignetteEnabled,vignetteEnabled===true);
   }
+  assert.equal((await readShareURL(raw({...state,interiorColor:undefined}),6)).interiorColor,'#081112');
+  await assert.rejects(readShareURL(raw({...state,interiorColor:'#123'}),6),/interior color/);
 });
 
 test('every fractal family and cycle shape can be shared with its formula parameters',async()=>{

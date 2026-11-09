@@ -18,7 +18,7 @@ import { setupAudioControls } from './audio/audio-controller.js';
 import { customInputFields, customInputExpressions, defaultCustomInputs, compileFormula, compileCustomInputs } from './custom-formula.mjs';
 import { MAX_CUSTOM_CONSTANTS } from './custom-constants.mjs';
 import { setupAppUpdates } from './update-ui.js';
-import { validateCustomPalette, customPaletteDefinition, paletteSelection } from './palettes.mjs';
+import { validateCustomPalette, customPaletteDefinition, paletteSelection, DEFAULT_INTERIOR_COLOR, validateInteriorColor, interiorColorRGB } from './palettes.mjs';
 import { setupPaletteEditor } from './palette-ui.js';
 import { normalizeRotation } from './rotation.mjs';
 import { setupTouchControls } from './touch-controls.js';
@@ -178,6 +178,7 @@ let view = { ...base },
   palette = 0,
   density = 1,
   phase = 0,
+  interiorColor = DEFAULT_INTERIOR_COLOR,
   field = null,
   meta = null;
 let generation = 0,
@@ -365,7 +366,7 @@ function syncPalette() {
   $('edit-palette').textContent = customPalette ? 'Edit…' : 'Create custom palette…';
 }
 function colorState() {
-  return { ...paletteSelection({ palette: palette === customPaletteIndex ? 'custom' : palette, customPalette }, builtinPaletteCount), density, phase };
+  return { ...paletteSelection({ palette: palette === customPaletteIndex ? 'custom' : palette, customPalette }, builtinPaletteCount), density, phase, interiorColor };
 }
 function setCustomPalette(data) {
   customPalette = validateCustomPalette(data);
@@ -374,10 +375,12 @@ function setCustomPalette(data) {
 }
 function restoreColors(data) {
   const selected = paletteSelection(data, builtinPaletteCount);
+  const interior = validateInteriorColor(data.interiorColor);
   if (selected.customPalette) setCustomPalette(selected.customPalette);
   palette = selected.palette === 'custom' ? customPaletteIndex : selected.palette;
   density = Number.isFinite(data.density) ? Math.max(.2, Math.min(4, data.density)) : 1;
   phase = Number.isFinite(data.phase) ? ((data.phase % 1) + 1) % 1 : 0;
+  interiorColor = interior;
   if (wallpaperSteadyContext) {
     wallpaperSteadyContext.colorOrigin = phase;
     wallpaperSteadyContext.colorElapsed = 0;
@@ -398,10 +401,11 @@ function colorTable(index = palette, definition = null) {
   }
   return table;
 }
-function paint(target = canvas, values = field, metadata = meta, colors = {palette,density,phase}) {
+function paint(target = canvas, values = field, metadata = meta, colors = {palette,density,phase,interiorColor}) {
   const {density: colorDensity, phase: colorPhase} = colors;
   if (!values || !metadata) return;
-  if (target === canvas) { if (paintingReady) engine.paint(colors.palette, colorDensity, colorPhase); return; }
+  if (target === canvas) { if (paintingReady) engine.paint(colors.palette, colorDensity, colorPhase, colors.definition, colors.interiorColor); return; }
+  const interior = interiorColorRGB(colors.interiorColor);
   // Remove the common iteration offset: a deep view may span only a few
   // escape counts after hundreds or thousands of shared iterations.
   if (metadata.color_origin === undefined) {
@@ -422,9 +426,9 @@ function paint(target = canvas, values = field, metadata = meta, colors = {palet
     const n = values[i],
       o = i * 4;
     if (n < 0) {
-      bytes[o] = 8;
-      bytes[o + 1] = 17;
-      bytes[o + 2] = 18;
+      bytes[o] = interior[0];
+      bytes[o + 1] = interior[1];
+      bytes[o + 2] = interior[2];
     } else {
       let t =
         (Math.log1p(Math.max(0, n - metadata.color_origin)) * 0.2 * colorDensity +
@@ -969,6 +973,19 @@ function setupControls() {
     apply: data => { setCustomPalette(data); palette = customPaletteIndex; syncPalette(); paint(); saveSession(); },
   });
   $('select-custom-palette').onclick = () => { palette = customPaletteIndex; syncPalette(); paint(); saveSession(); };
+  const applyInteriorColor = value => {
+    interiorColor = validateInteriorColor(value);
+    syncInteriorColor(); paint(); saveSession();
+  };
+  $('interior-color').oninput = () => applyInteriorColor($('interior-color').value);
+  $('interior-color-hex').oninput = () => {
+    const input = $('interior-color-hex'), valid = /^#[0-9a-f]{6}$/i.test(input.value);
+    input.setAttribute('aria-invalid', String(!valid));
+    input.setCustomValidity(valid ? '' : 'Enter a six-digit hex color, such as #000000.');
+    if (valid) applyInteriorColor(input.value);
+  };
+  $('interior-color-hex').onblur = syncInteriorColor;
+  $('reset-interior-color').onclick = () => applyInteriorColor(DEFAULT_INTERIOR_COLOR);
   setupShareLinks({ paletteCount: builtinPaletteCount, getState: () => ({
     ...structuredClone(locationData()), wanderingSpeed, wander: $('animate').checked,
     vignetteEnabled, paused: automationPlayer.paused,
@@ -1237,7 +1254,7 @@ function setupControls() {
     return { view: { ...view }, visibleView: { ...(imageView ?? view) }, requestedView: currentRenderView(),
       visibleViewReady: !rendering && paintingReady && !!field && (automationPlayer.plan || JSON.stringify(imageView) === JSON.stringify(currentRenderView())) && JSON.stringify(imageSettings) === JSON.stringify(renderSettings),
       automation: structuredClone(automationSettings), settings: { ...renderSettings }, supersampling: Number($('quality').value),
-      colors: { palette, density, phase, definition: structuredClone(palettes[palette]) }, speed: wanderingSpeed, wander: $('animate').checked,
+      colors: { palette, density, phase, interiorColor, definition: structuredClone(palettes[palette]) }, speed: wanderingSpeed, wander: $('animate').checked,
       loopColorPhase: wallpaperSteadyContext && $('animate').checked ? wallpaperSteadyContext.colorOrigin : undefined,
       audio: { ...audio.selection, volume: audio.settings.volume, intensity: audio.settings.intensity } };
   };
@@ -1313,7 +1330,13 @@ function setupControls() {
       }
     });
 }
+function syncInteriorColor() {
+  $('interior-color').value = $('interior-color-hex').value = interiorColor;
+  $('interior-color-hex').setAttribute('aria-invalid', 'false');
+  $('interior-color-hex').setCustomValidity('');
+}
 function syncColorControls() {
+  syncInteriorColor();
   $("density").value = density;
   $("density-value").textContent = density.toFixed(1);
   $("phase").value = phase;
@@ -1381,7 +1404,7 @@ async function init() {
           level: "YOUR OWN CORNER OF INFINITY",
           view: b.view,
           saved: true,
-          colors: b.palette === undefined ? undefined : { palette: b.palette, customPalette: b.customPalette, density: b.density, phase: b.phase },
+          colors: b.palette === undefined ? undefined : { palette: b.palette, customPalette: b.customPalette, density: b.density, phase: b.phase, interiorColor: b.interiorColor },
           automation: b.automation,
         });
   } catch {}

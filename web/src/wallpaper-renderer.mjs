@@ -49,7 +49,7 @@ export class WallpaperFrameRenderer {
       this.renderer.presentCached(frame.values, frame.metadata);
       this.gpuKey = frame.key; this.gpuDevice = this.renderer.device;
     }
-    this.renderer.paint(colors.palette ?? 0, colors.density, colors.phase, colors.definition);
+    this.renderer.paint(colors.palette ?? 0, colors.density, colors.phase, colors.definition, colors.interiorColor);
     await this.renderer.device.queue.onSubmittedWorkDone(); check(this.signal);
     if (this.renderer.lost) throw new Error('The GPU disconnected while coloring the wallpaper. Retry GPU and create it again.');
     if (target.width !== frame.metadata.width) target.width = frame.metadata.width;

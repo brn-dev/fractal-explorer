@@ -6,7 +6,7 @@ import { defaultWallpaperDraft, wallpaperSnapshot, wallpaperPlan, MAX_WALLPAPER_
 const base='https://brn-dev.github.io/fractal-explorer/';
 function draft(screen='inner') {
   const view={fractal:'julia',x:'0.'+'1234567890'.repeat(10),y:'0',span:'3.6',julia_x:'-.8',julia_y:'.156',iterations:200,bailout:64};
-  const next=defaultWallpaperDraft(wallpaperSnapshot({view,colors:{definition:{name:'Mine',colors:['#123456','#abcdef','#123456']},density:1.7,phase:.321},speed:.1,wander:true,supersampling:2,automation:{julia_x:{enabled:true,target:'-.6',speed:.35,shape:'sine'}}},[]),screen);
+  const next=defaultWallpaperDraft(wallpaperSnapshot({view,colors:{definition:{name:'Mine',colors:['#123456','#abcdef','#123456']},density:1.7,phase:.321,interiorColor:'#000000'},speed:.1,wander:true,supersampling:2,automation:{julia_x:{enabled:true,target:'-.6',speed:.35,shape:'sine'}}},[]),screen);
   next.name='Wallpaper 🌌';next.longest='native';next.screenSizes={[screen]:screen==='cover'?{width:1080,height:2520}:{width:2256,height:2504}};
   next.transitions[screen==='cover'?'closed-transition':'open-transition']={seconds:1.7,easing:'ease-out-strong'};
   next.colorSeconds=4;next.colorWander=true;next.quality='custom';next.bitrateMbps=83;

@@ -1,4 +1,16 @@
 export const MAX_PALETTE_COLORS = 64;
+export const DEFAULT_INTERIOR_COLOR = '#081112';
+
+export function validateInteriorColor(value = DEFAULT_INTERIOR_COLOR) {
+  if (typeof value !== 'string' || !/^#[0-9a-f]{6}$/i.test(value))
+    throw new Error('Choose a six-digit hex interior color, such as #000000.');
+  return value.toLowerCase();
+}
+
+export function interiorColorRGB(value) {
+  const hex = validateInteriorColor(value);
+  return [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+}
 
 export function validateCustomPalette(data) {
   if (!data || typeof data.name !== 'string' || data.name.trim().length > 40)

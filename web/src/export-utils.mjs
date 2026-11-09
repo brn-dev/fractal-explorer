@@ -1,5 +1,6 @@
 import { decimal, add, multiply, text, validate } from './decimal.mjs';
 import { hasConstant } from './fractals.mjs';
+import { interiorColorRGB } from './palettes.mjs';
 
 export const wrapPhase = phase => ((phase % 1) + 1) % 1;
 export const advancePhase = (phase, speed, seconds) => wrapPhase(phase + speed * Math.max(0, seconds));
@@ -62,7 +63,8 @@ export function drawVignette(canvas) {
   context.fillStyle = vertical; context.fillRect(0, 0, width, height);
 }
 
-export function createColorFrames(values, metadata, density, table) {
+export function createColorFrames(values, metadata, density, table, interiorColor) {
+  const interior = interiorColorRGB(interiorColor);
   let minimum = metadata.color_origin ?? Infinity;
   if (!Number.isFinite(minimum)) {
     minimum = Infinity;
@@ -78,7 +80,7 @@ export function createColorFrames(values, metadata, density, table) {
     const bytes = image.data;
     for (let i = 0; i < offsets.length; i++) {
       const index = i * 4;
-      if (offsets[i] < 0) { bytes[index] = 8; bytes[index + 1] = 17; bytes[index + 2] = 18; }
+      if (offsets[i] < 0) { bytes[index] = interior[0]; bytes[index + 1] = interior[1]; bytes[index + 2] = interior[2]; }
       else {
         const k = Math.min(4095, Math.floor(wrapPhase(offsets[i] + phase) * 4096)) * 3;
         bytes[index] = table[k]; bytes[index + 1] = table[k + 1]; bytes[index + 2] = table[k + 2];
@@ -90,7 +92,8 @@ export function createColorFrames(values, metadata, density, table) {
   };
 }
 
-export function gifPaletteSample(table, vignette) {
+export function gifPaletteSample(table, vignette, interiorColor) {
+  const interior = interiorColorRGB(interiorColor);
   // Sample the whole color ramp, including colors absent from the first frame.
   // Distribute it over the canvas so vignette shading is represented too.
   const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 128;
@@ -100,7 +103,7 @@ export function gifPaletteSample(table, vignette) {
     image.data.set([table[k], table[k + 1], table[k + 2], 255], i * 4);
   }
   // Include the interior color as well as escaped points.
-  for (let i = 0; i < canvas.width; i++) image.data.set([8, 17, 18, 255], i * 4);
+  for (let i = 0; i < canvas.width; i++) image.data.set([...interior, 255], i * 4);
   context.putImageData(image, 0, 0);
   if (vignette) drawVignette(canvas);
   return context.getImageData(0, 0, canvas.width, canvas.height).data;

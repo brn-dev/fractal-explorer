@@ -8,6 +8,21 @@ import { MAX_PALETTE_COLORS } from '../src/palettes.mjs';
 const view = { fractal:'julia', x:'0', y:'0', span:'3.6', julia_x:'-.8', julia_y:'.156', iterations:200, bailout:64 };
 const snapshot = () => wallpaperSnapshot({ view, colors:{palette:0,density:1,phase:.2}, speed:.12, wander:true, automation:{} }, [{name:'Test',colors:['#001122','#aabbcc','#001122']}]);
 
+test('custom interior colors survive wallpaper plans and old designs retain their appearance',()=>{
+  for(const screen of ['inner','cover']) {
+    const source=snapshot();source.colors.interiorColor='#aabbcc';
+    const draft=defaultWallpaperDraft(source,screen);
+    for(const plan of wallpaperPlan(draft))for(const frame of [0,plan.frames-1])
+      assert.equal(plan.sample(frame).colors.interiorColor,'#aabbcc');
+    draft.kind='static';
+    assert.equal(wallpaperPlan(draft)[0].sample(0).colors.interiorColor,'#aabbcc');
+    delete draft.states[screen==='cover'?'closed-steady':'open-steady'].colors.interiorColor;
+    assert.equal(wallpaperPlan(draft)[0].sample(0).colors.interiorColor,'#081112');
+    draft.states[screen==='cover'?'closed-steady':'open-steady'].colors.interiorColor='bad';
+    assert.throws(()=>wallpaperPlan(draft),/interior color/);
+  }
+});
+
 test('entry-free designs render only the unchanged steady loop and declare loop-only playback',()=>{
   for(const screen of ['inner','cover']) {
     const draft=defaultWallpaperDraft(snapshot(),screen), full=wallpaperPlan(draft).find(p=>!p.transition);

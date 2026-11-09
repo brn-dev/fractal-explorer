@@ -2,6 +2,7 @@ import { animationPlan } from './animation.mjs';
 import { compare, decimal, divide, multiply, order, plainText, text, validate } from './decimal.mjs';
 import { minimumSpan } from './fractals.mjs';
 import { exportAspect, exportDimensions, wrapPhase } from './export-utils.mjs';
+import { interiorColorRGB } from './palettes.mjs';
 
 export const exportQualities = {
   draft: { colors: 64, bits: .06, maxBitrate: 80e6 },
@@ -86,13 +87,14 @@ export function animationExport(state, options) {
   };
 }
 
-export function ditherFrame(rgba, width) {
+export function ditherFrame(rgba, width, interiorColor) {
+  const interior = interiorColorRGB(interiorColor);
   const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
   const result = new Uint8ClampedArray(rgba);
   for (let i = 0; i < result.length; i += 4) {
     const pixel = i / 4, noise = (bayer[(Math.floor(pixel / width) % 4) * 4 + pixel % 4] - 7.5) * .6;
     // Keep the exact interior color out of the dither pattern.
-    if (rgba[i] === 8 && rgba[i + 1] === 17 && rgba[i + 2] === 18) continue;
+    if (rgba[i] === interior[0] && rgba[i + 1] === interior[1] && rgba[i + 2] === interior[2]) continue;
     for (let c = 0; c < 3; c++) result[i + c] += noise;
   }
   return result;

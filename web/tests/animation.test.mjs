@@ -455,6 +455,9 @@ test('zoom fields reject invalid magnifications and enforce each formula’s lim
 test('ordered GIF dithering preserves opacity and exact interior pixels',()=>{
   const bytes=new Uint8ClampedArray([8,17,18,255,128,128,128,255,128,128,128,255]);
   const out=ditherFrame(bytes,2);assert.deepEqual([...out.slice(0,4)],[8,17,18,255]);assert.equal(out[7],255);assert.notDeepEqual(out,bytes);
+  const custom=new Uint8ClampedArray([18,171,239,255,128,128,128,255,8,17,18,255]);
+  const tinted=ditherFrame(custom,2,'#12abef');
+  assert.deepEqual([...tinted.slice(0,4)],[18,171,239,255]);assert.notDeepEqual(tinted.slice(8),custom.slice(8));
 });
 
 test('MP4 end hold freezes the exact final motion frame without stretching the path',()=>{

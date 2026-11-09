@@ -13,6 +13,7 @@ import { computePipeline, renderPipeline, gpuBackendFailure, GPUBackendError, sp
 import { kinds } from './fractals.mjs';
 import { sampleField } from './audio/reactive-analysis.mjs';
 import { rotationBasis } from './rotation.mjs';
+import { DEFAULT_INTERIOR_COLOR, interiorColorRGB } from './palettes.mjs';
 const now = () => performance.now();
 const makeAbort = () => new DOMException('A newer view is ready.', 'AbortError');
 
@@ -433,8 +434,9 @@ export class BrowserEngine {
     }
     return data;
   }
-  paint(palette, density, phase, definition = this.palettes[palette]) {
+  paint(palette, density, phase, definition = this.palettes[palette], interiorColor = DEFAULT_INTERIOR_COLOR) {
     if (!this.last) return;
+    const interior = interiorColorRGB(interiorColor);
     const meta = this.last.metadata;
     if (this.canvas.width !== meta.width) this.canvas.width = meta.width;
     if (this.canvas.height !== meta.height) this.canvas.height = meta.height;
@@ -442,7 +444,7 @@ export class BrowserEngine {
       const image = this.cpuContext.createImageData(meta.width, meta.height), table = this.palette(palette, definition), values = this.last.field;
       for (let i = 0; i < values.length; i++) {
         const n = values[i], t = ((Math.log1p(Math.max(0, n - meta.color_origin)) * .2 * density + phase) % 1 + 1) % 1, k = Math.min(4095, Math.floor(t * 4096));
-        for (let a = 0; a < 3; a++) image.data[4 * i + a] = n < 0 ? [8, 17, 18][a] : Math.round(table[k * 4 + a] * 255);
+        for (let a = 0; a < 3; a++) image.data[4 * i + a] = n < 0 ? interior[a] : Math.round(table[k * 4 + a] * 255);
         image.data[4 * i + 3] = 255;
       }
       this.cpuContext.putImageData(image, 0, 0); return;
@@ -456,6 +458,7 @@ export class BrowserEngine {
     // Otherwise a non-loop palette jumps from its last stop to its first.
     const gpuPhase = phase < 1 && Math.fround(phase) === 1 ? 1 - 2 ** -24 : phase;
     d.setUint32(0, meta.width, true); d.setUint32(4, meta.height, true); d.setFloat32(8, density, true); d.setFloat32(12, gpuPhase, true); d.setFloat32(16, meta.color_origin, true);
+    interior.forEach((value, i) => d.setFloat32(32 + i * 4, value / 255, true));
     this.device.queue.writeBuffer(this.colorUniform, 0, bytes);
     const group = this.device.createBindGroup({ layout: this.colorPipeline.getBindGroupLayout(0), entries: [this.colorUniform, this.output, this.paletteBuffer].map((buffer, binding) => ({ binding, resource: { buffer } })) });
     const encoder = this.device.createCommandEncoder(), pass = encoder.beginRenderPass({ colorAttachments: [{ view: this.context.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: .03, g: .06, b: .07, a: 1 } }] });

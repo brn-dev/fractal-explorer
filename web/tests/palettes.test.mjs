@@ -1,11 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { validateCustomPalette, customPaletteDefinition, paletteSelection, MAX_PALETTE_COLORS } from '../src/palettes.mjs';
+import { validateCustomPalette, customPaletteDefinition, paletteSelection, MAX_PALETTE_COLORS, validateInteriorColor, interiorColorRGB } from '../src/palettes.mjs';
 import { createShareURL, readShareURL } from '../src/share.mjs';
 
 const custom = { name: '  Twilight  ', colors: ['#2233AA', '#FFCC88', '#221133'], loop: true };
 const normalized = { name: 'Twilight', colors: ['#2233aa', '#ffcc88', '#221133'], loop: true };
+
+test('interior colors keep the legacy default and accept black and normalized RGB colors', () => {
+  assert.equal(validateInteriorColor(), '#081112');
+  assert.deepEqual(interiorColorRGB(), [8, 17, 18]);
+  assert.deepEqual(interiorColorRGB('#000000'), [0, 0, 0]);
+  assert.equal(validateInteriorColor('#12ABEF'), '#12abef');
+  assert.deepEqual(interiorColorRGB('#12ABEF'), [18, 171, 239]);
+  for (const bad of [null, '', '#123', '#12345678', 'red', 0, {}, '#zzzzzz'])
+    assert.throws(() => validateInteriorColor(bad), /interior color/);
+});
 
 test('custom palettes normalize safely and preserve an independent editable color list', () => {
   const result = validateCustomPalette(custom);

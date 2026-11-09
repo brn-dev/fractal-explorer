@@ -255,6 +255,15 @@
             <button id="select-custom-palette" class="custom-palette-choice" type="button" aria-pressed="false" hidden><span aria-hidden="true"></span><strong>Custom</strong></button>
             <button id="edit-palette" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="palette-dialog">Create custom palette…</button>
           </div>
+          <div class="interior-color-control">
+            <label class="field-label" for="interior-color">Interior color</label>
+            <div class="interior-color-inputs">
+              <input id="interior-color" type="color" value="#081112" aria-describedby="interior-color-note" />
+              <input id="interior-color-hex" type="text" value="#081112" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Interior color hex" aria-describedby="interior-color-note" />
+              <button id="reset-interior-color" class="secondary-button" type="button">Reset</button>
+            </div>
+            <p id="interior-color-note">Points that don’t escape. Stays fixed as colors wander.</p>
+          </div>
           <label class="range-label"
             >Color density <output id="density-value">1.0</output
             ><input

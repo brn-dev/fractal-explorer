@@ -1,7 +1,7 @@
 import { animationPlan, animationParameters } from './animation.mjs';
 import { decimal, add, multiply, compare, order, plainText, text, boundedText, validate } from './decimal.mjs';
 import { exportDimensions, wrapPhase } from './export-utils.mjs';
-import { customPaletteDefinition, validateCustomPalette, MAX_PALETTE_COLORS } from './palettes.mjs';
+import { customPaletteDefinition, validateCustomPalette, MAX_PALETTE_COLORS, validateInteriorColor } from './palettes.mjs';
 import { exportQualities } from './animation-export.mjs';
 import { normalizeRotation, rotationDelta } from './rotation.mjs';
 
@@ -115,7 +115,7 @@ export function wallpaperSnapshot(state, palettes, { visible = false } = {}) {
     settings: structuredClone(state.settings ?? {}), wander: !!state.wander,
     speed: Number(state.speed ?? .12),
     supersampling: Math.max(1, Number(state.supersampling ?? 1)),
-    colors: { density: Number(colors.density ?? 1), phase: wrapPhase(Number(!visible && Number.isFinite(state.loopColorPhase) ? state.loopColorPhase : colors.phase ?? 0)),
+    colors: { density: Number(colors.density ?? 1), interiorColor: validateInteriorColor(colors.interiorColor), phase: wrapPhase(Number(!visible && Number.isFinite(state.loopColorPhase) ? state.loopColorPhase : colors.phase ?? 0)),
       definition: { name: String(definition.name ?? 'Wallpaper'), colors: [...definition.colors] } },
   };
 }
@@ -128,6 +128,7 @@ export function validateWallpaperSnapshot(snapshot) {
   const normalized = stops.map(color => color.toLowerCase()), closed = stops.length > 2 && normalized.at(-1) === normalized[0];
   const palette = validateCustomPalette({ name: out.colors.definition.name ?? 'Wallpaper', colors: closed ? normalized.slice(0, -1) : normalized, loop: closed });
   out.colors.definition = { name: palette.name, colors: normalized };
+  out.colors.interiorColor = validateInteriorColor(out.colors.interiorColor);
   if (!Number.isFinite(out.speed) || out.speed < .05 || out.speed > 2) throw new Error('Invalid wallpaper color speed.');
   if (out.supersampling !== undefined && !wallpaperSamplingScales.includes(out.supersampling)) throw new Error('Choose a valid wallpaper supersampling level.');
   if (!Number.isFinite(out.colors.density) || out.colors.density < .2 || out.colors.density > 4 || !Number.isFinite(out.colors.phase)) throw new Error('Invalid wallpaper colors.');

@@ -1,7 +1,7 @@
 import { validate } from './decimal.mjs';
 import { fractalParameters } from './fractals.mjs';
 import { validateAutomation } from './animation.mjs';
-import { paletteSelection } from './palettes.mjs';
+import { paletteSelection, validateInteriorColor } from './palettes.mjs';
 
 export const MAX_SHARE_BYTES = 128 * 1024;
 const MAX_TOKEN_LENGTH = 180000;
@@ -30,6 +30,7 @@ export function sharedState(data, paletteCount) {
     version: 1, view, automation: validateAutomation(view, data.automation ?? {}), ...paletteSelection(data, paletteCount),
     density: number(data.density ?? 1, .2, 4, 'color density'),
     phase: number(data.phase ?? 0, 0, 1, 'color phase'),
+    interiorColor: validateInteriorColor(data.interiorColor),
     wanderingSpeed: number(data.wanderingSpeed ?? .12, .05, 2, 'wandering speed'),
     wander: boolean(data.wander, false, 'color animation'),
     vignetteEnabled: boolean(data.vignetteEnabled, false, 'vignette'),

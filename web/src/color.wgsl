@@ -1,4 +1,4 @@
-struct Colors {size:vec2u,density:f32,phase:f32,origin:f32,pad:vec3f}
+struct Colors {size:vec2u,density:f32,phase:f32,origin:f32,interior:vec3f}
 @group(0) @binding(0) var<uniform> settings:Colors;
 @group(0) @binding(1) var<storage,read> field:array<f32>;
 @group(0) @binding(2) var<storage,read> palette:array<vec4f>;
@@ -9,7 +9,7 @@ struct Colors {size:vec2u,density:f32,phase:f32,origin:f32,pad:vec3f}
 @fragment fn fragment(@builtin(position) p:vec4f)->@location(0) vec4f {
   let pos=min(vec2u(p.xy),settings.size-vec2u(1));let n=field[pos.y*settings.size.x+pos.x];
   if(n < -1.5){return vec4f(.5,.28,.12,1);}
-  if(n < 0){return vec4f(.03137,.06667,.07059,1);}
+  if(n < 0){return vec4f(settings.interior,1);}
   let t=fract(log(1+max(0,n-settings.origin))*.2*settings.density+settings.phase);
   return palette[min(4095u,u32(t*4096))];
 }

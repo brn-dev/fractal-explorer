@@ -529,6 +529,13 @@ select option {
 .palette-stop input[type="color"] { width:34px;height:37px;padding:2px;border:1px solid var(--line);border-radius:6px;background:transparent;cursor:pointer; }
 .palette-stop input[type="text"] { font-family:ui-monospace,monospace;padding:10px 8px; }
 .palette-stop input[aria-invalid="true"] { border-color:#efa993; }
+.interior-color-control { margin-top:19px; }
+.interior-color-inputs { display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:8px;align-items:center;margin-top:8px; }
+.interior-color-inputs input[type="color"] { width:38px;height:38px;padding:2px;border:1px solid var(--line);border-radius:6px;background:transparent;cursor:pointer; }
+.interior-color-inputs input[type="text"] { font-family:ui-monospace,monospace;padding:10px 8px; }
+.interior-color-inputs input[aria-invalid="true"] { border-color:#efa993; }
+.interior-color-inputs .secondary-button { width:auto;margin:0;padding:10px;font-size:10px; }
+#interior-color-note { margin:8px 0 0;font-size:10px;color:var(--muted);line-height:1.5; }
 .palette-stop-remove { height:32px;border:1px solid var(--line);border-radius:5px;background:transparent;font-size:19px; }
 #palette-dialog button:disabled { cursor:default; }
 .palette-editor-tools { display:flex;align-items:center;gap:8px;margin:12px 0; }
