@@ -58,10 +58,23 @@ test('custom palette share links round-trip independently of the number of built
 test('the expanded preset list preserves original palette indices and all colors can render', async () => {
   const palettes = JSON.parse(await readFile(new URL('../public/palettes.json', import.meta.url)));
   assert.deepEqual(palettes.slice(0, 12).map(p => p.name), ['Ember & ice', 'Lunar moss', 'Electric dusk', 'Solar flare', 'Oceanic', 'Monochrome', 'Aurora', 'Candy nebula', 'Abyssal glow', 'Desert bloom', 'Rose quartz', 'Prism']);
-  assert.equal(palettes.length, 20);
+  assert.equal(palettes.length, 21);
   assert.equal(new Set(palettes.map(p => p.name)).size, palettes.length);
   for (const preset of palettes) {
     assert.ok(preset.colors.length >= 2);
     for (const color of preset.colors) assert.match(color, /^#[0-9a-f]{6}$/);
   }
+});
+
+test('Midnight stars is mostly near black with four separated colored highlights and a closed loop', async () => {
+  const palettes = JSON.parse(await readFile(new URL('../public/palettes.json', import.meta.url)));
+  const preset = palettes.at(-1);
+  assert.equal(preset.name, 'Midnight stars · sparse');
+  assert.equal(preset.colors.length, 65);
+  const bright = preset.colors.map((hex,index) => ({ index, rgb:hex.slice(1).match(/../g).map(v=>parseInt(v,16)) })).filter(p=>Math.max(...p.rgb)>32);
+  assert.deepEqual(bright.map(p=>p.index), [8,24,40,56]);
+  assert.equal(new Set(bright.map(p=>p.rgb.join(','))).size,4);
+  assert.equal(preset.colors[0],preset.colors.at(-1));
+  const editable=validateCustomPalette({name:preset.name,colors:preset.colors.slice(0,-1),loop:true});
+  assert.deepEqual(customPaletteDefinition(editable),preset,'editing preserves exact accent spacing');
 });

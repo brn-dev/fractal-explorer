@@ -1,4 +1,4 @@
-export const MAX_PALETTE_COLORS = 12;
+export const MAX_PALETTE_COLORS = 64;
 
 export function validateCustomPalette(data) {
   if (!data || typeof data.name !== 'string' || data.name.trim().length > 40)

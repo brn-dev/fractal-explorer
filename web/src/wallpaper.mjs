@@ -1,7 +1,7 @@
 import { animationPlan, animationParameters } from './animation.mjs';
 import { decimal, add, multiply, compare, order, plainText, text, boundedText, validate } from './decimal.mjs';
 import { exportDimensions, wrapPhase } from './export-utils.mjs';
-import { customPaletteDefinition, validateCustomPalette } from './palettes.mjs';
+import { customPaletteDefinition, validateCustomPalette, MAX_PALETTE_COLORS } from './palettes.mjs';
 import { exportQualities } from './animation-export.mjs';
 import { normalizeRotation, rotationDelta } from './rotation.mjs';
 
@@ -124,7 +124,7 @@ export function validateWallpaperSnapshot(snapshot) {
   out.view = validate(out.view);
   animationPlan(out.view, out.automation ?? {});
   const stops = out.colors.definition.colors;
-  if (!Array.isArray(stops) || stops.length < 2 || stops.length > 13 || stops.some(color => typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color))) throw new Error('Invalid wallpaper palette.');
+  if (!Array.isArray(stops) || stops.length < 2 || stops.length > MAX_PALETTE_COLORS + 1 || stops.some(color => typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color))) throw new Error('Invalid wallpaper palette.');
   const normalized = stops.map(color => color.toLowerCase()), closed = stops.length > 2 && normalized.at(-1) === normalized[0];
   const palette = validateCustomPalette({ name: out.colors.definition.name ?? 'Wallpaper', colors: closed ? normalized.slice(0, -1) : normalized, loop: closed });
   out.colors.definition = { name: palette.name, colors: normalized };

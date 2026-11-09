@@ -4,6 +4,7 @@ import { wallpaperSnapshot, defaultWallpaperDraft, wallpaperScreenDraft, wallpap
 import { largeWallpaperDraft } from './wallpaper-fixtures.mjs';
 import { wallpaperZip, crc32 } from '../src/zip-store.mjs';
 import { decimal, compare } from '../src/decimal.mjs';
+import { MAX_PALETTE_COLORS } from '../src/palettes.mjs';
 const view = { fractal:'julia', x:'0', y:'0', span:'3.6', julia_x:'-.8', julia_y:'.156', iterations:200, bailout:64 };
 const snapshot = () => wallpaperSnapshot({ view, colors:{palette:0,density:1,phase:.2}, speed:.12, wander:true, automation:{} }, [{name:'Test',colors:['#001122','#aabbcc','#001122']}]);
 
@@ -317,10 +318,10 @@ test('stored ZIP entries have interoperable headers, CRCs, and fixed safe names'
 test('every accepted imported palette can be restored in the existing editor', () => {
   const draft=defaultWallpaperDraft(snapshot());
   const definition=draft.states['open-steady'].colors.definition;
-  const twelve=Array.from({length:12},(_,i)=>`#${i.toString(16).padStart(6,'0')}`);
-  definition.colors=[...twelve,'#00000c'];
-  assert.throws(()=>wallpaperPlan(draft),/2–12 colors/);
-  definition.colors=[...twelve,'#000000'];
+  const colors=Array.from({length:MAX_PALETTE_COLORS},(_,i)=>`#${i.toString(16).padStart(6,'0')}`);
+  definition.colors=[...colors,'#000040'];
+  assert.throws(()=>wallpaperPlan(draft),new RegExp(`2–${MAX_PALETTE_COLORS} colors`));
+  definition.colors=[...colors,'#000000'];
   assert.doesNotThrow(()=>wallpaperPlan(draft));
   definition.name='x'.repeat(41); assert.throws(()=>wallpaperPlan(draft),/name/);
 });
