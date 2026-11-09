@@ -50,7 +50,7 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
       try { image.src = nativeCall('wallpaperThumbnailForScreen', entry.id, screen).image; } catch { image.hidden = true; }
       const content = document.createElement('div'), heading = document.createElement('h3'); heading.textContent = entry.name;
       const detail = document.createElement('p'); detail.className = 'export-note';
-      detail.textContent = `${active ? 'Selected · ' : ''}${screenLabel} · ${entry.kind === 'static' ? 'Static image' : 'Animated'} · ${(entry.bytes / 1024 ** 2).toFixed(1)} MB${entry.editable ? '' : entry.kind === 'static' ? ' · imported image' : ' · imported videos only'}`;
+      detail.textContent = `${active ? 'Selected · ' : ''}${screenLabel} · ${entry.kind === 'static' ? 'Static image' : entry.kind === 'loop' ? 'Steady loop · no entry transition' : 'Animated'} · ${(entry.bytes / 1024 ** 2).toFixed(1)} MB${entry.editable ? '' : entry.kind === 'static' ? ' · imported image' : ' · imported videos only'}`;
       const actions = document.createElement('div'); actions.className = 'wallpaper-state-actions';
       const apply = button(pool.enabled ? 'Use only this' : active ? 'Selected' : `Use on ${screen === 'cover' ? 'cover' : 'main'}`, () => {
         nativeCall('applyWallpaperScreen', entry.id, screen); refresh();

@@ -169,6 +169,7 @@ final class VideoRenderer {
           currentIdle = WallpaperFiles.playback(preferences, screen, "idle");
           currentArrival = WallpaperFiles.playback(preferences, screen, "arrival");
         }
+        if (!WallpaperFiles.hasEntry(preferences, screen)) currentArrival = false;
         if (WallpaperFiles.isStatic(preferences, screen)) currentIdle = currentArrival = false;
         boolean changed =
             state.update(mode, visible, currentIdle, currentArrival, saving, currentRevision, now);
@@ -216,6 +217,7 @@ final class VideoRenderer {
                 WallpaperFiles.revision(context.getSharedPreferences("wallpaper", 0), screen);
             currentIdle = WallpaperFiles.playback(preferences, screen, "idle");
             currentArrival = WallpaperFiles.playback(preferences, screen, "arrival");
+            if (!WallpaperFiles.hasEntry(preferences, screen)) currentArrival = false;
             if (WallpaperFiles.isStatic(preferences, screen)) currentIdle = currentArrival = false;
             if (shuffleBlank) currentIdle = currentArrival = false;
             changed |=

@@ -9,8 +9,8 @@ android {
         applicationId 'org.fractalexplorer.wallpaper'
         minSdk 30
         targetSdk 36
-        versionCode 25
-        versionName '0.15.0'
+        versionCode 26
+        versionName '0.16.0'
     }
     androidResources { noCompress += ['mp4', 'png'] }
     signingConfigs {

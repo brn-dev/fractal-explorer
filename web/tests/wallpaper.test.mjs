@@ -7,6 +7,27 @@ import { decimal, compare } from '../src/decimal.mjs';
 const view = { fractal:'julia', x:'0', y:'0', span:'3.6', julia_x:'-.8', julia_y:'.156', iterations:200, bailout:64 };
 const snapshot = () => wallpaperSnapshot({ view, colors:{palette:0,density:1,phase:.2}, speed:.12, wander:true, automation:{} }, [{name:'Test',colors:['#001122','#aabbcc','#001122']}]);
 
+test('entry-free designs render only the unchanged steady loop and declare loop-only playback',()=>{
+  for(const screen of ['inner','cover']) {
+    const draft=defaultWallpaperDraft(snapshot(),screen), full=wallpaperPlan(draft).find(p=>!p.transition);
+    draft.entryTransition=false;const before=structuredClone(draft),plans=wallpaperPlan(draft),manifest=wallpaperManifest(draft,plans);
+    assert.equal(plans.length,1);assert.equal(plans[0].transition,undefined);
+    for(const frame of [0,Math.floor(full.frames/2),full.frames-1])assert.deepEqual(plans[0].sample(frame),full.sample(frame));
+    assert.equal(manifest.kind,'loop');assert.deepEqual(Object.keys(manifest.clips),[full.key]);
+    assert.deepEqual(Object.values(manifest.playback),[[full.key]]);assert.equal(manifest.editor.entryTransition,false);
+    assert.deepEqual(draft,before);
+    draft.arrivalSeconds=NaN;draft.arrivalFps=NaN;draft.transitions=null;
+    draft.states[screen==='cover'?'closed-transition':'open-transition']={};
+    assert.equal(wallpaperPlan(draft).length,1,'unused transition settings and snapshots do not affect export');
+  }
+});
+
+test('legacy designs retain entry transitions and entry choice rejects nonboolean data',()=>{
+  const draft=defaultWallpaperDraft(snapshot(),'inner');delete draft.entryTransition;
+  assert.equal(wallpaperPlan(draft).length,2);assert.equal(wallpaperManifest(draft,wallpaperPlan(draft)).kind,undefined);
+  for(const bad of [null,0,1,'false',[],{}])assert.throws(()=>wallpaperPlan({...draft,entryTransition:bad}),/entry transition/);
+});
+
 test('static wallpaper exports one constant PNG at native pixels with sampling and editable scene',()=>{
   for(const screen of ['cover','inner']) {
     const draft=defaultWallpaperDraft(snapshot(),screen);draft.kind='static';draft.displayProfile='fold8-ultra';draft.longest='native';draft.supersampling=2;

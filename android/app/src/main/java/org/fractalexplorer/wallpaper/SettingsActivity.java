@@ -43,12 +43,15 @@ public final class SettingsActivity extends Activity {
   private RadioGroup steady;
   private RadioButton still, animated;
   private Switch arrivalSwitch;
+  private TextView arrivalNote;
   private String settingsScreen = "inner";
   private boolean syncingPlayback;
   private final SharedPreferences.OnSharedPreferenceChangeListener preferenceListener =
       (prefs, key) -> {
         if ("idle".equals(key) || (settingsScreen + "_idle").equals(key)) syncSteady();
-        if ("arrival".equals(key) || (settingsScreen + "_arrival").equals(key)) syncArrival();
+        if ("arrival".equals(key)
+            || (settingsScreen + "_arrival").equals(key)
+            || (settingsScreen + "_has_entry").equals(key)) syncArrival();
       };
 
   @Override
@@ -153,11 +156,12 @@ public final class SettingsActivity extends Activity {
             + " entries.",
         14);
     arrivalSwitch = toggle(column, "Play arrival animation", "arrival");
-    text(column, "After the transition", 18);
+    arrivalNote = text(column, "", 14);
+    text(column, "Steady scene", 18);
     steady = new RadioGroup(this);
     still = new RadioButton(this);
     still.setId(View.generateViewId());
-    still.setText("Still image · transitions only");
+    still.setText("Still image · stop video playback");
     animated = new RadioButton(this);
     animated.setId(View.generateViewId());
     animated.setText("Animated loop while visible");
@@ -302,9 +306,11 @@ public final class SettingsActivity extends Activity {
         }
         edit.putString("active_" + screen, "")
             .putBoolean(screen + "_static", false)
+            .putBoolean(screen + "_has_entry", true)
             .putLong(screen + "_revision", WallpaperFiles.revision(preferences, screen) + 1);
         keys.add("active_" + screen);
         keys.add(screen + "_static");
+        keys.add(screen + "_has_entry");
         keys.add(screen + "_revision");
       }
       keys.add("active_pack");
@@ -400,8 +406,18 @@ public final class SettingsActivity extends Activity {
   private void syncArrival() {
     syncingPlayback = true;
     try {
-      if (arrivalSwitch != null)
-        arrivalSwitch.setChecked(WallpaperFiles.playback(preferences, settingsScreen, "arrival"));
+      boolean available = WallpaperFiles.hasEntry(preferences, settingsScreen);
+      if (arrivalSwitch != null) {
+        arrivalSwitch.setEnabled(available);
+        arrivalSwitch.setChecked(
+            available && WallpaperFiles.playback(preferences, settingsScreen, "arrival"));
+      }
+      if (arrivalNote != null)
+        arrivalNote.setText(
+            available
+                ? "Play the saved entry transition before the steady scene."
+                : "This wallpaper has no entry transition. Edit its design and create it again to"
+                      + " add one.");
     } finally {
       syncingPlayback = false;
     }

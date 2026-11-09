@@ -53,7 +53,7 @@ function setup(reset=true, overrides={}) {
   hold=null;
   if (!globalThis.FractalNative) globalThis.window=new EventTarget();
   if(reset){const draft=defaultWallpaperDraft(wallpaperSnapshot(state,palettes));draft.states['open-steady'].view.x='-.12345';storage=JSON.stringify(draft);}
-  const extra=['wallpaper-kind','wallpaper-static-note','wallpaper-download-image','wallpaper-device','wallpaper-gallery-screen','wallpaper-gallery-dialog','wallpaper-gallery-status','wallpaper-gallery-cards','open-wallpaper-gallery','wallpaper-gallery','wallpaper-gallery-new','wallpaper-gallery-set','wallpaper-replace-dialog','wallpaper-replace-continue','wallpaper-editing-help'];
+  const extra=['wallpaper-entry-transition','wallpaper-entry-note','wallpaper-endpoints-note','wallpaper-arrival-note','wallpaper-steady-note','wallpaper-kind','wallpaper-static-note','wallpaper-download-image','wallpaper-device','wallpaper-gallery-screen','wallpaper-gallery-dialog','wallpaper-gallery-status','wallpaper-gallery-cards','open-wallpaper-gallery','wallpaper-gallery','wallpaper-gallery-new','wallpaper-gallery-set','wallpaper-replace-dialog','wallpaper-replace-continue','wallpaper-editing-help'];
   const elements=Object.fromEntries([...ids,...extra,'wallpaper-supersampling','wallpaper-gallery-shuffle','wallpaper-gallery-shuffle-options','wallpaper-gallery-shuffle-note','wallpaper-renderer-note','wallpaper-pc','wallpaper-pc-dialog','wallpaper-pc-link','wallpaper-pc-status','wallpaper-pc-summary','wallpaper-pc-copy','wallpaper-pc-share','wallpaper-pc-file'].map(id=>[id,new Element(id)]));
   const find=(node,id)=>node.id===id?node:node.children.map(child=>find(child,id)).find(Boolean);
   globalThis.document={hidden:false,getElementById:id=>elements[id]??Object.values(elements).map(node=>find(node,id)).find(Boolean),createElement:tag=>new Element(tag),addEventListener(){}};
@@ -62,6 +62,48 @@ function setup(reset=true, overrides={}) {
   return {elements,api};
 }
 async function close(elements){elements['wallpaper-dialog'].close();await flush();}
+
+test('entry toggle hides start editing, preserves it for later and stays independent per screen',async()=>{
+  const {elements,api}=setup();
+  try {
+    elements['open-wallpaper-export'].click();await flush();
+    const before=structuredClone(api.draft());
+    elements['wallpaper-entry-transition'].checked=false;elements['wallpaper-entry-transition'].onchange();await flush();
+    assert.equal(api.draft().entryTransition,false);assert.equal(elements['wallpaper-state-cards'].children.length,1);
+    assert.equal(elements['wallpaper-endpoints-note'].hidden,true);
+    const buttons=elements['wallpaper-state-cards'].querySelectorAll('button');
+    assert.ok(buttons.some(b=>b.textContent==='Edit steady scene'));assert.ok(!buttons.some(b=>b.textContent.includes('start')));
+    assert.match(elements['wallpaper-encoding-note'].textContent,/Steady only/);
+    assert.deepEqual(api.draft().states,before.states);assert.deepEqual(api.draft().transitions,before.transitions);
+    buttons.find(b=>b.textContent==='Edit steady scene').click();assert.match(elements['wallpaper-editing-label'].textContent,/STEADY/);
+    elements['wallpaper-overview'].click();
+    elements['wallpaper-screen'].value='cover';elements['wallpaper-screen'].onchange();await flush();
+    assert.equal(elements['wallpaper-entry-transition'].checked,true);
+    elements['wallpaper-screen'].value='inner';elements['wallpaper-screen'].onchange();await flush();
+    assert.equal(elements['wallpaper-entry-transition'].checked,false);
+    elements['wallpaper-entry-transition'].checked=true;elements['wallpaper-entry-transition'].onchange();await flush();
+    assert.equal(elements['wallpaper-state-cards'].children.length,2);assert.deepEqual(api.draft().states,before.states);
+  }finally{await close(elements);}
+});
+
+test('native entry-free export encodes one steady clip per screen and retains its choice in the editor',async()=>{
+  const clips=[],manifests=[],oldVideo=globalThis.testVideo;
+  globalThis.window=new EventTarget();globalThis.FractalNative={info(){},beginPack:()=>'{"ok":true}',putPoster:()=>'{"ok":true}',commitPack:json=>{manifests.push(JSON.parse(json));return '{"ok":true}';}};
+  globalThis.testVideo={async supportsMP4(){return true;},async mp4Encoder(canvas,plan){clips.push(plan.nativeTarget);return{async add(){},async finish(){},async cancel(){}};}};
+  const {elements}=setup();
+  try {
+    elements['open-wallpaper-export'].click();await flush();
+    for(const screen of ['inner','cover']) {
+      elements['wallpaper-screen'].value=screen;elements['wallpaper-screen'].onchange();await flush();
+      elements['wallpaper-entry-transition'].checked=false;elements['wallpaper-entry-transition'].onchange();await flush();
+      elements['wallpaper-idle-seconds'].value='2';elements['wallpaper-idle-fps'].value='10';
+      await elements['wallpaper-create'].onclick();
+      assert.equal(manifests.at(-1).kind,'loop');assert.equal(manifests.at(-1).editor.entryTransition,false);
+      assert.equal(Object.keys(manifests.at(-1).clips).length,1);assert.match(elements['wallpaper-status'].textContent,/without entry transition/);
+    }
+    assert.deepEqual(clips,['open-steady','closed-steady']);
+  }finally{await close(elements);delete globalThis.FractalNative;globalThis.testVideo=oldVideo;}
+});
 
 test('static mode edits one still target scene and preserves animation settings when toggled back',async()=>{
   const applied=[],contexts=[];

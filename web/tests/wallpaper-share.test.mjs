@@ -23,6 +23,15 @@ test('wallpaper links preserve native dimensions, exact scenes, sampling, colors
     assert.deepEqual([b[0].width,b[0].height,b[0].renderWidth,b[0].renderHeight],[a[0].width,a[0].height,a[0].width*2,a[0].height*2]);
   }
 });
+
+test('entry-free choice and retained start scene survive PC links and JSON handoffs',async()=>{
+  for(const screen of ['inner','cover']) {
+    const source=draft(screen);source.entryTransition=false;
+    const restored=await readWallpaperURL(await createWallpaperURL(base,source));
+    assert.equal(restored.entryTransition,false);assert.equal(wallpaperPlan(restored).length,1);
+    assert.deepEqual(restored.states,source.states);assert.deepEqual(restored.transitions,source.transitions);
+  }
+});
 test('links remove credentials, old queries and fragments and reject unsupported protocols',async()=>{
   const url=new URL(await createWallpaperURL('https://name:secret@example.org/app/?cpu=1#s=old',draft()));
   assert.equal(url.username,'');assert.equal(url.password,'');assert.equal(url.search,'');assert.equal(url.pathname,'/app/');

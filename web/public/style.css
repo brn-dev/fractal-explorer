@@ -1305,6 +1305,7 @@ dialog .export-note {
 #wallpaper-state-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:18px 0; }
 .wallpaper-static .wallpaper-motion-option { display:none; }
 .wallpaper-static #wallpaper-state-cards { grid-template-columns:minmax(0,1fr); }
+.wallpaper-loop-only #wallpaper-state-cards { grid-template-columns:minmax(0,1fr); }
 .wallpaper-state { min-width:0; border:1px solid var(--line); border-radius:12px; padding:16px; }
 .wallpaper-state h3 { margin:0 0 8px; }
 .wallpaper-state p { font-size:13px; }

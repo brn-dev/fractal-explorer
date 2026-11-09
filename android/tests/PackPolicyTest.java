@@ -22,6 +22,15 @@ public final class PackPolicyTest {
     require(PackPolicy.files("inner", "static").size() == 2);
     require(PackPolicy.files("", "static").size() == 3);
     require(PackPolicy.files("inner", "animated").equals(PackPolicy.files("inner")));
+    require(
+        PackPolicy.files("cover", "loop")
+            .equals(
+                new java.util.HashSet<>(
+                    java.util.Arrays.asList(
+                        "wallpaper.json", "cover-idle.mp4", "cover-poster.png"))));
+    require(PackPolicy.files("", "loop").size() == 5);
+    require(!PackPolicy.isStatic("loop") && !PackPolicy.hasEntry("loop"));
+    require(PackPolicy.hasEntry("animated") && !PackPolicy.hasEntry("static"));
     boolean badKind = false;
     try {
       PackPolicy.files("inner", "unknown");

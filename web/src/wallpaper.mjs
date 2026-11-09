@@ -29,6 +29,10 @@ export function wallpaperKind(draft) {
   if (!['animated', 'static'].includes(kind)) throw new Error('Choose an animated or static wallpaper.');
   return kind;
 }
+export function wallpaperHasEntry(draft) {
+  if (draft.entryTransition !== undefined && typeof draft.entryTransition !== 'boolean') throw new Error('Choose whether to include an entry transition.');
+  return wallpaperKind(draft) !== 'static' && (draft.entryTransition ?? true);
+}
 // Portrait pixel dimensions: Samsung SM-F976B (Galaxy Z Fold8 Ultra).
 export const wallpaperDisplayProfiles = {
   'fold8-ultra': { name: 'Samsung Galaxy Z Fold8 Ultra', screens: {
@@ -137,7 +141,7 @@ export function defaultWallpaperDraft(snapshot, screen) {
     const span = multiply(decimal(snapshot.view.span), decimal('1.3'));
     states[slot.key].view = validate({ ...snapshot.view, span: compare(span, decimal('16')) > 0 ? '16' : text(span) });
   }
-  const draft = { format: WALLPAPER_FORMAT, name: 'My fractal wallpaper', quality: 'dynamic-high', supersampling: snapshot.supersampling ?? 1, steadyMotion: 'animated', arrivalSeconds: 3, idleSeconds: 8,
+  const draft = { format: WALLPAPER_FORMAT, name: 'My fractal wallpaper', quality: 'dynamic-high', entryTransition: true, supersampling: snapshot.supersampling ?? 1, steadyMotion: 'animated', arrivalSeconds: 3, idleSeconds: 8,
     longest: 1080, arrivalFps: 30, idleFps: 15, coverAspect: 2520 / 1080, innerAspect: 2504 / 2256,
     states, transitions: Object.fromEntries(wallpaperStates.filter(slot => slot.transition).map(slot => [slot.key, {seconds:3,easing:'ease-out'}])) };
   return screen ? wallpaperScreenDraft(draft, screen) : draft;
@@ -211,6 +215,7 @@ export function transitionProgress(t, easing) {
 export function wallpaperPlan(draft, { previewLongest } = {}) {
   if (draft.format !== WALLPAPER_FORMAT) throw new Error('This is not a Fractal Explorer wallpaper.');
   const kind = wallpaperKind(draft);
+  const entry = wallpaperHasEntry(draft);
   const supersampling = draft.supersampling ?? 1;
   if (!wallpaperSamplingScales.includes(supersampling)) throw new Error('Choose 1×, 1.5×, 2×, 3× or 4× supersampling.');
   if (draft.longest !== 'native' && ![480, 720, 1080, 1920, 2560, 3840].includes(Number(draft.longest))) throw new Error('Choose a wallpaper resolution.');
@@ -224,10 +229,10 @@ export function wallpaperPlan(draft, { previewLongest } = {}) {
     };
   });
   if (!['animated', 'still'].includes(draft.steadyMotion ?? 'animated')) throw new Error('Choose a steady-state playback mode.');
-  if (!Number.isFinite(draft.arrivalSeconds) || draft.arrivalSeconds < .5 || draft.arrivalSeconds > 10 ||
+  if (entry && (!Number.isFinite(draft.arrivalSeconds) || draft.arrivalSeconds < .5 || draft.arrivalSeconds > 10) ||
       !Number.isFinite(draft.idleSeconds) || draft.idleSeconds < 2 || draft.idleSeconds > 20) throw new Error('Choose a 0.5–10 second arrival and a 2–20 second idle loop.');
-  if (![15, 24, 30].includes(draft.arrivalFps) || ![10, 15, 24, 30].includes(draft.idleFps)) throw new Error('Choose a wallpaper frame rate.');
-  const slots = wallpaperSlots(draft), colorCycle = wallpaperColorCycle(draft);
+  if (entry && ![15, 24, 30].includes(draft.arrivalFps) || ![10, 15, 24, 30].includes(draft.idleFps)) throw new Error('Choose a wallpaper frame rate.');
+  const slots = wallpaperSlots(draft).filter(slot => !slot.transition || entry), colorCycle = wallpaperColorCycle(draft);
   const states = Object.fromEntries(slots.map(({ key }) => [key, validateWallpaperSnapshot(draft.states[key])]));
   return slots.map(slot => {
     const snapshot = states[slot.key], destination = states[slot.target] ?? snapshot;
@@ -274,9 +279,13 @@ export function wallpaperManifest(draft, clips) {
       posters: Object.fromEntries(clips.map(plan=>[plan.screen,plan.file])), editor:draft };
     wallpaperJSON(manifest); return manifest;
   }
-  const manifest = { format: WALLPAPER_FORMAT, version: 1, name: String(draft.name || 'My fractal wallpaper').slice(0, 80), steadyMotion: draft.steadyMotion ?? 'animated',
+  const entry = wallpaperHasEntry(draft);
+  const manifest = { format: WALLPAPER_FORMAT, version: 1, ...(!entry ? {kind:'loop'} : {}), name: String(draft.name || 'My fractal wallpaper').slice(0, 80), steadyMotion: draft.steadyMotion ?? 'animated',
     ...(draft.screen ? { screen: draft.screen } : {}),
-    playback: Object.fromEntries((draft.screen ? [draft.screen] : ['cover', 'inner']).map(screen => screen === 'cover' ? ['just-closed', ['closed-transition', 'closed-steady']] : ['just-opened', ['open-transition', 'open-steady']])),
+    playback: Object.fromEntries((draft.screen ? [draft.screen] : ['cover', 'inner']).map(screen => {
+      const prefix = screen === 'cover' ? 'closed' : 'open';
+      return [screen === 'cover' ? 'just-closed' : 'just-opened', [...(entry ? [`${prefix}-transition`] : []), `${prefix}-steady`]];
+    })),
     clips: Object.fromEntries(clips.map(clip => [clip.key, { file: clip.file, width: clip.width, height: clip.height, fps: clip.fps, frames: clip.frames, duration: clip.duration, loop: !clip.transition, quality: clip.quality, bitrate: clip.bitrate, quantizer: clip.quantizer }])),
     posters: Object.fromEntries([...new Set(clips.map(clip => clip.screen))].map(screen => [screen, `${screen}-poster.png`])), editor: draft };
   wallpaperJSON(manifest);

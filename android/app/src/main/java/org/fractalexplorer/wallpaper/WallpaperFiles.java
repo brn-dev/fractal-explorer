@@ -97,6 +97,10 @@ final class WallpaperFiles {
     return preferences.getBoolean(screen + "_static", false);
   }
 
+  static boolean hasEntry(SharedPreferences preferences, String screen) {
+    return preferences.getBoolean(screen + "_has_entry", true);
+  }
+
   static long revision(SharedPreferences preferences, String screen) {
     return preferences.getLong(screen + "_revision", preferences.getLong("revision", 0));
   }
@@ -212,6 +216,9 @@ final class WallpaperFiles {
     for (String screen : screens) {
       edit.putBoolean(screen + "_static", staticWallpaper);
       keys.add(screen + "_static");
+      edit.putBoolean(
+          screen + "_has_entry", PackPolicy.hasEntry(manifest.optString("kind", "animated")));
+      keys.add(screen + "_has_entry");
       if (!keepPlayback) {
         edit.putBoolean("shuffle_" + screen, false);
         keys.add("shuffle_" + screen);
@@ -270,13 +277,19 @@ final class WallpaperFiles {
             PackPolicy.validId(activeId)
                 ? new File(new File(root(), activeId), "wallpaper.json")
                 : null;
-        JSONObject previousFlags =
+        JSONObject previousManifest =
             activeManifest != null && activeManifest.isFile()
                 ? new JSONObject(
-                        new String(
-                            Files.readAllBytes(activeManifest.toPath()), StandardCharsets.UTF_8))
-                    .optJSONObject("customSteady")
+                    new String(Files.readAllBytes(activeManifest.toPath()), StandardCharsets.UTF_8))
                 : null;
+        JSONObject previousFlags =
+            previousManifest == null ? null : previousManifest.optJSONObject("customSteady");
+        String kind =
+            slot.endsWith("arrival")
+                    || previousManifest == null
+                    || PackPolicy.hasEntry(previousManifest.optString("kind", "animated"))
+                ? "animated"
+                : "loop";
         for (String screen : new String[] {"cover", "inner"})
           selectedSteady.put(
               screen,
@@ -284,8 +297,8 @@ final class WallpaperFiles {
                   ? activeFile(context, screen + "-idle.mp4").isFile()
                   : previousFlags.optBoolean(screen, false));
         boolean hasSteady = selectedSteady.getBoolean(prefix);
-        for (String name : PackPolicy.files(prefix)) {
-          if (name.equals("wallpaper.json")) continue;
+        for (String name : PackPolicy.files(prefix, kind)) {
+          if (name.equals("wallpaper.json") || name.equals(filename)) continue;
           File selected = activeFile(context, name);
           try (InputStream source =
               selected.isFile()
@@ -306,7 +319,7 @@ final class WallpaperFiles {
         if (slot.endsWith("idle")) selectedSteady.put(prefix, true);
         JSONObject clips = new JSONObject();
         for (int i = 0; i < PackPolicy.VIDEOS.length; i++) {
-          if (!PackPolicy.VIDEOS[i].startsWith(prefix + "-")) continue;
+          if (!PackPolicy.files(prefix, kind).contains(PackPolicy.VIDEOS[i])) continue;
           try (MediaMetadataRetriever reader = new MediaMetadataRetriever()) {
             reader.setDataSource(PackPolicy.child(folder, PackPolicy.VIDEOS[i]).getAbsolutePath());
             clips.put(
@@ -337,6 +350,7 @@ final class WallpaperFiles {
                 .put("format", "fractal-wallpaper/v1")
                 .put("version", 1)
                 .put("screen", prefix)
+                .put("kind", kind)
                 .put("name", "My imported fractals")
                 .put("customSteady", selectedSteady)
                 .put("clips", clips);

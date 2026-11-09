@@ -528,9 +528,11 @@
       <p>Create and save a wallpaper for one screen at a time. Choose an animated design or a single static image. Your other screen's wallpaper stays unchanged.</p>
       <label class="field-label">Design for<select id="wallpaper-screen"><option value="inner">Main screen</option><option value="cover">Cover screen</option></select></label>
       <label class="field-label">Target device<select id="wallpaper-device"><option value="auto">Saved or detected screen</option><option value="fold8-ultra">Samsung Galaxy Z Fold8 Ultra</option></select></label>
-      <label class="field-label">Wallpaper type<select id="wallpaper-kind"><option value="animated">Animated · transition and steady scene</option><option value="static">Static image · no video</option></select></label>
+      <label class="field-label">Wallpaper type<select id="wallpaper-kind"><option value="animated">Animated wallpaper</option><option value="static">Static image · no video</option></select></label>
+      <label class="switch-label wallpaper-motion-option"><span>Include entry transition</span><input id="wallpaper-entry-transition" type="checkbox" role="switch" checked aria-describedby="wallpaper-entry-note" /><span class="switch"></span></label>
+      <p id="wallpaper-entry-note" class="export-note wallpaper-motion-option">Play a one-time transition before the steady scene. Turn off to start directly in the steady loop and render no entry clip.</p>
       <p id="wallpaper-static-note" class="export-note" hidden>Creates one lossless PNG using your target resolution and supersampling. Static images can join animated designs in the phone's shuffle selection.</p>
-      <p class="export-note wallpaper-motion-option">Each transition runs from its saved START scene to the matching saved END / steady scene. Use the explicit scene buttons below to edit or preview either endpoint.</p>
+      <p id="wallpaper-endpoints-note" class="export-note wallpaper-motion-option">Each transition runs from its saved START scene to the matching saved END / steady scene. Use the explicit scene buttons below to edit or preview either endpoint.</p>
       <label class="field-label">Name<input id="wallpaper-name" maxlength="80" value="My fractal wallpaper"></label>
       <div id="wallpaper-preview-stage"><canvas id="wallpaper-preview" aria-label="Selected wallpaper state preview"></canvas></div>
       <p id="wallpaper-preview-status" class="export-note" role="status"></p>
@@ -539,15 +541,15 @@
       <div id="wallpaper-state-cards"></div>
       <div class="wallpaper-motion-option">
       <p class="export-note">Copy start → end or Copy end → start replaces the destination scene. Start scenes use still parameter values; set loop motion in the end / steady scene.</p>
-      <label class="field-label">Steady states<select id="wallpaper-steady-motion"><option value="still">Still images · transitions only</option><option value="animated">Animated loops while visible</option></select></label>
-      <p class="export-note">Transitions only plays the opening or closing clip once, then holds the steady image with video playback stopped. Idle loops stay in the package so you can enable them later in Wallpaper settings.</p>
+      <label class="field-label">Steady states<select id="wallpaper-steady-motion"><option value="still">Still image · stop video playback</option><option value="animated">Animated loops while visible</option></select></label>
+      <p id="wallpaper-steady-note" class="export-note">Transitions only plays the opening or closing clip once, then holds the steady image with video playback stopped. Idle loops stay in the package so you can enable them later in Wallpaper settings.</p>
       <p class="export-note">The exported loop grows to fit your parameter speeds exactly. Colors share one palette and speed across the transition and loop.</p>
       <div class="two-fields">
         <label class="field-label">Minimum loop · seconds<input id="wallpaper-idle-seconds" type="number" min="2" max="20" step="1" value="8"></label>
       </div>
       <p id="wallpaper-loop-note" class="export-note"></p>
       <div class="two-fields">
-        <label class="field-label">Colors in both scenes<select id="wallpaper-color-motion"><option value="cycle">Cycle continuously</option><option value="still">Keep colors still</option></select></label>
+        <label class="field-label">Palette animation<select id="wallpaper-color-motion"><option value="cycle">Cycle continuously</option><option value="still">Keep colors still</option></select></label>
         <label class="field-label">Color cycle · seconds<input id="wallpaper-color-seconds" type="number" min="0.5" max="20" step="0.1" value="8"></label>
       </div>
       <p id="wallpaper-color-note" class="export-note"></p>
@@ -568,7 +570,7 @@
       <p id="wallpaper-encoding-note" class="export-note" role="status"></p>
       <label class="field-label">Fractal supersampling<select id="wallpaper-supersampling"><option value="1">1× · one sample per output pixel</option><option value="1.5">1.5×</option><option value="2">2× · four samples per pixel</option><option value="3">3× · nine samples per pixel</option><option value="4">4× · sixteen samples per pixel</option></select></label>
       <p class="export-note">Renders larger fractal frames and downsamples the colored image. Your explorer choice is captured when saving a scene. This increases creation time; finished images and videos keep the selected output resolution. Oversized requests are reported instead of silently reducing sampling.</p>
-      <p class="export-note wallpaper-motion-option">Arrival plays once at 30 fps. Matching formulas morph; different formulas blend. Palette edits in either scene apply to both. Color timing fits whole cycles in the steady loop and continues at the same speed through the transition, meeting the exact first loop frame.</p>
+      <p id="wallpaper-arrival-note" class="export-note wallpaper-motion-option">Arrival plays once at 30 fps. Matching formulas morph; different formulas blend. Palette edits in either scene apply to both. Color timing fits whole cycles in the steady loop and continues at the same speed through the transition, meeting the exact first loop frame.</p>
       <div class="export-choices">
         <button id="wallpaper-create" class="primary-button" type="button">Download wallpaper package</button>
         <button id="wallpaper-pc" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="wallpaper-pc-dialog">Render on PC…</button>

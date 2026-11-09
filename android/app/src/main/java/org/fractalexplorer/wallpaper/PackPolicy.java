@@ -45,8 +45,12 @@ final class PackPolicy {
 
   static boolean isStatic(String kind) {
     if ("static".equals(kind)) return true;
-    if ("animated".equals(kind)) return false;
+    if ("animated".equals(kind) || "loop".equals(kind)) return false;
     throw new IllegalArgumentException("Unknown wallpaper type");
+  }
+
+  static boolean hasEntry(String kind) {
+    return !isStatic(kind) && !"loop".equals(kind);
   }
 
   static Set<String> files(String screen, String kind) {
@@ -55,7 +59,7 @@ final class PackPolicy {
     result.add("wallpaper.json");
     for (String target : screens(screen)) {
       if (!image) {
-        result.add(target + "-arrival.mp4");
+        if (hasEntry(kind)) result.add(target + "-arrival.mp4");
         result.add(target + "-idle.mp4");
       }
       result.add(target + "-poster.png");
