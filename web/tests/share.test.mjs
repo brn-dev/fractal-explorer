@@ -17,6 +17,10 @@ test('compressed and uncompressed links round-trip exact location, colors, curve
     assert.equal(new URL(link).search,'');assert.match(new URL(link).hash,compress?/^#s=g1\./:/^#s=j1\./);
     assert.ok(link.length<1500);
   }
+  for(const vignetteEnabled of [undefined,false,true]) {
+    const source={...state,vignetteEnabled};
+    assert.equal((await readShareURL(raw(source),6)).vignetteEnabled,vignetteEnabled===true);
+  }
 });
 
 test('every fractal family and cycle shape can be shared with its formula parameters',async()=>{

@@ -32,7 +32,7 @@ export function sharedState(data, paletteCount) {
     phase: number(data.phase ?? 0, 0, 1, 'color phase'),
     wanderingSpeed: number(data.wanderingSpeed ?? .12, .05, 2, 'wandering speed'),
     wander: boolean(data.wander, false, 'color animation'),
-    vignetteEnabled: boolean(data.vignetteEnabled, true, 'vignette'),
+    vignetteEnabled: boolean(data.vignetteEnabled, false, 'vignette'),
     paused: boolean(data.paused, false, 'animation playback'),
   };
 }

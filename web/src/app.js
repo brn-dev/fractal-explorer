@@ -171,7 +171,7 @@ let renderSettings = {
   acceleration: "auto",
 };
 let placesHidden = false;
-let vignetteEnabled = true;
+let vignetteEnabled = false;
 let rulersEnabled = false;
 let wanderingSpeed = .12, lastAnimationTime = null;
 let view = { ...base },
@@ -1359,7 +1359,7 @@ async function init() {
     const saved = JSON.parse(localStorage.getItem("fractal-web-session"));
     cacheMemoryMiB = cacheMemorySetting(saved?.cacheMemoryMiB, engine.mobile);
     setPlacesHidden(saved?.placesHidden === true);
-    vignetteEnabled = saved?.vignetteEnabled !== false;
+    vignetteEnabled = saved?.vignetteEnabled === true;
     rulersEnabled = saved?.rulersEnabled === true;
     if (Number.isFinite(saved?.wanderingSpeed)) wanderingSpeed = Math.max(.05, Math.min(2, saved.wanderingSpeed));
     if (saved?.view && Object.hasOwn(fractals, saved.view.fractal)) {

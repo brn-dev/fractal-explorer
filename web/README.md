@@ -57,7 +57,7 @@ GPU information appears alongside render timing and resolution in the bottom-lef
 
 Startup checks the selected scene's actual compute pipeline before reporting that the GPU is ready. Kernels compile separately for each fractal and direct/deep mode, reducing the work left to mobile GPU drivers. Internal pipeline failures receive at most three attempts; persistent failures or later device loss switch to the local CPU instead of leaving a blank canvas. This keeps the arithmetic precision checks and exact scene settings. The main view adapts to the CPU pixel budget; explicit exports retain their chosen dimensions. **Rendering → Retry GPU** reconnects without restarting and preserves paused parameter values. Browsers without WebGPU continue using the CPU without offering a GPU retry.
 
-The **Vignette** switch under **Light & color** removes the edge-darkening overlay immediately. Its setting persists across reloads and place changes.
+Vignette defaults **off** in the explorer, including share links that omit the setting. The **Vignette** switch under **Light & color** adds or removes the edge-darkening overlay immediately. Its setting persists across reloads and place changes; saved settings and explicit share-link choices are respected. Image/video exports also default off independently.
 
 Tap the **eye icon** in the top-right corner (or press **H**) for an unobstructed fractal view. The eye closes when the UI is hidden and stays visible so you can restore the controls on mobile. The **chevron above the location cards** toggles those cards independently; **P** does the same. Both buttons have descriptive tooltips and accessible labels. The card preference persists across reloads and is preserved when you hide and restore the full interface.
 
