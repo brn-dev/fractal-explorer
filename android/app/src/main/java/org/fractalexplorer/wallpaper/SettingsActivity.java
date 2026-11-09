@@ -240,6 +240,29 @@ public final class SettingsActivity extends Activity {
                       ? "Sample videos restored."
                       : "Some files could not be restored. Try again.");
             }));
+    text(column, "Day / night app icon", 21);
+    text(
+        column,
+        "The fractal icon uses mint and gold by day, blue and violet at night, using the same"
+            + " Vienna sunrise/sunset times as wallpaper shuffling. Launchers may take a moment to"
+            + " refresh. Themed icons use your launcher's colors instead.",
+        14);
+    text(
+        column,
+        "For a home-screen icon that keeps its place when the mode changes, add the day/night"
+            + " shortcut below. You can remove the previous plain icon from your home screen"
+            + " afterward.",
+        14);
+    button(
+        column,
+        "Add day/night home icon",
+        () ->
+            LauncherIcon.get(this)
+                .pinHomeIcon(
+                    message ->
+                        android.widget.Toast.makeText(
+                                getApplicationContext(), message, android.widget.Toast.LENGTH_LONG)
+                            .show()));
     status = text(column, "Pre-rendered artwork. No fractal calculation on your phone.", 14);
     String previousError = preferences.getString("last_error", "");
     if (!previousError.isEmpty()) status.setText("Last playback error: " + previousError);

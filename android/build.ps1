@@ -34,7 +34,7 @@ foreach ($asset in @('cover-arrival.mp4','cover-idle.mp4','inner-arrival.mp4','i
 $java = Join-Path $JavaHome 'bin\java.exe'
 $javac = Join-Path $JavaHome 'bin\javac.exe'
 $aapt = Join-Path $BuildTools 'aapt2.exe'
-$manifestText = (Get-Content -LiteralPath "$sourceRoot\AndroidManifest.xml" -Raw).Replace('<manifest ', '<manifest package="org.fractalexplorer.wallpaper" ')
+$manifestText = (Get-Content -LiteralPath "$sourceRoot\AndroidManifest.xml" -Raw -Encoding UTF8).Replace('<manifest ', '<manifest package="org.fractalexplorer.wallpaper" ')
 Set-Content -LiteralPath "$buildRoot\AndroidManifest.xml" -Value $manifestText -Encoding UTF8
 Run-Tool $aapt @('compile', '--dir', "$sourceRoot\res", '-o', "$buildRoot\resources.zip")
 Run-Tool $aapt @('link', '-o', "$buildRoot\resources.apk", '--manifest', "$buildRoot\AndroidManifest.xml", '-I', $AndroidJar, '--java', "$buildRoot\generated", '-A', "$sourceRoot\assets", '-A', "$buildRoot\web-assets", '-0', 'mp4', '-0', 'png', "$buildRoot\resources.zip")
@@ -81,6 +81,13 @@ Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplore
 Run-Tool $java @('-cp', "$buildRoot\tests", 'org.fractalexplorer.wallpaper.ShufflePolicyTest')
 Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplorer\wallpaper\ViennaSun.java", "$PSScriptRoot\tests\ViennaSunTest.java")
 Run-Tool $java @('-cp', "$buildRoot\tests", 'org.fractalexplorer.wallpaper.ViennaSunTest')
+# Launcher package-manager/alarm/shortcut fixtures stay separate from SDK classes.
+$iconTests = Join-Path $buildRoot 'icon-tests'
+New-Item -ItemType Directory -Path $iconTests -Force | Out-Null
+$iconSources = @(Get-ChildItem -LiteralPath "$PSScriptRoot\tests\icon-host" -Recurse -Filter '*.java' | Select-Object -ExpandProperty FullName)
+$iconSources += @('LauncherIcon', 'IconModeReceiver', 'ViennaSun') | ForEach-Object { "$sourceRoot\java\org\fractalexplorer\wallpaper\$_.java" }
+Run-Tool $javac (@('-d', $iconTests) + $iconSources + @("$PSScriptRoot\tests\LauncherIconTest.java"))
+Run-Tool $java @('-cp', $iconTests, 'org.fractalexplorer.wallpaper.LauncherIconTest', $sourceRoot)
 Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplorer\wallpaper\PackPolicy.java", "$PSScriptRoot\tests\PackPolicyTest.java")
 Run-Tool $java @('-cp', "$buildRoot\tests", 'org.fractalexplorer.wallpaper.PackPolicyTest', $buildRoot)
 Run-Tool $javac @('-d', "$buildRoot\tests", "$sourceRoot\java\org\fractalexplorer\wallpaper\NativeWorkQueue.java", "$PSScriptRoot\tests\NativeWorkQueueTest.java")
