@@ -58,7 +58,7 @@ test('custom palette share links round-trip independently of the number of built
 test('the expanded preset list preserves original palette indices and all colors can render', async () => {
   const palettes = JSON.parse(await readFile(new URL('../public/palettes.json', import.meta.url)));
   assert.deepEqual(palettes.slice(0, 12).map(p => p.name), ['Ember & ice', 'Lunar moss', 'Electric dusk', 'Solar flare', 'Oceanic', 'Monochrome', 'Aurora', 'Candy nebula', 'Abyssal glow', 'Desert bloom', 'Rose quartz', 'Prism']);
-  assert.equal(palettes.length, 21);
+  assert.equal(palettes.length, 25);
   assert.equal(new Set(palettes.map(p => p.name)).size, palettes.length);
   for (const preset of palettes) {
     assert.ok(preset.colors.length >= 2);
@@ -68,7 +68,7 @@ test('the expanded preset list preserves original palette indices and all colors
 
 test('Midnight stars is mostly near black with four separated colored highlights and a closed loop', async () => {
   const palettes = JSON.parse(await readFile(new URL('../public/palettes.json', import.meta.url)));
-  const preset = palettes.at(-1);
+  const preset = palettes.find(p=>p.name==='Midnight stars · sparse');
   assert.equal(preset.name, 'Midnight stars · sparse');
   assert.equal(preset.colors.length, 65);
   const bright = preset.colors.map((hex,index) => ({ index, rgb:hex.slice(1).match(/../g).map(v=>parseInt(v,16)) })).filter(p=>Math.max(...p.rgb)>32);
@@ -77,4 +77,18 @@ test('Midnight stars is mostly near black with four separated colored highlights
   assert.equal(preset.colors[0],preset.colors.at(-1));
   const editable=validateCustomPalette({name:preset.name,colors:preset.colors.slice(0,-1),loop:true});
   assert.deepEqual(customPaletteDefinition(editable),preset,'editing preserves exact accent spacing');
+});
+
+test('natural night-sky options use restrained star colors and a quieter faint variant', async () => {
+  const palettes=JSON.parse(await readFile(new URL('../public/palettes.json',import.meta.url)));
+  const variants=palettes.filter(p=>p.name.startsWith('Night sky · '));
+  assert.deepEqual(variants.map(p=>p.name),['Night sky · silver','Night sky · cool','Night sky · warm','Night sky · faint']);
+  for(const preset of variants) {
+    assert.equal(preset.colors.length,65);assert.equal(preset.colors[0],preset.colors.at(-1));
+    const highlights=preset.colors.map(hex=>hex.slice(1).match(/../g).map(v=>parseInt(v,16))).filter(rgb=>Math.max(...rgb)>32);
+    assert.equal(highlights.length,preset.name.endsWith('faint')?2:4);
+    for(const rgb of highlights)assert.ok(Math.max(...rgb)-Math.min(...rgb)<=36,'stars have only faint color tints');
+    assert.ok(highlights.every(rgb=>Math.max(...rgb)<=(preset.name.endsWith('faint')?174:213)));
+    assert.deepEqual(customPaletteDefinition({name:preset.name,colors:preset.colors.slice(0,-1),loop:true}),preset);
+  }
 });
