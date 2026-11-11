@@ -94,7 +94,7 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
       const preview = button('Preview', () => nativeCall('previewWallpaper', entry.id, screen));
       preview.disabled = !previewSupported;
       preview.title = preview.disabled ? 'Install Android app 0.17.0 or newer for full-screen previews.' : 'Play this saved wallpaper full screen. Tap anywhere to return.';
-      actions.append(apply, edit, duplicate, rename, remove, preview); content.append(heading, detail, actions, renameForm, confirm); card.append(image, content); container.append(card);
+      actions.append(preview, apply, edit, duplicate, rename, remove); content.append(heading, detail, actions, renameForm, confirm); card.append(image, content); container.append(card);
       if (shuffleSupported) {
         const label = document.createElement('label'); label.className = 'field-label';
         const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = pool.ids.includes(entry.id);

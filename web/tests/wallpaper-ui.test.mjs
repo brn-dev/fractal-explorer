@@ -497,7 +497,7 @@ test('gallery editing extracts the selected screen from a combined design withou
   const {elements,api}=setup();
   try {
     elements['open-wallpaper-export'].onclick(); await flush(); elements['wallpaper-gallery'].click();
-    elements['wallpaper-gallery-cards'].children[0].children[1].children[2].children[1].click();
+    elements['wallpaper-gallery-cards'].children[0].children[1].children[2].children.find(button=>button.textContent==='Edit design').click();
     elements['wallpaper-replace-continue'].click(); await flush();
     assert.equal(api.draft().screen,'inner'); assert.deepEqual(api.draft().states['open-steady'],saved.states['open-steady']); assert.equal(Object.keys(api.draft().states).length,2); assert.equal(elements['wallpaper-name'].value,'Saved original');
     api.draft().states['open-steady'].view.x='-.9';
@@ -521,7 +521,7 @@ test('duplicate protects the working draft until confirmation and creates a sepa
     try {
       elements['open-wallpaper-export'].click();await flush();const working=structuredClone(api.draft());
       elements['wallpaper-gallery'].click();elements['wallpaper-gallery-screen'].value=screen;elements['wallpaper-gallery-screen'].onchange();
-      const duplicate=()=>elements['wallpaper-gallery-cards'].children[0].children[1].children[2].children[2].click();
+      const duplicate=()=>elements['wallpaper-gallery-cards'].children[0].children[1].children[2].children.find(button=>button.textContent==='Duplicate & edit').click();
       duplicate();assert.equal(elements['wallpaper-replace-dialog'].open,true);assert.deepEqual(api.draft(),working);
       elements['wallpaper-replace-dialog'].close();await flush();assert.deepEqual(api.draft(),working);assert.deepEqual(calls,[]);
       duplicate();elements['wallpaper-replace-continue'].click();await flush();

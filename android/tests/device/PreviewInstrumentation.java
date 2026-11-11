@@ -237,9 +237,9 @@ public final class PreviewInstrumentation extends Instrumentation {
               addMonitor("org.fractalexplorer.wallpaper.WallpaperPreviewActivity", null, false);
           String title = "Preview " + screen + " " + kind;
           String button =
-              "Array.from(document.querySelectorAll('.wallpaper-gallery-card')).find(c=>c.querySelector('h3').textContent==="
+              "Array.from(Array.from(document.querySelectorAll('.wallpaper-gallery-card')).find(c=>c.querySelector('h3').textContent==="
                   + JSONObject.quote(title)
-                  + ").querySelectorAll('button')[5]";
+                  + ").querySelectorAll('button')).find(b=>b.textContent==='Preview')";
           if (quick) {
             eval(
                 web,

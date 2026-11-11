@@ -32,9 +32,10 @@ function setup({ pending = false, allowed = true } = {}) {
   setupWallpaperGallery({canOpen:()=>allowed,newWallpaper:screen=>calls.push(['new',screen]),editWallpaper:(value,screen,options)=>calls.push(options?['edit',value,screen,options]:['edit',value,screen]),beforeOpen:()=>calls.push(['before'])});
   const cards = () => elements['wallpaper-gallery-cards'].children;
   const content = i => cards()[i].children[1];
-  const actions = i => content(i).children[2].children;
+  const actions = i => content(i).children[2].children.filter(button=>button.textContent!=='Preview');
+  const preview = i => content(i).children[2].children.find(button=>button.textContent==='Preview');
   const cleanup = () => { delete globalThis.FractalNative; };
-  return {elements,entries,calls,draft,cards,content,actions,cleanup};
+  return {elements,entries,calls,draft,cards,content,actions,preview,cleanup};
 }
 test('gallery applies saved videos without requesting a render and protects the active entry',()=>{
   const t = setup(); try {
@@ -57,7 +58,7 @@ test('every gallery kind previews its own ID and screen without applying, editin
     for(const screen of ['cover','inner']) {
       t.elements['wallpaper-gallery-screen'].value=screen;t.elements['wallpaper-gallery-screen'].onchange();
       for(const index of [0,1]) {
-        const preview=t.actions(index).find(button=>button.textContent==='Preview');
+        const preview=t.preview(index);
         assert.equal(preview.disabled,false);preview.click();
         assert.deepEqual(t.calls.at(-1),['preview',t.entries[index].id,screen]);
       }
@@ -65,7 +66,7 @@ test('every gallery kind previews its own ID and screen without applying, editin
     assert.deepEqual(t.entries,before);assert.equal(t.elements['wallpaper-gallery-dialog'].open,true);
     assert.equal(t.calls.some(call=>['apply','edit','draft'].includes(call[0])),false);
     FractalNative.previewWallpaper=()=>JSON.stringify({ok:false,error:'Wallpaper is missing'});
-    t.actions(1).find(button=>button.textContent==='Preview').click();
+    t.preview(1).click();
     assert.match(t.elements['wallpaper-gallery-status'].textContent,/Wallpaper is missing/);
   }finally{t.cleanup();}
 });
@@ -76,7 +77,7 @@ test('older native hosts expose a disabled preview without breaking other galler
     delete FractalNative.previewWallpaper;
     setupWallpaperGallery({canOpen:()=>true,newWallpaper(){},editWallpaper(){},beforeOpen(){}});
     t.elements['open-wallpaper-gallery'].click();
-    const preview=t.actions(1).find(button=>button.textContent==='Preview');
+    const preview=t.preview(1);
     assert.equal(preview.disabled,true);assert.match(preview.title,/0.17.0/);
     t.actions(1)[0].click();assert.deepEqual(t.calls.at(-1),['apply','b','inner']);
   }finally{t.cleanup();}
