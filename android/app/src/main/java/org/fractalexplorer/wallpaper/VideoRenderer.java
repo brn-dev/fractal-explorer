@@ -41,6 +41,8 @@ final class VideoRenderer {
   private final Context context;
   private final Surface window;
   private final boolean shuffleAllowed;
+  private final WallpaperPreviewSource preview;
+  private final java.util.function.Consumer<Exception> previewError;
   private final HandlerThread thread = new HandlerThread("Fractal video");
   private final Handler handler;
   private final PlaybackState state = new PlaybackState();
@@ -114,9 +116,28 @@ final class VideoRenderer {
   }
 
   VideoRenderer(Context context, Surface window, boolean shuffleAllowed) {
+    this(context, window, shuffleAllowed, null, null);
+  }
+
+  VideoRenderer(
+      Context context,
+      Surface window,
+      WallpaperPreviewSource preview,
+      java.util.function.Consumer<Exception> onError) {
+    this(context, window, false, preview, onError);
+  }
+
+  private VideoRenderer(
+      Context context,
+      Surface window,
+      boolean shuffleAllowed,
+      WallpaperPreviewSource preview,
+      java.util.function.Consumer<Exception> onError) {
     this.context = context.getApplicationContext();
     this.window = window;
     this.shuffleAllowed = shuffleAllowed;
+    this.preview = preview;
+    this.previewError = onError;
     thread.start();
     handler = new Handler(thread.getLooper());
   }
@@ -169,8 +190,13 @@ final class VideoRenderer {
           currentIdle = WallpaperFiles.playback(preferences, screen, "idle");
           currentArrival = WallpaperFiles.playback(preferences, screen, "arrival");
         }
-        if (!WallpaperFiles.hasEntry(preferences, screen)) currentArrival = false;
-        if (WallpaperFiles.isStatic(preferences, screen)) currentIdle = currentArrival = false;
+        if (preview != null) {
+          currentIdle = preview.idle;
+          currentArrival = preview.hasEntry;
+        } else {
+          if (!WallpaperFiles.hasEntry(preferences, screen)) currentArrival = false;
+          if (WallpaperFiles.isStatic(preferences, screen)) currentIdle = currentArrival = false;
+        }
         boolean changed =
             state.update(mode, visible, currentIdle, currentArrival, saving, currentRevision, now);
         if (scheduleTick != null) {
@@ -347,8 +373,10 @@ final class VideoRenderer {
   private void applyStageContents(boolean keepVideoFrame) {
     if ((state.stage == PlaybackState.Stage.ARRIVAL || state.stage == PlaybackState.Stage.IDLE)
         && (shuffleBlank
-            || WallpaperFiles.isStatic(
-                context.getSharedPreferences("wallpaper", 0), state.prefix()))) {
+            || (preview != null
+                ? preview.image
+                : WallpaperFiles.isStatic(
+                    context.getSharedPreferences("wallpaper", 0), state.prefix())))) {
       // Activation can precede a queued configure. Never fall back to sample
       // videos while an image-only entry is already selected.
       state.failed(state.generation);
@@ -363,7 +391,7 @@ final class VideoRenderer {
       createVideoSurface(token);
       final MediaPlayer current = new MediaPlayer();
       player = current;
-      File custom = WallpaperFiles.activeFile(context, state.clip());
+      File custom = mediaFile(state.clip());
       if (custom.isFile()) {
         try (FileInputStream source = new FileInputStream(custom)) {
           current.setDataSource(source.getFD());
@@ -422,7 +450,7 @@ final class VideoRenderer {
   private void loadPoster() throws IOException {
     resetArrivalPoster();
     Bitmap bitmap;
-    File custom = WallpaperFiles.activeFile(context, state.prefix() + "-poster.png");
+    File custom = mediaFile(state.prefix() + "-poster.png");
     if (custom.isFile()) bitmap = BitmapFactory.decodeFile(custom.getAbsolutePath());
     else
       try (java.io.InputStream source = context.getAssets().open(state.prefix() + "-poster.png")) {
@@ -447,7 +475,7 @@ final class VideoRenderer {
     Bitmap bitmap = null;
     try (MediaMetadataRetriever reader = new MediaMetadataRetriever()) {
       String clip = state.prefix() + "-arrival.mp4";
-      File custom = WallpaperFiles.activeFile(context, clip);
+      File custom = mediaFile(clip);
       if (custom.isFile()) {
         try (FileInputStream source = new FileInputStream(custom)) {
           reader.setDataSource(source.getFD());
@@ -607,8 +635,16 @@ final class VideoRenderer {
     }
   }
 
+  private File mediaFile(String filename) throws IOException {
+    return preview == null ? WallpaperFiles.activeFile(context, filename) : preview.file(filename);
+  }
+
   private void report(Exception error) {
     Log.e("FractalWallpaper", "Wallpaper playback", error);
+    if (preview != null) {
+      if (previewError != null) previewError.accept(error);
+      return;
+    }
     try {
       context
           .getSharedPreferences("wallpaper", 0)
@@ -620,7 +656,7 @@ final class VideoRenderer {
     }
   }
 
-  void close() {
+  void closeAsync() {
     boolean begin;
     synchronized (this) {
       begin = !closed;
@@ -631,6 +667,11 @@ final class VideoRenderer {
       return; // Never wait for cleanup queued behind this renderer callback.
     }
     if (begin) handler.post(this::release);
+  }
+
+  void close() {
+    closeAsync();
+    if (Thread.currentThread() == thread) return;
     boolean interrupted = false;
     try {
       for (; ; ) {

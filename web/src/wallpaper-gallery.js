@@ -6,6 +6,10 @@ const $ = id => document.getElementById(id);
 export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, beforeOpen, getScreen }) {
   const dialog = $('wallpaper-gallery-dialog'), status = $('wallpaper-gallery-status');
   if (!nativeBridge()) return;
+  const previewSupported = typeof nativeBridge().previewWallpaper === 'function';
+  const previewNote = $('wallpaper-gallery-preview-note');
+  if (previewNote) previewNote.textContent = previewSupported ? 'Preview plays the saved entry transition, then the steady loop or still image. Tap anywhere to return. Your wallpaper selection stays unchanged.'
+    : 'Install Android app 0.17.0 or newer to enable full-screen wallpaper previews.';
   const screenSelect = $('wallpaper-gallery-screen'); screenSelect.value = 'inner';
   const shuffleSupported = typeof nativeBridge().setWallpaperShuffle === 'function';
   const rulesSupported = typeof nativeBridge().setWallpaperShuffleRule === 'function';
@@ -87,7 +91,10 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
       const inShuffle = Object.values(pools).some(pool => pool.enabled && pool.ids.includes(entry.id));
       const remove = button('Delete', () => { confirm.hidden = false; }); remove.disabled = entry.active || inShuffle;
       remove.title = entry.active ? 'Select another wallpaper on every screen using this design before deleting it.' : inShuffle ? 'Remove this design from shuffle before deleting it.' : '';
-      actions.append(apply, edit, duplicate, rename, remove); content.append(heading, detail, actions, renameForm, confirm); card.append(image, content); container.append(card);
+      const preview = button('Preview', () => nativeCall('previewWallpaper', entry.id, screen));
+      preview.disabled = !previewSupported;
+      preview.title = preview.disabled ? 'Install Android app 0.17.0 or newer for full-screen previews.' : 'Play this saved wallpaper full screen. Tap anywhere to return.';
+      actions.append(apply, edit, duplicate, rename, remove, preview); content.append(heading, detail, actions, renameForm, confirm); card.append(image, content); container.append(card);
       if (shuffleSupported) {
         const label = document.createElement('label'); label.className = 'field-label';
         const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = pool.ids.includes(entry.id);

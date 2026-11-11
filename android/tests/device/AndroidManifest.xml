@@ -2,4 +2,5 @@
   <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="36" />
   <application android:label="Fractal wallpaper device tests" />
   <instrumentation android:name=".SmokeInstrumentation" android:targetPackage="org.fractalexplorer.wallpaper" android:functionalTest="true" />
+  <instrumentation android:name=".PreviewInstrumentation" android:targetPackage="org.fractalexplorer.wallpaper" android:functionalTest="true" />
 </manifest>

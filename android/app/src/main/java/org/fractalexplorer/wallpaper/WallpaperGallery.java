@@ -382,6 +382,42 @@ final class WallpaperGallery {
     }
   }
 
+  WallpaperPreviewSource previewSource(String id, String screen) throws Exception {
+    checkScreen(screen);
+    synchronized (WallpaperFiles.class) {
+      File directory = folder(id);
+      JSONObject saved = manifest(directory);
+      if (!PackPolicy.supports(saved.optString("screen", ""), screen))
+        throw new IOException("This wallpaper belongs to the other screen");
+      String kind = saved.optString("kind", "animated");
+      boolean image = PackPolicy.isStatic(kind);
+      boolean fallback =
+          saved.has("steadyMotion")
+              ? "animated".equals(saved.getString("steadyMotion"))
+              : WallpaperFiles.playback(preferences, screen, "idle");
+      boolean idle =
+          id.equals(WallpaperFiles.activeId(preferences, screen))
+              ? WallpaperFiles.playback(preferences, screen, "idle")
+              : preferences.getBoolean(
+                  "gallery_" + screen + "_idle_" + id,
+                  preferences.getBoolean("gallery_idle_" + id, fallback));
+      BitmapFactory.Options dimensions = new BitmapFactory.Options();
+      dimensions.inJustDecodeBounds = true;
+      BitmapFactory.decodeFile(
+          PackPolicy.child(directory, screen + "-poster.png").getAbsolutePath(), dimensions);
+      // A preview deliberately shows the entry when present, even if entry playback
+      // is currently disabled on the home screen. Nothing is applied or persisted.
+      return new WallpaperPreviewSource(
+          directory,
+          screen,
+          image,
+          PackPolicy.hasEntry(kind),
+          idle,
+          dimensions.outWidth,
+          dimensions.outHeight);
+    }
+  }
+
   String thumbnail(String id) throws Exception {
     synchronized (WallpaperFiles.class) {
       String scope = manifest(folder(id)).optString("screen", "");

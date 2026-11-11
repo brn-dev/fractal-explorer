@@ -43,6 +43,7 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
   private ValueCallback<Uri[]> fileChooser;
   private File pendingSave;
   private boolean galleryRequested;
+  private boolean previewShowing;
   private static boolean recoveredExports;
   private static final java.util.Set<String> copying =
       java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -424,6 +425,19 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
   }
 
   @Override
+  public void previewWallpaper(String id, String screen) {
+    runOnUiThread(
+        () -> {
+          if (previewShowing || isFinishing() || isDestroyed()) return;
+          previewShowing = true;
+          startActivity(
+              new Intent(this, WallpaperPreviewActivity.class)
+                  .putExtra("wallpaper_id", id)
+                  .putExtra("wallpaper_screen", screen));
+        });
+  }
+
+  @Override
   public void shareText(String text) {
     runOnUiThread(
         () -> {
@@ -551,6 +565,7 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
   @Override
   protected void onResume() {
     super.onResume();
+    previewShowing = false;
     refreshWallpaperDisplay();
     if (web != null) {
       web.resumeTimers();

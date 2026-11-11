@@ -20,6 +20,10 @@ final class ExplorerBridge {
 
     void wallpaperPicker();
 
+    default void previewWallpaper(String id, String screen) throws Exception {
+      throw new IOException("Full-screen previews need a newer Android app.");
+    }
+
     default JSONObject webUpdates(String action, String version) throws Exception {
       throw new IOException("Web updates require a newer Android app.");
     }
@@ -100,7 +104,7 @@ final class ExplorerBridge {
 
   @JavascriptInterface
   public String info() {
-    return "{\"ok\":true,\"version\":2,\"nativeVideo\":true,\"maxEdge\":4096,\"dynamicQuality\":true,\"staticWallpapers\":true,\"shuffleRules\":true}";
+    return "{\"ok\":true,\"version\":2,\"nativeVideo\":true,\"maxEdge\":4096,\"dynamicQuality\":true,\"staticWallpapers\":true,\"shuffleRules\":true,\"wallpaperPreview\":true}";
   }
 
   @JavascriptInterface
@@ -385,6 +389,16 @@ final class ExplorerBridge {
   @JavascriptInterface
   public String wallpaperThumbnailForScreen(String id, String screen) {
     return call(() -> new JSONObject().put("image", gallery.thumbnail(id, screen)));
+  }
+
+  @JavascriptInterface
+  public String previewWallpaper(String id, String screen) {
+    return call(
+        () -> {
+          gallery.previewSource(id, screen);
+          host.previewWallpaper(id, screen);
+          return new JSONObject();
+        });
   }
 
   @JavascriptInterface
