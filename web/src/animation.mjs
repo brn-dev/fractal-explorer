@@ -1,5 +1,6 @@
 import { hasConstant, fractalParameters } from './fractals.mjs';
 import { validate, decimal, add, multiply, boundedText, plainText } from './decimal.mjs';
+import { validateCurve, compileCurve, curveFromFunction } from './curve.mjs';
 
 export const LIVE_FPS = 30;
 const smootherstep = t => t * t * t * (t * (t * 6 - 15) + 10);
@@ -15,6 +16,10 @@ export const cycleShapes = {
   'pause-middle': { label: 'Pause at middle', ease: t => t < .4 ? smootherstep(t / .4) / 2 : t > .6 ? .5 + smootherstep((t - .6) / .4) / 2 : .5 },
   linear: { label: 'Linear · constant speed', ease: t => t },
 };
+export function cycleCurvePreset(shape) {
+  if (!Object.hasOwn(cycleShapes, shape)) throw new Error('Choose a valid cycle preset.');
+  return curveFromFunction(t => cycleShapes[shape].ease(2 * Math.min(t, 1-t)), 'cycle');
+}
 export const cacheMemoryOptionsMiB = [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384];
 export function cacheMemorySetting(value, mobile = false) {
   return cacheMemoryOptionsMiB.includes(value) ? value : mobile ? 256 : 2048;
@@ -31,11 +36,13 @@ export function animationParameters(view) {
     ] : []),
     ...fractalParameters(view).map(p => ({ ...p, slider: `parameter-${p.key}-slider` })),
     { key: 'iterations', label: 'Iterations', min: 50, max: 50000, step: 1, slider: 'iterations-slider' },
+    { key: 'rotation', label: 'View rotation', angle: true, min: -360000, max: 360000, step: .1, slider: 'view-rotation-slider' },
   ];
 }
 export function defaultAutomation(view, p) {
   let target;
-  if (p.decimal) {
+  if (p.angle) target = (view[p.key] ?? 0) + 90;
+  else if (p.decimal) {
     target = plainText(add(decimal(view[p.key]), decimal('.02')));
     try { validate({ ...view, [p.key]: target }); }
     catch { target = plainText(add(decimal(view[p.key]), decimal('-.02'))); }
@@ -60,8 +67,10 @@ export function validateAutomation(view, settings = {}) {
     validate({ ...view, [p.key]: target });
     // Existing sessions keep their original sine motion when no shape was saved.
     const shape = entry.shape ?? 'sine';
-    if (!Object.hasOwn(cycleShapes, shape)) throw new Error('Choose a valid cycle shape.');
-    out[p.key] = { enabled: true, target: String(entry.target), speed: ticks / 20, shape };
+    if (shape !== 'custom' && !Object.hasOwn(cycleShapes, shape)) throw new Error('Choose a valid cycle shape.');
+    const curve = entry.curve === undefined ? undefined : validateCurve(entry.curve, 'cycle');
+    if (shape === 'custom' && !curve) throw new Error('Create a custom cycle shape.');
+    out[p.key] = { enabled: true, target: String(entry.target), speed: ticks / 20, shape, ...(curve ? {curve} : {}) };
   }
   return out;
 }
@@ -74,13 +83,14 @@ export function animationPlan(view, settings, fps = LIVE_FPS, startFrame = 0) {
   const frames = Math.max(2, fps * 20 / divisor), duration = frames / fps;
   const frameOffset = ((Math.round(startFrame) % frames) + frames) % frames;
   const channels = parameters.map(p => ({ ...p, ...valid[p.key], cycles: Math.round(valid[p.key].speed * 20) / divisor }));
+  const custom = Object.fromEntries(channels.filter(p=>p.shape==='custom').map(p=>[p.key,compileCurve(p.curve,'cycle')]));
   const viewAt = (index, count = frames) => {
     const next = { ...view };
     for (const p of channels) {
       const position = (((index + frameOffset * count / frames) * p.cycles) % count + count) % count;
       const distance = Math.min(position, count - position);
       // Fold integer frame positions before easing so return frames stay exact aliases.
-      const amount = Math.max(0, Math.min(1, cycleShapes[p.shape].ease(2 * distance / count)));
+      const amount = Math.max(0, Math.min(1, p.shape==='custom' ? custom[p.key](position/count) : cycleShapes[p.shape].ease(2 * distance / count)));
       if (amount === 0) continue;
       if (p.decimal) {
         if (amount === 1) next[p.key] = p.target;
@@ -89,7 +99,7 @@ export function animationPlan(view, settings, fps = LIVE_FPS, startFrame = 0) {
           next[p.key] = boundedText(add(from, multiply(add(to, { n: -from.n, e: from.e }), decimal(amount.toPrecision(17)))));
         }
       } else {
-        const from = Number(view[p.key]), to = Number(p.target);
+        const from = Number(view[p.key] ?? (p.angle ? 0 : NaN)), to = Number(p.target);
         const value = amount === 1 ? to : Math.max(Math.min(from, to), Math.min(Math.max(from, to), from + (to - from) * amount));
         next[p.key] = p.step === 1 ? Math.round(value) : value;
       }

@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WallpaperFrameRenderer } from '../src/wallpaper-renderer.mjs';
-const colors={density:1.3,phase:.2,interiorColor:'#aabbcc',definition:{colors:['#123456','#abcdef']}};
+const colors={density:1.3,phase:.2,interiorColor:'#aabbcc',colorCurves:{tone:{points:[[0,0],[.5,.3],[1,1]]}},definition:{colors:['#123456','#abcdef']}};
 function fixture(gpu=true) {
   const calls={render:[],read:0,paint:[],restore:[],cpu:[],draw:[],put:0},data=new Map();
-  const renderer={gpu,device:{queue:{async onSubmittedWorkDone(){}}},canvas:{},async render(view,width,height,settings){calls.render.push({view,width,height,settings});this.value=view.x;this.last={metadata:{width,height,color_origin:0}};return this.last;},async readField(){calls.read++;return new Float32Array([Number(this.value)]);},presentCached(values,metadata){this.value=values[0];this.last={metadata};calls.restore.push(this.value);},paint(index,density,phase,definition,interiorColor){calls.paint.push({value:Number(this.value),phase,definition,interiorColor});}};
+  const renderer={gpu,device:{queue:{async onSubmittedWorkDone(){}}},canvas:{},async render(view,width,height,settings){calls.render.push({view,width,height,settings});this.value=view.x;this.last={metadata:{width,height,color_origin:0}};return this.last;},async readField(){calls.read++;return new Float32Array([Number(this.value)]);},presentCached(values,metadata){this.value=values[0];this.last={metadata};calls.restore.push(this.value);},paint(index,density,phase,definition,interiorColor,colorCurves){calls.paint.push({value:Number(this.value),phase,definition,interiorColor,colorCurves});}};
   const fields={async get(key){return data.get(key);},async put(key,frame){calls.put++;data.set(key,frame);}};
   const target={width:0,height:0,getContext(){return{drawImage:(...args)=>calls.draw.push(args)}}};
   const controller=new AbortController();
@@ -19,6 +19,7 @@ test('palette-only GPU frames reuse the resident field without CPU readback or t
   assert.equal(t.calls.paint.length,100);assert.equal(t.calls.draw.length,100);assert.equal(t.calls.paint.at(-1).phase,.99);
   assert.equal(t.calls.paint[0].definition,colors.definition);assert.deepEqual([t.target.width,t.target.height],[64,80]);
   assert.equal(t.calls.paint[0].interiorColor,colors.interiorColor);
+  assert.equal(t.calls.paint[0].colorCurves,colors.colorCurves);
 });
 test('one-use transitions compute exact views without storing full-resolution fields',async()=>{
   const t=fixture();

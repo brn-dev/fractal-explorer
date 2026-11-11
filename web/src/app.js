@@ -20,6 +20,9 @@ import { MAX_CUSTOM_CONSTANTS } from './custom-constants.mjs';
 import { setupAppUpdates } from './update-ui.js';
 import { validateCustomPalette, customPaletteDefinition, paletteSelection, DEFAULT_INTERIOR_COLOR, validateInteriorColor, interiorColorRGB } from './palettes.mjs';
 import { setupPaletteEditor } from './palette-ui.js';
+import { validateColorCurves, hasColorCurves, paletteColorTable, adjustedPaletteGradient, colorCurveChannels } from './color-curves.mjs';
+import { openCurveEditor } from './curve-ui.js';
+import { defaultCurve } from './curve.mjs';
 import { normalizeRotation } from './rotation.mjs';
 import { setupTouchControls } from './touch-controls.js';
 const $ = (id) => document.getElementById(id);
@@ -173,12 +176,15 @@ let renderSettings = {
 let placesHidden = false;
 let vignetteEnabled = false;
 let rulersEnabled = false;
+let curvePreview = null;
+const effectiveColorCurves = () => curvePreview ?? colorCurves;
 let wanderingSpeed = .12, lastAnimationTime = null;
 let view = { ...base },
   palette = 0,
   density = 1,
   phase = 0,
   interiorColor = DEFAULT_INTERIOR_COLOR,
+  colorCurves = {},
   field = null,
   meta = null;
 let generation = 0,
@@ -355,7 +361,8 @@ function syncPalette() {
     b.setAttribute("aria-pressed", String(i === palette));
   });
   $("palette-name").textContent = palettes[palette].name;
-  $("palette-preview").style.background = gradient(palettes[palette]);
+  $("palette-preview").style.background = adjustedPaletteGradient(palettes[palette], effectiveColorCurves());
+  $('color-curves-state').textContent = hasColorCurves(effectiveColorCurves()) ? 'Adjusted' : 'Original';
   const custom = $('select-custom-palette');
   custom.hidden = !customPalette;
   custom.classList.toggle('active', palette === customPaletteIndex);
@@ -366,7 +373,7 @@ function syncPalette() {
   $('edit-palette').textContent = customPalette ? 'Edit…' : 'Create custom palette…';
 }
 function colorState() {
-  return { ...paletteSelection({ palette: palette === customPaletteIndex ? 'custom' : palette, customPalette }, builtinPaletteCount), density, phase, interiorColor };
+  return { ...paletteSelection({ palette: palette === customPaletteIndex ? 'custom' : palette, customPalette }, builtinPaletteCount), density, phase, interiorColor, colorCurves };
 }
 function setCustomPalette(data) {
   customPalette = validateCustomPalette(data);
@@ -376,35 +383,26 @@ function setCustomPalette(data) {
 function restoreColors(data) {
   const selected = paletteSelection(data, builtinPaletteCount);
   const interior = validateInteriorColor(data.interiorColor);
+  const curves = validateColorCurves(data.colorCurves);
   if (selected.customPalette) setCustomPalette(selected.customPalette);
   palette = selected.palette === 'custom' ? customPaletteIndex : selected.palette;
   density = Number.isFinite(data.density) ? Math.max(.2, Math.min(4, data.density)) : 1;
   phase = Number.isFinite(data.phase) ? ((data.phase % 1) + 1) % 1 : 0;
   interiorColor = interior;
+  colorCurves = curves; curvePreview = null;
   if (wallpaperSteadyContext) {
     wallpaperSteadyContext.colorOrigin = phase;
     wallpaperSteadyContext.colorElapsed = 0;
     wallpaperSteadyContext.colorTimeBase = 0;
   }
 }
-function colorTable(index = palette, definition = null) {
-  const colors = (definition ?? palettes[index]).colors.map((c) =>
-      [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)),
-    ),
-    table = new Uint8ClampedArray(4096 * 3);
-  for (let i = 0; i < 4096; i++) {
-    const t = (i / 4096) * (colors.length - 1),
-      k = Math.floor(t),
-      f = t - k;
-    for (let j = 0; j < 3; j++)
-      table[i * 3 + j] = colors[k][j] * (1 - f) + colors[k + 1][j] * f;
-  }
-  return table;
+function colorTable(index = palette, definition = null, curves = {}) {
+  return new Uint8ClampedArray(paletteColorTable(definition ?? palettes[index], curves));
 }
-function paint(target = canvas, values = field, metadata = meta, colors = {palette,density,phase,interiorColor}) {
+function paint(target = canvas, values = field, metadata = meta, colors = {palette,density,phase,interiorColor,colorCurves:effectiveColorCurves()}) {
   const {density: colorDensity, phase: colorPhase} = colors;
   if (!values || !metadata) return;
-  if (target === canvas) { if (paintingReady) engine.paint(colors.palette, colorDensity, colorPhase, colors.definition, colors.interiorColor); return; }
+  if (target === canvas) { if (paintingReady) engine.paint(colors.palette, colorDensity, colorPhase, colors.definition, colors.interiorColor, colors.colorCurves); return; }
   const interior = interiorColorRGB(colors.interiorColor);
   // Remove the common iteration offset: a deep view may span only a few
   // escape counts after hundreds or thousands of shared iterations.
@@ -421,7 +419,7 @@ function paint(target = canvas, values = field, metadata = meta, colors = {palet
   const context = target.getContext("2d"),
     image = context.createImageData(metadata.width, metadata.height),
     bytes = image.data,
-    table = colorTable(colors.palette, colors.definition);
+    table = colorTable(colors.palette, colors.definition, colors.colorCurves);
   for (let i = 0; i < values.length; i++) {
     const n = values[i],
       o = i * 4;
@@ -973,6 +971,22 @@ function setupControls() {
     apply: data => { setCustomPalette(data); palette = customPaletteIndex; syncPalette(); paint(); saveSession(); },
   });
   $('select-custom-palette').onclick = () => { palette = customPaletteIndex; syncPalette(); paint(); saveSession(); };
+  $('edit-color-curves').onclick = () => {
+    const original = colorCurves;
+    const checkCurrent = () => { if (colorCurves !== original) throw new Error('The scene changed. Reopen its color curves.'); };
+    openCurveEditor({ title:'Tone / RGB curves',mode:'free',channels:colorCurveChannels,curves:colorCurves,
+      getPalette:()=>palettes[palette],paletteGradient:adjustedPaletteGradient,
+      presets:[
+        {label:'Original / diagonal',curve:()=>defaultCurve()},
+        {label:'Darker midtones',curve:()=>({points:[[0,0],[.5,.3],[1,1]],interpolation:'smooth'})},
+        {label:'Brighter midtones',curve:()=>({points:[[0,0],[.5,.7],[1,1]],interpolation:'smooth'})},
+        {label:'Gentle contrast',curve:()=>({points:[[0,0],[.25,.15],[.75,.85],[1,1]],interpolation:'smooth'})},
+      ],
+      onPreview:value=>{checkCurrent();curvePreview=validateColorCurves(value);syncPalette();paint();},
+      onApply:value=>{checkCurrent();colorCurves=validateColorCurves(value);curvePreview=null;syncPalette();paint();saveSession();},
+      onCancel:()=>{curvePreview=null;syncPalette();paint();},
+    });
+  };
   const applyInteriorColor = value => {
     interiorColor = validateInteriorColor(value);
     syncInteriorColor(); paint(); saveSession();
@@ -1254,7 +1268,7 @@ function setupControls() {
     return { view: { ...view }, visibleView: { ...(imageView ?? view) }, requestedView: currentRenderView(),
       visibleViewReady: !rendering && paintingReady && !!field && (automationPlayer.plan || JSON.stringify(imageView) === JSON.stringify(currentRenderView())) && JSON.stringify(imageSettings) === JSON.stringify(renderSettings),
       automation: structuredClone(automationSettings), settings: { ...renderSettings }, supersampling: Number($('quality').value),
-      colors: { palette, density, phase, interiorColor, definition: structuredClone(palettes[palette]) }, speed: wanderingSpeed, wander: $('animate').checked,
+      colors: { palette, density, phase, interiorColor, colorCurves: structuredClone(colorCurves), definition: structuredClone(palettes[palette]) }, speed: wanderingSpeed, wander: $('animate').checked,
       loopColorPhase: wallpaperSteadyContext && $('animate').checked ? wallpaperSteadyContext.colorOrigin : undefined,
       audio: { ...audio.selection, volume: audio.settings.volume, intensity: audio.settings.intensity } };
   };
@@ -1404,7 +1418,7 @@ async function init() {
           level: "YOUR OWN CORNER OF INFINITY",
           view: b.view,
           saved: true,
-          colors: b.palette === undefined ? undefined : { palette: b.palette, customPalette: b.customPalette, density: b.density, phase: b.phase, interiorColor: b.interiorColor },
+          colors: b.palette === undefined ? undefined : { palette: b.palette, customPalette: b.customPalette, density: b.density, phase: b.phase, interiorColor: b.interiorColor, colorCurves: b.colorCurves },
           automation: b.automation,
         });
   } catch {}

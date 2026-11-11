@@ -8,6 +8,7 @@ const root = fileURLToPath(new URL('../src/', import.meta.url));
 const {defaultWallpaperDraft, wallpaperSnapshot} = await import(pathToFileURL(root+'wallpaper.mjs'));
 let source = await readFile(root+'wallpaper-ui.js','utf8');
 source = source.replace("import { BrowserEngine } from './engine.js';", 'const BrowserEngine = globalThis.TestEngine;');
+source = source.replace("import { openCurveEditor } from './curve-ui.js';", 'const openCurveEditor = options => { globalThis.testCurveEditor = options; };');
 source = source.replace("await import('./video-export.js')", 'globalThis.testVideo');
 source = source.replaceAll(/from '(\.\/[^']+)'/g, (_, p) => `from '${pathToFileURL(root+p).href}'`);
 source = source.replace('return { openHandoff };', 'return { openHandoff, draft:()=>draft };');
@@ -707,6 +708,27 @@ test('per-transition curve and duration edits persist independently and invalid 
   const currentDuration=document.getElementById('wallpaper-open-transition-seconds');currentDuration.value='';currentDuration.onchange();await flush();
   assert.match(elements['wallpaper-preview-status'].textContent,/transition/);assert.equal(elements['wallpaper-preview-play'].textContent,'Play preview');
   assert.equal(api.draft().transitions['open-transition'].seconds,1.2);
+  await close(elements);
+});
+
+test('custom motion edits survive unchanged option refresh, persist through timing edits and cancel safely',async()=>{
+  const {elements,api}=setup();elements['open-wallpaper-export'].onclick();await flush();
+  const select=document.getElementById('wallpaper-open-transition-easing');select.value='custom';select.onchange();
+  assert.equal(select.value,'ease-out');assert.equal(globalThis.testCurveEditor.mode,'transition');
+  assert.equal(globalThis.testCurveEditor.presets.length,4);
+  const spec=globalThis.testCurveEditor.presets[1].curve();
+  // Browser blur can re-read identical settings after the modal opens.
+  elements['wallpaper-name'].onchange();await flush();
+  globalThis.testCurveEditor.onApply({curve:spec});await flush();
+  assert.equal(api.draft().transitions['open-transition'].easing,'custom');
+  assert.deepEqual(api.draft().transitions['open-transition'].curve,spec);
+  assert.equal(document.getElementById('wallpaper-open-transition-curve-edit').hidden,false);
+  const duration=document.getElementById('wallpaper-open-transition-seconds');duration.value='1.1';duration.onchange();await flush();
+  assert.deepEqual(api.draft().transitions['open-transition'],{seconds:1.1,easing:'custom',curve:spec});
+  select.value='linear';select.onchange();await flush();select.value='custom';select.onchange();globalThis.testCurveEditor.onCancel();
+  assert.equal(select.value,'linear');assert.equal(api.draft().transitions['open-transition'].easing,'linear');
+  select.value='custom';select.onchange();elements['wallpaper-name'].value='Changed elsewhere';elements['wallpaper-name'].onchange();await flush();
+  assert.throws(()=>globalThis.testCurveEditor.onApply({curve:spec}),/wallpaper changed/);
   await close(elements);
 });
 

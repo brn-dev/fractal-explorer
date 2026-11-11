@@ -14,6 +14,7 @@ import { kinds } from './fractals.mjs';
 import { sampleField } from './audio/reactive-analysis.mjs';
 import { rotationBasis } from './rotation.mjs';
 import { DEFAULT_INTERIOR_COLOR, interiorColorRGB } from './palettes.mjs';
+import { paletteColorTable } from './color-curves.mjs';
 const now = () => performance.now();
 const makeAbort = () => new DOMException('A newer view is ready.', 'AbortError');
 
@@ -424,24 +425,23 @@ export class BrowserEngine {
     }
     this.last = { field: this.gpu ? true : field, metadata };
   }
-  palette(index, definition = this.palettes[index]) {
-    const colors = definition.colors.map(s => s.match(/[0-9a-f]{2}/gi).map(v => parseInt(v, 16)));
+  palette(index, definition = this.palettes[index], colorCurves = {}) {
+    const colors = paletteColorTable(definition, colorCurves);
     const data = new Float32Array(4096 * 4);
     for (let i = 0; i < 4096; i++) {
-      const t = i / 4096 * (colors.length - 1), k = Math.floor(t), f = t - k;
-      for (let axis = 0; axis < 3; axis++) data[4 * i + axis] = (colors[k][axis] * (1 - f) + colors[k + 1][axis] * f) / 255;
+      for (let axis = 0; axis < 3; axis++) data[4 * i + axis] = colors[3 * i + axis] / 255;
       data[4 * i + 3] = 1;
     }
     return data;
   }
-  paint(palette, density, phase, definition = this.palettes[palette], interiorColor = DEFAULT_INTERIOR_COLOR) {
+  paint(palette, density, phase, definition = this.palettes[palette], interiorColor = DEFAULT_INTERIOR_COLOR, colorCurves = {}) {
     if (!this.last) return;
     const interior = interiorColorRGB(interiorColor);
     const meta = this.last.metadata;
     if (this.canvas.width !== meta.width) this.canvas.width = meta.width;
     if (this.canvas.height !== meta.height) this.canvas.height = meta.height;
     if (!this.gpu) {
-      const image = this.cpuContext.createImageData(meta.width, meta.height), table = this.palette(palette, definition), values = this.last.field;
+      const image = this.cpuContext.createImageData(meta.width, meta.height), table = this.palette(palette, definition, colorCurves), values = this.last.field;
       for (let i = 0; i < values.length; i++) {
         const n = values[i], t = ((Math.log1p(Math.max(0, n - meta.color_origin)) * .2 * density + phase) % 1 + 1) % 1, k = Math.min(4095, Math.floor(t * 4096));
         for (let a = 0; a < 3; a++) image.data[4 * i + a] = n < 0 ? interior[a] : Math.round(table[k * 4 + a] * 255);
@@ -449,9 +449,11 @@ export class BrowserEngine {
       }
       this.cpuContext.putImageData(image, 0, 0); return;
     }
-    if (this.paletteIndex !== palette || this.paletteDefinition !== definition) {
-      this.device.queue.writeBuffer(this.paletteBuffer, 0, this.palette(palette, definition));
+    const curvesKey = JSON.stringify(colorCurves);
+    if (this.paletteIndex !== palette || this.paletteDefinition !== definition || this.paletteCurvesKey !== curvesKey) {
+      this.device.queue.writeBuffer(this.paletteBuffer, 0, this.palette(palette, definition, colorCurves));
       this.paletteIndex = palette; this.paletteDefinition = definition;
+      this.paletteCurvesKey = curvesKey;
     }
     const bytes = new ArrayBuffer(48), d = new DataView(bytes);
     // A phase just below one must stay below one after conversion to f32.

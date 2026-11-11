@@ -254,7 +254,7 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
         if (version === current.version) current.key = key;
       }
       if (preview === current && version === current.version && !job) {
-        current.renderer.paint(current.state.colors.palette, current.state.colors.density, p.phaseAt(index), current.state.colors.definition, current.state.colors.interiorColor);
+        current.renderer.paint(current.state.colors.palette, current.state.colors.density, p.phaseAt(index), current.state.colors.definition, current.state.colors.interiorColor, current.state.colors.colorCurves);
       }
     })().catch(error => {
       if (preview === current && error.name !== 'AbortError') { $('color-gif-status').textContent = error.message; current.paused = true; syncPlay(); }
@@ -353,7 +353,7 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
     if (current.rendering) await abortable(current.rendering, signal);
     const output = document.createElement('canvas'); output.width = p.width; output.height = p.height;
     const gif = p.format === 'gif' ? GIFEncoder() : null;
-    const gifPalette = gif ? quantize(gifPaletteSample(colorTable(current.state.colors.palette, current.state.colors.definition), shade, current.state.colors.interiorColor), p.paletteSize) : null;
+    const gifPalette = gif ? quantize(gifPaletteSample(colorTable(current.state.colors.palette, current.state.colors.definition, current.state.colors.colorCurves), shade, current.state.colors.interiorColor), p.paletteSize) : null;
     const fields = p.repeats > 1 ? new ExportFieldCache({ memoryBudget: exportCacheBudget(engine.mobile), signal }) : null;
     let video, finished = false, key = null, values, metadata, computed = 0, reused = 0;
     const cancel = () => { video?.cancel().catch(() => {}); current.renderer.cancel(); };
@@ -390,7 +390,7 @@ export function setupExports({ engine, palettes, getState, getCurrentField, pain
           if (dither) rgba = ditherFrame(rgba, p.width, current.state.colors.interiorColor);
           gif.writeFrame(applyPalette(rgba, gifPalette), p.width, p.height, { palette: index ? undefined : gifPalette, delay: p.delay(index), repeat: p.looping ? 0 : -1 });
         } else await abortable(video.add(index), signal);
-        current.renderer.paint(current.state.colors.palette, current.state.colors.density, p.phaseAt(index), current.state.colors.definition, current.state.colors.interiorColor);
+        current.renderer.paint(current.state.colors.palette, current.state.colors.density, p.phaseAt(index), current.state.colors.definition, current.state.colors.interiorColor, current.state.colors.colorCurves);
         await nextFrame();
       }
       check(signal);

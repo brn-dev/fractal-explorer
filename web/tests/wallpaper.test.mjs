@@ -154,7 +154,7 @@ test('transition and loop share palette, density and constant color speed indepe
   for(const screen of ['cover','inner']) for(const curve of transitionCurves) for(const crossfade of [false,true]) {
     const draft=defaultWallpaperDraft(snapshot(),screen), arrivalKey=screen==='cover'?'closed-transition':'open-transition';
     draft.colorWander=true; draft.colorSeconds=4; draft.idleSeconds=8;
-    draft.transitions[arrivalKey]={seconds:1.3,easing:curve.value};
+    draft.transitions[arrivalKey]={seconds:1.3,easing:curve.value,...(curve.value==='custom'?{curve:{points:[[0,0],[.2,.8],[1,1]]}}:{})};
     draft.states[arrivalKey].colors={definition:{name:'Different',colors:['#ffffff','#000000']},density:4,phase:.9};
     if(crossfade) draft.states[arrivalKey].view.fractal='mandelbrot';
     const [arrival,idle]=wallpaperPlan(draft), steady=idle.sample(0).colors;
@@ -200,7 +200,7 @@ test('opening and closing default to immediate movement and independently config
   assert.ok(Math.abs(closed.sample(1).amount-1/(closed.frames-1))<1e-12);
 });
 test('all transition curves are monotonic, have exact endpoints and meet the steady first frame',()=>{
-  for(const {value} of transitionCurves){
+  for(const {value} of transitionCurves.filter(item=>item.value!=='custom')){
     const draft=defaultWallpaperDraft(snapshot());draft.transitions={'open-transition':{seconds:.5,easing:value}};
     const plans=wallpaperPlan(draft),arrival=plans.find(p=>p.key==='open-transition'),steady=plans.find(p=>p.key==='open-steady');
     let previous=-1;

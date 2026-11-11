@@ -1,5 +1,5 @@
 import { BrowserEngine } from './engine.js';
-import { wallpaperStates, wallpaperSlots, wallpaperScreenDraft, wallpaperScreenName, wallpaperScreenSize, wallpaperDimensions, wallpaperKind, wallpaperHasEntry, wallpaperColorCycle, wallpaperSnapshot, validateWallpaperSnapshot, defaultWallpaperDraft, wallpaperPlan, wallpaperManifest, wallpaperJSON, MAX_WALLPAPER_JSON_BYTES, wallpaperTransition, transitionCurves, wallpaperPaletteDefinitions, MAX_WALLPAPER_PALETTES } from './wallpaper.mjs';
+import { wallpaperStates, wallpaperSlots, wallpaperScreenDraft, wallpaperScreenName, wallpaperScreenSize, wallpaperDimensions, wallpaperKind, wallpaperHasEntry, wallpaperColorCycle, wallpaperSnapshot, validateWallpaperSnapshot, defaultWallpaperDraft, wallpaperPlan, wallpaperManifest, wallpaperJSON, MAX_WALLPAPER_JSON_BYTES, wallpaperTransition, transitionCurves, transitionProgress, wallpaperPaletteDefinitions, MAX_WALLPAPER_PALETTES } from './wallpaper.mjs';
 import { wrapPhase } from './export-utils.mjs';
 import { wallpaperZip } from './zip-store.mjs';
 import { nativeBridge, nativeCall } from './native-bridge.mjs';
@@ -11,6 +11,8 @@ import { shareBaseURL } from './share.mjs';
 import { WallpaperFrameRenderer } from './wallpaper-renderer.mjs';
 import { videoRateDescription } from './video-rate-control.mjs';
 import { renderPaletteBatch } from './wallpaper-batch.mjs';
+import { curveFromFunction } from './curve.mjs';
+import { openCurveEditor } from './curve-ui.js';
 
 const $ = id => document.getElementById(id);
 const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
@@ -152,6 +154,7 @@ export function setupWallpaper({ engine, palettes, paletteOptions = palettes, ge
   function readOptions() {
     const entryTransition = $('wallpaper-entry-transition').checked;
     const transitions = imageMode() || !entryTransition ? draft.transitions : Object.fromEntries(wallpaperSlots(draft).filter(slot => slot.transition).map(slot => [slot.key, {
+      ...wallpaperTransition(draft,slot.key),
       seconds: $(`wallpaper-${slot.key}-seconds`) ? Number($(`wallpaper-${slot.key}-seconds`).value) : wallpaperTransition(draft,slot.key).seconds,
       easing: $(`wallpaper-${slot.key}-easing`)?.value ?? wallpaperTransition(draft,slot.key).easing,
     }]));
@@ -372,6 +375,7 @@ export function setupWallpaper({ engine, palettes, paletteOptions = palettes, ge
         if (slot.transition) {
           const timing = wallpaperTransition(draft, slot.key);
           $(`wallpaper-${slot.key}-seconds`).value = timing.seconds; $(`wallpaper-${slot.key}-easing`).value = timing.easing;
+          $(`wallpaper-${slot.key}-curve-edit`).hidden = timing.easing !== 'custom';
         }
         continue;
       }
@@ -402,12 +406,38 @@ export function setupWallpaper({ engine, palettes, paletteOptions = palettes, ge
         const curve = document.createElement('select'); curve.id = `wallpaper-${slot.key}-easing`;
         for (const item of transitionCurves) { const option = document.createElement('option'); option.value = item.value; option.textContent = item.label; curve.append(option); }
         curve.value = timing.easing; curveLabel.append(curve);
-        for (const control of [duration, curve]) control.onchange = () => {
+        const customEdit = document.createElement('button'); customEdit.id = `wallpaper-${slot.key}-curve-edit`; customEdit.type = 'button'; customEdit.className = 'secondary-button';
+        customEdit.textContent = 'Edit custom curve…'; customEdit.hidden = timing.easing !== 'custom';
+        const editCurve = () => {
+          if (job || loadingDraft) return;
+          stopPreview();
+          const profile = JSON.stringify(draft), saved = wallpaperTransition(draft, slot.key);
+          // Selection opens the editor before committing Custom, so Cancel preserves the previous preset.
+          curve.value = saved.easing;
+          const preset = value => curveFromFunction(t => transitionProgress(t,value), 'transition');
+          openCurveEditor({ title: `${slot.title} · motion curve`, mode:'transition', curves:{curve:saved.curve ?? preset(saved.easing)},
+            presets:transitionCurves.filter(item => item.value !== 'custom').map(item => ({label:item.label,curve:()=>preset(item.value)})),
+            onApply: ({curve:spec}) => {
+              // A pending blur can re-read unchanged options while the modal
+              // opens. Compare content so that refresh does not discard edits.
+              if (JSON.stringify(draft) !== profile || job || loadingDraft) throw new Error('The wallpaper changed. Reopen its motion curve.');
+              const before = draft.transitions;
+              draft.transitions = {...before,[slot.key]:{...saved,seconds:Number(duration.value),easing:'custom',curve:spec}};
+              curve.value = 'custom';
+              try { readOptions(); cards(); selected=slot.key; previewCaption=''; startPreview(true); }
+              catch(error) { draft.transitions=before;curve.value=saved.easing;throw error; }
+            }, onCancel: () => {curve.value=saved.easing;},
+          });
+        };
+        const updateTiming = () => {
           try { readOptions(); cards(); selected = slot.key; previewCaption = ''; startPreview(true); }
           catch (error) { stopPreview(); $('wallpaper-preview-status').textContent = error.message; }
         };
+        duration.onchange = updateTiming;
+        curve.onchange = () => { try { if(curve.value==='custom')editCurve();else updateTiming(); } catch(error) {curve.value=wallpaperTransition(draft,slot.key).easing;$('wallpaper-preview-status').textContent=error.message;} };
+        customEdit.onclick = editCurve;
         const note = document.createElement('p'); note.className = 'export-note'; note.textContent = 'Fast start moves immediately, then slows into the exact end scene. Timing changes take effect when you create the wallpaper again.';
-        controls.append(durationLabel, curveLabel); section.append(endpoints, controls, note);
+        controls.append(durationLabel, curveLabel); section.append(endpoints, controls, customEdit, note);
       }
     }
   }

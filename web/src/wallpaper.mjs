@@ -4,6 +4,8 @@ import { exportDimensions, wrapPhase } from './export-utils.mjs';
 import { customPaletteDefinition, validateCustomPalette, MAX_PALETTE_COLORS, validateInteriorColor } from './palettes.mjs';
 import { exportQualities } from './animation-export.mjs';
 import { normalizeRotation, rotationDelta } from './rotation.mjs';
+import { validateColorCurves } from './color-curves.mjs';
+import { validateCurve, compileCurve } from './curve.mjs';
 
 export const WALLPAPER_FORMAT = 'fractal-wallpaper/v1';
 export const MAX_WALLPAPER_JSON_BYTES = 4 * 1024 ** 2;
@@ -150,7 +152,7 @@ export function wallpaperSnapshot(state, palettes, { visible = false } = {}) {
     settings: structuredClone(state.settings ?? {}), wander: !!state.wander,
     speed: Number(state.speed ?? .12),
     supersampling: Math.max(1, Number(state.supersampling ?? 1)),
-    colors: { density: Number(colors.density ?? 1), interiorColor: validateInteriorColor(colors.interiorColor), phase: wrapPhase(Number(!visible && Number.isFinite(state.loopColorPhase) ? state.loopColorPhase : colors.phase ?? 0)),
+    colors: { density: Number(colors.density ?? 1), interiorColor: validateInteriorColor(colors.interiorColor), colorCurves: validateColorCurves(colors.colorCurves), phase: wrapPhase(Number(!visible && Number.isFinite(state.loopColorPhase) ? state.loopColorPhase : colors.phase ?? 0)),
       definition: { name: String(definition.name ?? 'Wallpaper'), colors: [...definition.colors] } },
   };
 }
@@ -160,6 +162,7 @@ export function validateWallpaperSnapshot(snapshot) {
   animationPlan(out.view, out.automation ?? {});
   out.colors.definition = wallpaperPaletteDefinition(out.colors.definition);
   out.colors.interiorColor = validateInteriorColor(out.colors.interiorColor);
+  out.colors.colorCurves = validateColorCurves(out.colors.colorCurves);
   if (!Number.isFinite(out.speed) || out.speed < .05 || out.speed > 2) throw new Error('Invalid wallpaper color speed.');
   if (out.supersampling !== undefined && !wallpaperSamplingScales.includes(out.supersampling)) throw new Error('Choose a valid wallpaper supersampling level.');
   if (!Number.isFinite(out.colors.density) || out.colors.density < .2 || out.colors.density > 4 || !Number.isFinite(out.colors.phase)) throw new Error('Invalid wallpaper colors.');
@@ -224,6 +227,7 @@ export const transitionCurves = [
   { value: 'ease-out-strong', label: 'Very fast start · long glide' },
   { value: 'linear', label: 'Constant speed' },
   { value: 'ease-in-out', label: 'Slow start · smooth finish' },
+  { value: 'custom', label: 'Custom…' },
 ];
 export function wallpaperTransition(draft, key) {
   if (!wallpaperStates.some(slot => slot.key === key && slot.transition)) throw new Error('Unknown wallpaper transition.');
@@ -233,15 +237,18 @@ export function wallpaperTransition(draft, key) {
   const seconds = saved?.seconds ?? draft.arrivalSeconds, easing = saved?.easing ?? 'ease-out';
   if (!Number.isFinite(seconds) || seconds < .5 || seconds > 10) throw new Error('Choose a 0.5–10 second transition.');
   if (!transitionCurves.some(curve => curve.value === easing)) throw new Error('Choose a transition motion curve.');
-  return { seconds, easing };
+  const curve = saved?.curve === undefined ? undefined : validateCurve(saved.curve, 'transition');
+  if (easing === 'custom' && !curve) throw new Error('Create a custom transition curve.');
+  return { seconds, easing, ...(curve ? {curve} : {}) };
 }
-export function transitionProgress(t, easing) {
+export function transitionProgress(t, easing, curve) {
   if (t <= 0) return 0;
   if (t >= 1) return 1;
   if (easing === 'ease-out') return 1 - (1 - t) ** 3;
   if (easing === 'ease-out-strong') return 1 - (1 - t) ** 5;
   if (easing === 'linear') return t;
   if (easing === 'ease-in-out') return t * t * t * (t * (t * 6 - 15) + 10);
+  if (easing === 'custom') return compileCurve(curve, 'transition')(t);
   throw new Error('Choose a transition motion curve.');
 }
 export function wallpaperPlan(draft, { previewLongest } = {}) {
@@ -271,6 +278,7 @@ export function wallpaperPlan(draft, { previewLongest } = {}) {
     const snapshot = states[slot.key], destination = states[slot.target] ?? snapshot;
     const fps = slot.transition ? draft.arrivalFps : draft.idleFps;
     const timing = slot.transition ? wallpaperTransition(draft, slot.key) : null;
+    const progress = timing?.easing === 'custom' ? compileCurve(timing.curve, 'transition') : t => transitionProgress(t, timing?.easing);
     const loop = wallpaperLoopTiming(snapshot.view, snapshot.automation, draft.idleSeconds, fps);
     const frames = slot.transition ? Math.max(2, Math.round(timing.seconds * fps)) : draft.screen ? loop.frames : Math.max(2, Math.round(draft.idleSeconds * fps));
     const dimensions = wallpaperDimensions(draft, slot.screen, previewLongest), aspect = dimensions.height / dimensions.width;
@@ -288,7 +296,7 @@ export function wallpaperPlan(draft, { previewLongest } = {}) {
       colorCycleSeconds: colorCycle?.seconds, parameterCycles: Object.fromEntries(channels.map(channel => [channel.key, channel.cycles])),
       sample(index) {
         if (!Number.isInteger(index) || index < 0 || index >= frames) throw new Error('Invalid wallpaper frame.');
-        const amount = slot.transition ? transitionProgress(index / (frames - 1), timing.easing) : 0;
+        const amount = slot.transition ? progress(index / (frames - 1)) : 0;
         const colors = colorCycle ? { ...destination.colors, phase: wrapPhase(destination.colors.phase + (colorCycle.enabled ? (slot.transition ? (index - frames + 1) / fps / colorCycle.seconds : cycles * index / frames) : 0)) }
           : slot.transition && amount >= 1 ? destination.colors : slot.transition && amount <= 0 ? snapshot.colors : slot.transition ? { ...destination.colors,
           density: snapshot.colors.density + (destination.colors.density - snapshot.colors.density) * amount,

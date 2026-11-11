@@ -3,8 +3,8 @@
 export function sliderDomain(parameter, start, target = start, precision = false) {
   const a = Number(start), b = Number(target);
   const extent = Math.min(1e6, Math.max(2, Math.ceil(Math.abs(a)), Math.ceil(Math.abs(b))));
-  const lower = parameter.decimal ? -extent : parameter.min;
-  const upper = parameter.decimal ? extent : parameter.max;
+  const lower = parameter.angle ? Math.min(-360, Math.floor(Math.min(a,b)/360)*360) : parameter.decimal ? -extent : parameter.min;
+  const upper = parameter.angle ? Math.max(360, Math.ceil(Math.max(a,b)/360)*360) : parameter.decimal ? extent : parameter.max;
   const baseStep = parameter.decimal ? .0001 : parameter.step;
   const step = parameter.step === 1 ? 1 : baseStep / (precision ? 10 : 1);
   if (!precision) return { min: lower, max: upper, step };
