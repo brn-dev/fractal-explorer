@@ -76,14 +76,37 @@ test('the expanded preset list preserves original palette indices and all colors
   }
 });
 
-test('Midnight stars is mostly near black with four separated colored highlights and a closed loop', async () => {
+const rgb = hex => hex.slice(1).match(/../g).map(v=>parseInt(v,16));
+const brightness = hex => { const [r,g,b]=rgb(hex);return .2126*r+.7152*g+.0722*b; };
+function starPeaks(preset) {
+  return preset.colors.map((hex,index)=>({index,rgb:rgb(hex),value:brightness(hex)}))
+    .filter(p=>p.index>0&&p.index<preset.colors.length-1&&p.value>32&&p.value>brightness(preset.colors[p.index-1])&&p.value>brightness(preset.colors[p.index+1]));
+}
+function checkSoftBands(preset, minimumWidth) {
+  const base=brightness(preset.colors[0]);
+  for(const peak of starPeaks(preset)) {
+    const half=(base+peak.value)/2;
+    let start=peak.index,end=peak.index;
+    while(start>0&&brightness(preset.colors[start-1])>=half)start--;
+    while(end<preset.colors.length-1&&brightness(preset.colors[end+1])>=half)end++;
+    assert.ok(end-start+1>=minimumWidth,'bright accents linger across a broad band instead of a single-stop flash');
+  }
+  for(let i=1;i<preset.colors.length;i++) {
+    const a=rgb(preset.colors[i-1]),b=rgb(preset.colors[i]);
+    assert.ok(a.every((value,c)=>Math.abs(value-b[c])<=80),'gradual color ramps limit abrupt brightness changes');
+  }
+  assert.ok(preset.colors.filter(hex=>brightness(hex)<=32).length>preset.colors.length/2,'most stops stay perceptually dark');
+}
+
+test('Midnight stars keeps four distinct colors with wider soft highlights, dark gaps and a closed loop', async () => {
   const palettes = JSON.parse(await readFile(new URL('../public/palettes.json', import.meta.url)));
   const preset = palettes.find(p=>p.name==='Midnight stars · sparse');
   assert.equal(preset.name, 'Midnight stars · sparse');
   assert.equal(preset.colors.length, 65);
-  const bright = preset.colors.map((hex,index) => ({ index, rgb:hex.slice(1).match(/../g).map(v=>parseInt(v,16)) })).filter(p=>Math.max(...p.rgb)>32);
+  const bright = starPeaks(preset);
   assert.deepEqual(bright.map(p=>p.index), [8,24,40,56]);
   assert.equal(new Set(bright.map(p=>p.rgb.join(','))).size,4);
+  checkSoftBands(preset,5);
   assert.equal(preset.colors[0],preset.colors.at(-1));
   const editable=validateCustomPalette({name:preset.name,colors:preset.colors.slice(0,-1),loop:true});
   assert.deepEqual(customPaletteDefinition(editable),preset,'editing preserves exact accent spacing');
@@ -95,10 +118,11 @@ test('natural night-sky options use restrained star colors and a quieter faint v
   assert.deepEqual(variants.map(p=>p.name),['Night sky · silver','Night sky · cool','Night sky · warm','Night sky · faint']);
   for(const preset of variants) {
     assert.equal(preset.colors.length,65);assert.equal(preset.colors[0],preset.colors.at(-1));
-    const highlights=preset.colors.map(hex=>hex.slice(1).match(/../g).map(v=>parseInt(v,16))).filter(rgb=>Math.max(...rgb)>32);
+    const highlights=starPeaks(preset).map(p=>p.rgb);
     assert.equal(highlights.length,preset.name.endsWith('faint')?2:4);
     for(const rgb of highlights)assert.ok(Math.max(...rgb)-Math.min(...rgb)<=36,'stars have only faint color tints');
     assert.ok(highlights.every(rgb=>Math.max(...rgb)<=(preset.name.endsWith('faint')?174:213)));
+    checkSoftBands(preset,preset.name.endsWith('faint')?7:5);
     assert.deepEqual(customPaletteDefinition({name:preset.name,colors:preset.colors.slice(0,-1),loop:true}),preset);
   }
 });
