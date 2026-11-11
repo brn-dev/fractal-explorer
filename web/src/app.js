@@ -1262,7 +1262,7 @@ function setupControls() {
     if (!engineReady) throw new Error('Wait for the browser renderer to start.');
     return snapshotState();
   };
-  wallpaperUI = setupWallpaper({ engine, palettes, paint, downloadBlob, getState: snapshotState,
+  wallpaperUI = setupWallpaper({ engine, palettes, paletteOptions: palettes.slice(0, builtinPaletteCount), paint, downloadBlob, getState: snapshotState,
     onSceneEditingChange(slot, context) {
       if (slot && !wallpaperTarget) {
         wallpaperPanelWasCollapsed = $('panel-content').hidden;

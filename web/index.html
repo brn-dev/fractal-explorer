@@ -543,10 +543,17 @@
       <p id="wallpaper-static-note" class="export-note" hidden>Creates one lossless PNG using your target resolution and supersampling. Static images can join animated designs in the phone's shuffle selection.</p>
       <p id="wallpaper-endpoints-note" class="export-note wallpaper-motion-option">Each transition runs from its saved START scene to the matching saved END / steady scene. Use the explicit scene buttons below to edit or preview either endpoint.</p>
       <label class="field-label">Name<input id="wallpaper-name" maxlength="80" value="My fractal wallpaper"></label>
+      <details id="wallpaper-palette-options">
+        <summary>Render multiple palettes</summary>
+        <p class="export-note">Keep the current palette and choose up to three more. On your PC, each fractal frame is calculated once and recolored for every palette. Each variant still needs its own video encoding. Preview shows the current palette.</p>
+        <div id="wallpaper-palettes" role="group" aria-label="Additional wallpaper palettes"></div>
+        <p id="wallpaper-palette-count" class="export-note" role="status">Current palette only</p>
+        <p class="export-note">Downloads one ZIP containing separate wallpaper ZIPs. Extract it, then import the individual packages into the phone app. Palette choices travel with PC links and saved drafts.</p>
+      </details>
       <div id="wallpaper-preview-stage"><canvas id="wallpaper-preview" aria-label="Selected wallpaper state preview"></canvas></div>
       <p id="wallpaper-preview-status" class="export-note" role="status"></p>
       <button id="wallpaper-preview-play" class="secondary-button" type="button">Play preview</button>
-      <button id="wallpaper-download-image" class="secondary-button" type="button" hidden>Download PNG image</button>
+      <button id="wallpaper-download-image" class="secondary-button" type="button" hidden>Download current PNG image</button>
       <div id="wallpaper-state-cards"></div>
       <div class="wallpaper-motion-option">
       <p class="export-note">Copy start → end or Copy end → start replaces the destination scene. Start scenes use still parameter values; set loop motion in the end / steady scene.</p>

@@ -1,5 +1,5 @@
 import { BrowserEngine } from './engine.js';
-import { wallpaperStates, wallpaperSlots, wallpaperScreenDraft, wallpaperScreenName, wallpaperScreenSize, wallpaperDimensions, wallpaperKind, wallpaperHasEntry, wallpaperColorCycle, wallpaperSnapshot, validateWallpaperSnapshot, defaultWallpaperDraft, wallpaperPlan, wallpaperManifest, wallpaperJSON, MAX_WALLPAPER_JSON_BYTES, wallpaperTransition, transitionCurves } from './wallpaper.mjs';
+import { wallpaperStates, wallpaperSlots, wallpaperScreenDraft, wallpaperScreenName, wallpaperScreenSize, wallpaperDimensions, wallpaperKind, wallpaperHasEntry, wallpaperColorCycle, wallpaperSnapshot, validateWallpaperSnapshot, defaultWallpaperDraft, wallpaperPlan, wallpaperManifest, wallpaperJSON, MAX_WALLPAPER_JSON_BYTES, wallpaperTransition, transitionCurves, wallpaperPaletteDefinitions, MAX_WALLPAPER_PALETTES } from './wallpaper.mjs';
 import { wrapPhase } from './export-utils.mjs';
 import { wallpaperZip } from './zip-store.mjs';
 import { nativeBridge, nativeCall } from './native-bridge.mjs';
@@ -10,6 +10,7 @@ import { createWallpaperURL, readWallpaperURL, wallpaperHandoff } from './wallpa
 import { shareBaseURL } from './share.mjs';
 import { WallpaperFrameRenderer } from './wallpaper-renderer.mjs';
 import { videoRateDescription } from './video-rate-control.mjs';
+import { renderPaletteBatch } from './wallpaper-batch.mjs';
 
 const $ = id => document.getElementById(id);
 const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
@@ -17,7 +18,7 @@ const check = signal => { if (signal?.aborted) throw new DOMException('Wallpaper
 const png = canvas => new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Could not encode a wallpaper frame.')), 'image/png'));
 const STORAGE = 'fractal-web-wallpaper-v1';
 
-export function setupWallpaper({ engine, palettes, getState, applyState, paint, downloadBlob, onSceneEditingChange = () => {} }) {
+export function setupWallpaper({ engine, palettes, paletteOptions = palettes, getState, applyState, paint, downloadBlob, onSceneEditingChange = () => {} }) {
   const dialog = $('wallpaper-dialog');
   if (typeof ResizeObserver === 'function') new ResizeObserver(entries => {
     document.documentElement.style.setProperty('--wallpaper-editing-space', `${Math.ceil(entries[0].target.getBoundingClientRect().height) + 28}px`);
@@ -30,6 +31,37 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
   const designPlan = value => wallpaperPlan(value, { previewLongest: 480 });
   const imageMode = () => wallpaperKind(draft) === 'static';
   const designSlots = () => wallpaperSlots(draft).filter(slot => !slot.transition || wallpaperHasEntry(draft));
+  let paletteChoices = [];
+  const paletteKey = definition => JSON.stringify(definition.colors.map(color => color.toLowerCase()));
+  function syncPaletteOptions() {
+    if (!draft) return;
+    const count = wallpaperPaletteDefinitions(draft).length;
+    for (const { input, current } of paletteChoices) input.disabled = !!job || loadingDraft || current || (!input.checked && count >= MAX_WALLPAPER_PALETTES);
+    $('wallpaper-palette-count').textContent = count > 1 ? `${count} palettes · one wallpaper package each` : 'Current palette only';
+    $('wallpaper-create').textContent = count > 1 ? nativeBridge() ? `Render ${count} palettes on PC…` : `Download ${count} palette wallpapers`
+      : `${nativeBridge() ? 'Create' : 'Download'} ${screen === 'cover' ? 'cover' : 'main'} wallpaper`;
+  }
+  function buildPaletteOptions() {
+    const definitions = wallpaperPaletteDefinitions(draft), base = definitions[0], selected = new Set(definitions.map(paletteKey)), seen = new Set();
+    paletteChoices = []; $('wallpaper-palettes').replaceChildren();
+    for (const definition of [base, ...definitions.slice(1), ...paletteOptions]) {
+      const key = paletteKey(definition); if (seen.has(key)) continue; seen.add(key);
+      const current = key === paletteKey(base), row = document.createElement('label'), input = document.createElement('input');
+      row.className = 'wallpaper-palette-choice'; input.type = 'checkbox'; input.checked = current || selected.has(key);
+      input.setAttribute('aria-label', definition.name + (current ? ' (current palette)' : ''));
+      const swatch = document.createElement('span'); swatch.className = 'wallpaper-palette-swatch'; swatch.setAttribute('aria-hidden', 'true'); swatch.style.background = `linear-gradient(90deg, ${definition.colors.join(',')})`;
+      const text = document.createElement('span'); text.textContent = definition.name + (current ? ' · current' : '');
+      row.append(input, swatch, text); $('wallpaper-palettes').append(row); paletteChoices.push({ input, definition, current });
+      input.onchange = () => {
+        const before = draft.paletteVariants;
+        try {
+          draft.paletteVariants = paletteChoices.filter(choice => !choice.current && choice.input.checked).map(choice => structuredClone(choice.definition));
+          wallpaperPaletteDefinitions(draft); save(); syncPaletteOptions();
+        } catch (error) { draft.paletteVariants = before; input.checked = !input.checked; syncPaletteOptions(); $('wallpaper-status').textContent = error.message; }
+      };
+    }
+    syncPaletteOptions();
+  }
   function syncEntryUI() {
     const entry = wallpaperHasEntry(draft);
     dialog.classList.toggle('wallpaper-loop-only', !entry && !imageMode());
@@ -208,7 +240,7 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     $('wallpaper-cancel').textContent = loadingDraft ? 'Cancel import' : 'Cancel export';
     $('wallpaper-bitrate').disabled = value || draft?.quality !== 'custom';
     if (draft && imageMode()) for (const id of ['wallpaper-idle-seconds','wallpaper-idle-fps','wallpaper-steady-motion','wallpaper-color-motion','wallpaper-color-seconds','wallpaper-quality','wallpaper-bitrate']) $(id).disabled = true;
-    $('wallpaper-create').textContent = `${nativeBridge() ? 'Create' : 'Download'} ${screen === 'cover' ? 'cover' : 'main'} wallpaper`;
+    syncPaletteOptions();
     if (draft) syncEntryUI();
   }
   async function renderSample(renderer, canvas, plan, index, fields, signal) {
@@ -404,7 +436,7 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
       const steady = draft.states[wallpaperSlots(draft).find(slot => !slot.transition).key];
       $('wallpaper-color-motion').value = (draft.colorWander ?? steady.wander) ? 'cycle' : 'still';
       $('wallpaper-color-seconds').value = draft.colorSeconds ?? 1 / steady.speed;
-      rendererNote();
+      rendererNote(); buildPaletteOptions();
       $('export-dialog').close(); if (!dialog.open) dialog.showModal(); cards(); busy(false); startPreview();
     } catch (error) { $('export-menu-status').textContent = error.message; }
   }
@@ -474,7 +506,8 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     try {
       refreshSizes(); readOptions(); handoff = wallpaperHandoff(draft); stopPreview();
       const plan = wallpaperPlan(handoff)[0];
-      $('wallpaper-pc-summary').textContent = `${handoff.name} · ${wallpaperScreenName(handoff.screen)} · ${plan.width} × ${plan.height} · ${plan.supersampling}× supersampling. ${wallpaperHasEntry(handoff) ? 'Both saved scenes and their animation settings are included.' : 'Only the steady scene is rendered; no entry transition.'}`;
+      const paletteCount = wallpaperPaletteDefinitions(handoff).length;
+      $('wallpaper-pc-summary').textContent = `${handoff.name} · ${wallpaperScreenName(handoff.screen)} · ${plan.width} × ${plan.height} · ${plan.supersampling}× supersampling. ${wallpaperHasEntry(handoff) ? 'Both saved scenes and their animation settings are included.' : 'Only the steady scene is rendered; no entry transition.'}${paletteCount > 1 ? ` ${paletteCount} palette variants share the same frame calculation.` : ''}`;
       pcLink.value = ''; $('wallpaper-pc-copy').disabled = $('wallpaper-pc-share').disabled = true;
       $('wallpaper-pc-share').hidden = typeof navigator.share !== 'function' && typeof nativeBridge()?.shareWallpaperLink !== 'function';
       pcStatus.textContent = 'Preparing PC link…'; if (!pcDialog.open) pcDialog.showModal();
@@ -530,6 +563,8 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
     stopPreview(); $('wallpaper-apply').hidden = true; busy(true);
     try {
       readOptions(); const saved = structuredClone(draft), plans = wallpaperPlan(saved), native = !!nativeBridge();
+      const batch = !imageOnly && wallpaperPaletteDefinitions(saved).length > 1;
+      if (batch && native) throw new Error('Use Render on PC for palette batches. This phone encoder creates one wallpaper at a time.');
       if (imageOnly && (!imageMode() || native)) throw new Error('PNG download is available for static designs in the browser.');
       if (native && imageMode() && !nativeCall('info').staticWallpapers) throw new Error('Install the latest Android app to create static image wallpapers.');
       const manifest = wallpaperManifest(saved, plans); // Check metadata size before rendering any video.
@@ -547,6 +582,21 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
         catch { throw new Error(`${plan.supersampling}× supersampling at ${plan.width} × ${plan.height} exceeds this renderer's limits. Choose a lower sampling level or smaller resolution.`); }
       }
       fields = new ExportFieldCache({ memoryBudget: exportCacheBudget(engine.mobile), signal });
+      if (batch) {
+        const encoding = new Map();
+        const result = await renderPaletteBatch({ draft: saved, renderer, fields, paint, codecs, signal, yieldFrame: nextFrame,
+          onEncoding: ({ plan, encodings }) => {
+            const modes = [...new Set(encodings.filter(info => info?.qualityMode).map(info => videoRateDescription(info)))];
+            if (modes.length) encoding.set(plan.key, `${plan.transition ? 'Transition' : 'Steady'}: ${modes.join(' / ')}`);
+            $('wallpaper-encoding-note').textContent = `${plan.width} × ${plan.height} · ${wallpaperPaletteDefinitions(saved).length} palettes · ${[...encoding.values()].join('. ')}.`;
+          },
+          onProgress: ({ plan, index, complete, total, palettes }) => {
+            $('wallpaper-status').textContent = `${plan.title} · frame ${index + 1} / ${plan.frames} · ${palettes} palettes · ${Math.round(100 * complete / total)}%`;
+          } });
+        check(signal); await downloadBlob(result.archive, 'fractal-wallpaper-palettes.zip');
+        $('wallpaper-status').textContent = `${result.count} palette wallpapers ready. Extract this ZIP, then import each wallpaper ZIP into the Android app.`;
+        return;
+      }
       const entries = [], canvas = document.createElement('canvas');
       const actualEncoding = new Map();
       const showActualEncoding = () => {
@@ -602,7 +652,12 @@ export function setupWallpaper({ engine, palettes, getState, applyState, paint, 
       renderer?.destroy(); await fields?.dispose().catch(() => {}); job = null; busy(false);
     }
   }
-  $('wallpaper-create').onclick = () => createWallpaper();
+  $('wallpaper-create').onclick = () => {
+    try {
+      if (nativeBridge() && wallpaperPaletteDefinitions(draft).length > 1) return $('wallpaper-pc').click();
+      return createWallpaper();
+    } catch (error) { $('wallpaper-status').textContent = error.message; }
+  };
   $('wallpaper-download-image').onclick = () => createWallpaper(true);
   function replaceWorkingDraft(next, { isCurrent = () => true, fromLink = false, message = '' } = {}) {
     designPlan(next); wallpaperJSON(next);

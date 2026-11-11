@@ -536,6 +536,12 @@ select option {
 .interior-color-inputs input[aria-invalid="true"] { border-color:#efa993; }
 .interior-color-inputs .secondary-button { width:auto;margin:0;padding:10px;font-size:10px; }
 #interior-color-note { margin:8px 0 0;font-size:10px;color:var(--muted);line-height:1.5; }
+#wallpaper-palette-options { margin:16px 0;padding:12px;border:1px solid var(--line);border-radius:8px; }
+#wallpaper-palette-options summary { cursor:pointer;font-size:12px; }
+#wallpaper-palettes { display:grid;gap:7px;max-height:250px;overflow-y:auto; }
+.wallpaper-palette-choice { display:grid;grid-template-columns:18px 48px minmax(0,1fr);align-items:center;gap:9px;min-height:34px;font-size:11px;cursor:pointer; }
+.wallpaper-palette-choice input { width:17px;height:17px;margin:0;accent-color:var(--lime); }
+.wallpaper-palette-swatch { height:22px;border:1px solid var(--line);border-radius:4px; }
 .palette-stop-remove { height:32px;border:1px solid var(--line);border-radius:5px;background:transparent;font-size:19px; }
 #palette-dialog button:disabled { cursor:default; }
 .palette-editor-tools { display:flex;align-items:center;gap:8px;margin:12px 0; }

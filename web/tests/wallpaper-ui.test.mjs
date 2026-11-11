@@ -30,6 +30,7 @@ class Element extends EventTarget {
   replaceChildren(...children) { this.children = children; }
   focus() {}
   select() { this.selected=true; }
+  setAttribute(name,value) { this[name]=String(value); }
   click() { this.onclick?.(); }
   querySelectorAll(selector) { const tags=selector.split(',').map(x=>x.trim()),out=[]; const walk=e=>{ for(const c of e.children){if(tags.includes(c.tag))out.push(c);walk(c);} }; walk(this); return out; }
   close() { if(this.open){this.open=false;setImmediate(()=>this.dispatchEvent(new Event('close')));} }
@@ -53,7 +54,7 @@ function setup(reset=true, overrides={}) {
   hold=null;
   if (!globalThis.FractalNative) globalThis.window=new EventTarget();
   if(reset){const draft=defaultWallpaperDraft(wallpaperSnapshot(state,palettes));draft.states['open-steady'].view.x='-.12345';storage=JSON.stringify(draft);}
-  const extra=['wallpaper-entry-transition','wallpaper-entry-note','wallpaper-endpoints-note','wallpaper-arrival-note','wallpaper-steady-note','wallpaper-kind','wallpaper-static-note','wallpaper-download-image','wallpaper-device','wallpaper-gallery-screen','wallpaper-gallery-dialog','wallpaper-gallery-status','wallpaper-gallery-cards','open-wallpaper-gallery','wallpaper-gallery','wallpaper-gallery-new','wallpaper-gallery-set','wallpaper-replace-dialog','wallpaper-replace-continue','wallpaper-editing-help'];
+  const extra=['wallpaper-palettes','wallpaper-palette-count','wallpaper-entry-transition','wallpaper-entry-note','wallpaper-endpoints-note','wallpaper-arrival-note','wallpaper-steady-note','wallpaper-kind','wallpaper-static-note','wallpaper-download-image','wallpaper-device','wallpaper-gallery-screen','wallpaper-gallery-dialog','wallpaper-gallery-status','wallpaper-gallery-cards','open-wallpaper-gallery','wallpaper-gallery','wallpaper-gallery-new','wallpaper-gallery-set','wallpaper-replace-dialog','wallpaper-replace-continue','wallpaper-editing-help'];
   const elements=Object.fromEntries([...ids,...extra,'wallpaper-supersampling','wallpaper-gallery-shuffle','wallpaper-gallery-shuffle-options','wallpaper-gallery-shuffle-note','wallpaper-renderer-note','wallpaper-pc','wallpaper-pc-dialog','wallpaper-pc-link','wallpaper-pc-status','wallpaper-pc-summary','wallpaper-pc-copy','wallpaper-pc-share','wallpaper-pc-file'].map(id=>[id,new Element(id)]));
   const find=(node,id)=>node.id===id?node:node.children.map(child=>find(child,id)).find(Boolean);
   globalThis.document={hidden:false,getElementById:id=>elements[id]??Object.values(elements).map(node=>find(node,id)).find(Boolean),createElement:tag=>new Element(tag),addEventListener(){}};
@@ -62,6 +63,28 @@ function setup(reset=true, overrides={}) {
   return {elements,api};
 }
 async function close(elements){elements['wallpaper-dialog'].close();await flush();}
+
+test('palette selection limits the batch, persists independently per screen and routes native creation to PC',async()=>{
+  const options=[...palettes,...['A','B','C','D'].map((name,i)=>({name,colors:[`#00000${i}`,'#abcdef']}))];
+  let packs=0;
+  const {elements,api}=setup(true,{paletteOptions:options});
+  try {
+    elements['open-wallpaper-export'].click();await flush();
+    const inputs=elements['wallpaper-palettes'].children.map(row=>row.children[0]);
+    assert.equal(inputs[0].checked,true);assert.equal(inputs[0].disabled,true);
+    for(const index of [1,2,3]){inputs[index].checked=true;inputs[index].onchange();}
+    assert.deepEqual(api.draft().paletteVariants.map(p=>p.name),['A','B','C']);
+    assert.equal(inputs[4].disabled,true);assert.match(elements['wallpaper-create'].textContent,/4 palette/);
+    inputs[3].checked=false;inputs[3].onchange();assert.equal(inputs[4].disabled,false);
+    elements['wallpaper-screen'].value='cover';elements['wallpaper-screen'].onchange();await flush();
+    assert.equal(api.draft().paletteVariants,undefined);
+    elements['wallpaper-screen'].value='inner';elements['wallpaper-screen'].onchange();await flush();
+    assert.deepEqual(api.draft().paletteVariants.map(p=>p.name),['A','B']);
+    globalThis.FractalNative={info(){},beginPack(){packs++;return '{"ok":true}';}};
+    elements['wallpaper-create'].onclick();await flush();
+    assert.equal(elements['wallpaper-pc-dialog'].open,true);assert.match(elements['wallpaper-pc-summary'].textContent,/3 palette variants/);assert.equal(packs,0);
+  } finally {delete globalThis.FractalNative;elements['wallpaper-pc-dialog'].close();await close(elements);}
+});
 
 test('entry toggle hides start editing, preserves it for later and stays independent per screen',async()=>{
   const {elements,api}=setup();

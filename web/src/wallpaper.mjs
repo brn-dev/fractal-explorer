@@ -24,6 +24,41 @@ export const wallpaperStates = [
   { key: 'open-steady', title: 'Open', description: 'A repeating loop for the large inner screen.', file: 'inner-idle.mp4', screen: 'inner' },
 ];
 export const wallpaperScreenName = screen => screen === 'cover' ? 'Cover screen' : 'Main screen';
+export const MAX_WALLPAPER_PALETTES = 4;
+
+function wallpaperPaletteDefinition(definition) {
+  const stops = definition?.colors;
+  if (!Array.isArray(stops) || stops.length < 2 || stops.length > MAX_PALETTE_COLORS + 1 || stops.some(color => typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color))) throw new Error('Invalid wallpaper palette.');
+  const normalized = stops.map(color => color.toLowerCase()), closed = stops.length > 2 && normalized.at(-1) === normalized[0];
+  const palette = validateCustomPalette({ name: definition.name ?? 'Wallpaper', colors: closed ? normalized.slice(0, -1) : normalized, loop: closed });
+  return { name: palette.name, colors: normalized };
+}
+
+export function wallpaperPaletteDefinitions(draft) {
+  const steady = wallpaperSlots(draft).find(slot => !slot.transition);
+  const base = wallpaperPaletteDefinition(draft.states?.[steady.key]?.colors?.definition);
+  const extras = draft.paletteVariants ?? [];
+  if (!Array.isArray(extras) || extras.length >= MAX_WALLPAPER_PALETTES) throw new Error(`Choose up to ${MAX_WALLPAPER_PALETTES - 1} additional palettes.`);
+  const seen = new Set([JSON.stringify(base.colors)]), definitions = [base];
+  for (const definition of extras) {
+    const normalized = wallpaperPaletteDefinition(definition), key = JSON.stringify(normalized.colors);
+    if (!seen.has(key)) { definitions.push(normalized); seen.add(key); }
+  }
+  return definitions;
+}
+
+export function wallpaperPaletteDrafts(draft) {
+  const definitions = wallpaperPaletteDefinitions(draft);
+  return definitions.map(definition => {
+    const variant = structuredClone(draft); delete variant.paletteVariants;
+    if (definitions.length > 1) {
+      const suffix = ` · ${definition.name}`;
+      variant.name = (draft.name || 'My fractal wallpaper').slice(0, 80 - suffix.length).replace(/[\uD800-\uDBFF]$/, '') + suffix;
+      for (const state of Object.values(variant.states)) state.colors = { ...state.colors, definition: structuredClone(definition) };
+    }
+    return variant;
+  });
+}
 export function wallpaperKind(draft) {
   const kind = draft.kind ?? 'animated';
   if (!['animated', 'static'].includes(kind)) throw new Error('Choose an animated or static wallpaper.');
@@ -123,11 +158,7 @@ export function validateWallpaperSnapshot(snapshot) {
   const out = structuredClone(snapshot);
   out.view = validate(out.view);
   animationPlan(out.view, out.automation ?? {});
-  const stops = out.colors.definition.colors;
-  if (!Array.isArray(stops) || stops.length < 2 || stops.length > MAX_PALETTE_COLORS + 1 || stops.some(color => typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color))) throw new Error('Invalid wallpaper palette.');
-  const normalized = stops.map(color => color.toLowerCase()), closed = stops.length > 2 && normalized.at(-1) === normalized[0];
-  const palette = validateCustomPalette({ name: out.colors.definition.name ?? 'Wallpaper', colors: closed ? normalized.slice(0, -1) : normalized, loop: closed });
-  out.colors.definition = { name: palette.name, colors: normalized };
+  out.colors.definition = wallpaperPaletteDefinition(out.colors.definition);
   out.colors.interiorColor = validateInteriorColor(out.colors.interiorColor);
   if (!Number.isFinite(out.speed) || out.speed < .05 || out.speed > 2) throw new Error('Invalid wallpaper color speed.');
   if (out.supersampling !== undefined && !wallpaperSamplingScales.includes(out.supersampling)) throw new Error('Choose a valid wallpaper supersampling level.');
@@ -215,6 +246,7 @@ export function transitionProgress(t, easing) {
 }
 export function wallpaperPlan(draft, { previewLongest } = {}) {
   if (draft.format !== WALLPAPER_FORMAT) throw new Error('This is not a Fractal Explorer wallpaper.');
+  wallpaperPaletteDefinitions(draft);
   const kind = wallpaperKind(draft);
   const entry = wallpaperHasEntry(draft);
   const supersampling = draft.supersampling ?? 1;

@@ -7,13 +7,14 @@ export function crc32(bytes) {
   for (const byte of bytes) crc = (crc >>> 8) ^ table[(crc ^ byte) & 255];
   return (crc ^ 0xffffffff) >>> 0;
 }
-export async function wallpaperZip(entries) {
+async function storedZip(entries, { pattern, maxEntries, maxFileBytes, maxTotalBytes }) {
   const parts = [], directory = []; let offset = 0;
-  if (entries.length > 16) throw new Error('Too many wallpaper files.');
+  if (entries.length > maxEntries) throw new Error('Too many wallpaper files.');
   for (const [name, blob] of entries) {
-    if (!/^[a-z0-9-]+\.(mp4|png|json)$/.test(name)) throw new Error('Invalid wallpaper filename.');
+    if (!pattern.test(name)) throw new Error('Invalid wallpaper filename.');
+    if (blob.size > maxFileBytes || offset + blob.size > maxTotalBytes) throw new Error('Wallpaper archive is too large.');
     const filename = new TextEncoder().encode(name), bytes = new Uint8Array(await blob.arrayBuffer());
-    if (bytes.length > 150 * 1024 ** 2) throw new Error('A wallpaper clip exceeds 150 MB.');
+    if (bytes.length > maxFileBytes) throw new Error('A wallpaper file is too large.');
     const crc = crc32(bytes), header = new Uint8Array(30 + filename.length), view = new DataView(header.buffer);
     view.setUint32(0, 0x04034b50, true); view.setUint16(4, 20, true); view.setUint16(6, 0x800, true);
     view.setUint32(14, crc, true); view.setUint32(18, bytes.length, true); view.setUint32(22, bytes.length, true); view.setUint16(26, filename.length, true); header.set(filename, 30);
@@ -27,3 +28,5 @@ export async function wallpaperZip(entries) {
   ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, entries.length, true); ev.setUint16(10, entries.length, true); ev.setUint32(12, directorySize, true); ev.setUint32(16, offset, true);
   return new Blob([...parts, ...directory, end], { type: 'application/zip' });
 }
+export const wallpaperZip = entries => storedZip(entries, { pattern: /^[a-z0-9-]+\.(mp4|png|json)$/, maxEntries: 16, maxFileBytes: 150 * 1024 ** 2, maxTotalBytes: 1.5 * 1024 ** 3 });
+export const wallpaperBatchZip = entries => storedZip(entries, { pattern: /^[a-z0-9-]+\.zip$/, maxEntries: 4, maxFileBytes: 512 * 1024 ** 2, maxTotalBytes: 1.5 * 1024 ** 3 });
