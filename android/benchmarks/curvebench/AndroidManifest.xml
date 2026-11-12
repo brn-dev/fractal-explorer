@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.fractalexplorer.curvebench" android:versionCode="1" android:versionName="1.0">
+  <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="36" />
+  <uses-feature android:glEsVersion="0x00020000" android:required="true" />
+  <application android:label="Fractal playback benchmark" android:debuggable="true" android:allowBackup="false" android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+    <activity android:name=".BenchActivity" android:exported="true" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout">
+      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+    </activity>
+  </application>
+</manifest>
