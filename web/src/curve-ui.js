@@ -8,6 +8,30 @@ export function openCurveEditor(options) {
   const mode=options.mode??'free',channels=options.channels??[{key:'curve',label:'Custom',color:'#d6eca7'}];
   const working=Object.fromEntries(Object.entries(options.curves??{}).map(([key,value])=>[key,validateCurve(value,mode)]));
   const session=current={options,mode,channels,working,key:channels[0].key,selected:1,segment:0,playing:mode!=='free',phase:0,drag:null,applied:false};
+  const preview=$('curve-fractal-preview'),mount=$('curve-preview-mount'),toggle=$('curve-preview-toggle');
+  preview.hidden=!options.previewElement;
+  dialog.classList.toggle('curve-with-preview',!!options.previewElement);
+  dialog.classList.remove('curve-preview-expanded');
+  function expandPreview(expanded) {
+    dialog.classList.toggle('curve-preview-expanded',expanded);
+    toggle.textContent=expanded?'Back to curves':'Expand preview';
+    toggle.setAttribute('aria-expanded',String(expanded));
+  }
+  expandPreview(false);toggle.onclick=()=>expandPreview(!dialog.classList.contains('curve-preview-expanded'));
+  if(options.previewElement) {
+    // Move the existing drawing surface, preserving its GPU context and field.
+    // The original viewport still determines rendering and wallpaper composition.
+    const element=options.previewElement,parent=element.parentNode,next=element.nextSibling;
+    mount.append(element);
+    const fitPreview=()=>{
+      const aspect=options.getPreviewAspect(),box=preview.getBoundingClientRect();
+      if(!(aspect>0)||!box.width||!box.height)return;
+      const width=Math.min(Math.max(0,box.width-24),Math.max(0,box.height-24)*aspect);
+      mount.style.width=`${width}px`;mount.style.height=`${width/aspect}px`;
+    };
+    const observer=new ResizeObserver(fitPreview);observer.observe(preview);observer.observe(parent);
+    session.restorePreview=()=>{observer.disconnect();parent.insertBefore(element,next?.parentNode===parent?next:null);};
+  }
   const curve=()=>session.working[session.key]??=defaultCurve(mode);
   const output=()=>structuredClone(Object.fromEntries(Object.entries(session.working).map(([key,value])=>[key,validateCurve(value,mode)])));
   const error=message=>{$('curve-error').textContent=message;$('curve-error').hidden=!message;};
@@ -114,7 +138,11 @@ export function openCurveEditor(options) {
   $('curve-palette-ramps').hidden=!options.getPalette;
   $('curve-apply').onclick=()=>{try{options.onApply(output());session.applied=true;dialog.close();}catch(e){error(e.message);}};
   $('curve-cancel').onclick=()=>dialog.close();
-  if(!initialized){dialog.addEventListener('close',()=>{const ended=current;current=null;cancelAnimationFrame(raf);if(ended&&!ended.applied)ended.options.onCancel?.();});initialized=true;}
+  if(!initialized){
+    dialog.addEventListener('cancel',event=>{if(dialog.classList.contains('curve-preview-expanded')){event.preventDefault();toggle.click();}});
+    dialog.addEventListener('close',()=>{const ended=current;current=null;cancelAnimationFrame(raf);ended?.restorePreview?.();dialog.classList.remove('curve-with-preview','curve-preview-expanded');if(ended&&!ended.applied)ended.options.onCancel?.();});
+    initialized=true;
+  }
   error('');sync();dialog.showModal();let last=performance.now(),lastDraw=0;
   function tick(time){if(current!==session)return;if(session.playing&&!document.hidden){session.phase=(session.phase+(time-last)/2000)%1;if(time-lastDraw>33){draw();lastDraw=time;}}last=time;raf=requestAnimationFrame(tick);}
   if(mode!=='free')raf=requestAnimationFrame(tick);

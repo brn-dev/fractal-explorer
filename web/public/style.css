@@ -100,6 +100,12 @@ canvas {
 #fractal-canvas {
   transform-origin: center;
 }
+#fractal-scene {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
 .wallpaper-scene-editing #viewport,
 #wallpaper-target-frame {
   inset: var(--wallpaper-frame-top) auto auto var(--wallpaper-frame-left);
@@ -1058,6 +1064,84 @@ dialog .secondary-button {
 dialog .export-note {
   font-size: 10px;
   margin: 8px 0;
+}
+#curve-dialog.curve-with-preview[open] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) min(420px, 40vw);
+  width: calc(100vw - 24px);
+  height: calc(100dvh - 24px);
+  max-width: none;
+  max-height: none;
+  margin: 12px;
+  padding: 0;
+  overflow: hidden;
+  background: #081112;
+}
+#curve-fractal-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+#curve-preview-mount { overflow: hidden; }
+#curve-preview-toggle {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  width: auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 14px;
+  background: #111a19f5;
+  border: 1px solid #ffffff35;
+  box-shadow: 0 2px 12px #0006;
+}
+#curve-preview-mount #centering-rulers { display: none; }
+.curve-with-preview #curve-editor-controls {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  background: #142019;
+}
+.curve-with-preview .curve-editor-heading {
+  position: relative;
+  padding: 16px 20px 6px;
+  flex-shrink: 0;
+}
+.curve-with-preview .curve-editor-scroll {
+  padding: 0 20px 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+.curve-with-preview .palette-editor-buttons {
+  padding: 12px 20px;
+  margin: auto 0 0;
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+}
+#curve-dialog.curve-with-preview.curve-preview-expanded[open] { grid-template-columns: 1fr; }
+.curve-preview-expanded #curve-editor-controls { display: none; }
+@media (max-width: 700px) and (orientation: portrait) {
+  #curve-dialog.curve-with-preview[open] {
+    inset: 0;
+    margin: 0;
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 42fr) minmax(0, 58fr);
+  }
+  .curve-with-preview #curve-editor-controls { border-left: 0; border-top: 1px solid var(--line); }
+  .curve-with-preview .curve-editor-heading { padding-top: 12px; }
+  .curve-with-preview .palette-editor-buttons { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  #curve-dialog.curve-with-preview.curve-preview-expanded[open] { grid-template-rows: 1fr; }
 }
 .export-choices { display:grid;gap:10px;margin-top:20px; }
 .export-choices .secondary-button { margin:0;justify-content:space-between; }

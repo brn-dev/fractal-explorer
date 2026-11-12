@@ -21,12 +21,14 @@
       aria-label="Interactive fractal; drag to pan, scroll to zoom"
       tabindex="0"
     >
-      <canvas id="fractal-canvas"></canvas>
-      <div id="fractal-vignette" class="vignette" aria-hidden="true" hidden></div>
-      <div id="centering-rulers" aria-hidden="true" hidden>
-        <div class="ruler ruler-horizontal"></div>
-        <div class="ruler ruler-vertical"></div>
-        <span class="ruler-center"></span>
+      <div id="fractal-scene">
+        <canvas id="fractal-canvas"></canvas>
+        <div id="fractal-vignette" class="vignette" aria-hidden="true" hidden></div>
+        <div id="centering-rulers" aria-hidden="true" hidden>
+          <div class="ruler ruler-horizontal"></div>
+          <div class="ruler ruler-vertical"></div>
+          <span class="ruler-center"></span>
+        </div>
       </div>
     </main>
     <div id="wallpaper-target-frame" hidden><span id="wallpaper-target-label"></span></div>
@@ -481,29 +483,39 @@
     </footer>
     <div id="toast" role="alert" hidden></div>
     <dialog id="curve-dialog" aria-labelledby="curve-title">
-      <form method="dialog"><button class="dialog-close icon-button" aria-label="Cancel curve editor">×</button></form>
-      <h2 id="curve-title">Custom curve</h2>
-      <p id="curve-help" class="export-note"></p>
-      <div class="curve-toolbar">
-        <label id="curve-channel-row" class="field-label">Channel<select id="curve-channel"></select></label>
-        <label class="field-label">Start from a preset<select id="curve-presets"></select></label>
+      <div id="curve-fractal-preview" hidden>
+        <div id="curve-preview-mount" aria-label="Live fractal preview"></div>
+        <button id="curve-preview-toggle" type="button" class="secondary-button" aria-expanded="false" aria-controls="curve-preview-mount">Expand preview</button>
       </div>
-      <canvas id="curve-graph" width="480" height="300" tabindex="0" aria-label="Curve editor. Page Up/Down select points, arrow keys move them, Delete removes them." aria-describedby="curve-help"></canvas>
-      <div id="curve-palette-ramps"><span>Original</span><div id="curve-palette-before"></div><span>Adjusted</span><div id="curve-palette-after"></div></div>
-      <p id="curve-point-caption" class="export-note"></p>
-      <div class="two-fields">
-        <label class="field-label">Input / time · %<input id="curve-input" type="number" min="0" max="100" step="any"></label>
-        <label class="field-label">Output / value · %<input id="curve-output" type="number" min="0" max="100" step="any"></label>
+      <div id="curve-editor-controls">
+        <div class="curve-editor-heading">
+          <form method="dialog"><button class="dialog-close icon-button" aria-label="Cancel curve editor">×</button></form>
+          <h2 id="curve-title">Custom curve</h2>
+        </div>
+        <div class="curve-editor-scroll">
+          <p id="curve-help" class="export-note"></p>
+          <div class="curve-toolbar">
+            <label id="curve-channel-row" class="field-label">Channel<select id="curve-channel"></select></label>
+            <label class="field-label">Start from a preset<select id="curve-presets"></select></label>
+          </div>
+          <canvas id="curve-graph" width="480" height="300" tabindex="0" aria-label="Curve editor. Page Up/Down select points, arrow keys move them, Delete removes them." aria-describedby="curve-help"></canvas>
+          <div id="curve-palette-ramps"><span>Original</span><div id="curve-palette-before"></div><span>Adjusted</span><div id="curve-palette-after"></div></div>
+          <p id="curve-point-caption" class="export-note"></p>
+          <div class="two-fields">
+            <label class="field-label">Input / time · %<input id="curve-input" type="number" min="0" max="100" step="any"></label>
+            <label class="field-label">Output / value · %<input id="curve-output" type="number" min="0" max="100" step="any"></label>
+          </div>
+          <input id="curve-output-slider" type="range" min="0" max="100" step="0.1" aria-label="Selected curve point output">
+          <div class="curve-toolbar">
+            <label class="field-label">Interpolation<select id="curve-interpolation"><option value="smooth">Smooth curve</option><option value="segments">Lines &amp; bends</option></select></label>
+            <label class="range-label curve-bend-label">Segment bend <output id="curve-bend-value">0%</output><input id="curve-bend" type="range" min="-100" max="100" step="1" aria-label="Selected curve segment bend"></label>
+          </div>
+          <div class="wallpaper-state-actions curve-tools"><button id="curve-add" type="button" class="secondary-button">Add point</button><button id="curve-remove" type="button" class="secondary-button">Remove point</button><button id="curve-play" type="button" class="secondary-button">Play curve</button></div>
+          <div class="wallpaper-state-actions curve-tools"><button id="curve-reset" type="button" class="secondary-button">Reset curve</button><button id="curve-reset-all" type="button" class="secondary-button">Reset all channels</button></div>
+          <p id="curve-error" class="custom-error" role="status" hidden></p>
+        </div>
+        <div class="palette-editor-buttons"><button id="curve-cancel" type="button" class="secondary-button">Cancel</button><button id="curve-apply" type="button" class="primary-button">Apply curve</button></div>
       </div>
-      <input id="curve-output-slider" type="range" min="0" max="100" step="0.1" aria-label="Selected curve point output">
-      <div class="curve-toolbar">
-        <label class="field-label">Interpolation<select id="curve-interpolation"><option value="smooth">Smooth curve</option><option value="segments">Lines &amp; bends</option></select></label>
-        <label class="range-label curve-bend-label">Segment bend <output id="curve-bend-value">0%</output><input id="curve-bend" type="range" min="-100" max="100" step="1" aria-label="Selected curve segment bend"></label>
-      </div>
-      <div class="wallpaper-state-actions curve-tools"><button id="curve-add" type="button" class="secondary-button">Add point</button><button id="curve-remove" type="button" class="secondary-button">Remove point</button><button id="curve-play" type="button" class="secondary-button">Play curve</button></div>
-      <div class="wallpaper-state-actions curve-tools"><button id="curve-reset" type="button" class="secondary-button">Reset curve</button><button id="curve-reset-all" type="button" class="secondary-button">Reset all channels</button></div>
-      <p id="curve-error" class="custom-error" role="status" hidden></p>
-      <div class="palette-editor-buttons"><button id="curve-cancel" type="button" class="secondary-button">Cancel</button><button id="curve-apply" type="button" class="primary-button">Apply curve</button></div>
     </dialog>
     <dialog id="palette-dialog" aria-labelledby="palette-editor-title">
       <form method="dialog"><button class="dialog-close icon-button" aria-label="Close palette editor">×</button></form>

@@ -998,6 +998,7 @@ function setupControls() {
     const original = colorCurves;
     const checkCurrent = () => { if (colorCurves !== original) throw new Error('The scene changed. Reopen its color curves.'); };
     openCurveEditor({ title:'Tone / RGB curves',mode:'free',channels:colorCurveChannels,curves:colorCurves,
+      previewElement: $('fractal-scene'), getPreviewAspect: () => { const box = $('viewport').getBoundingClientRect(); return box.width / box.height; },
       getPalette:()=>palettes[palette],paletteGradient:adjustedPaletteGradient,
       presets:[
         {label:'Original / diagonal',curve:()=>defaultCurve()},
