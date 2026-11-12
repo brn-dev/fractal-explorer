@@ -167,6 +167,26 @@ const destinations = [
   { name: 'Phoenix feathers', level: 'ORBITS WITH A MEMORY', view: defaultView(base, 'phoenix') },
   { name: 'Islands of attraction', level: 'NEWTON ROOT BASINS', view: defaultView(base, 'newton') },
   { name: 'Fourfold gardens', level: 'PLAY WITH THE POWER', view: defaultView(base, 'multijulia') },
+  {
+    name: 'Stellar Mandelbrot',
+    level: 'STARS WITH ORBIT MEMORY',
+    view: {
+      ...base,
+      fractal: 'custom',
+      x: '1861872095635684760661022241080604136422579721123949788845351806420302181857437877882463696031931685e-99',
+      y: '-112964155014412162930712360791196264755425988354064283300147133587541151034322978651102567142877527e-98',
+      span: '97296100200348705638832755453801627227889971914051273776566874921667660200636221e-80',
+      iterations: 2254,
+      julia_x: '0.1307',
+      julia_y: '0.0905',
+      custom_formula: '(z + c) / (1-z[n-1])',
+      custom_mode: 'mandelbrot',
+    },
+    colors: { palette: 3, density: 3.5, phase: 0.03276999999502972 },
+    wanderingSpeed: .09,
+    wander: true,
+    vignetteEnabled: true,
+  },
 ];
 let renderSettings = {
   arithmetic: "auto",
@@ -451,6 +471,9 @@ function buildDestinations() {
     b.querySelector(".card-name").textContent = d.name;
     b.querySelector(".card-level").textContent = d.level;
     b.onclick = () => {
+      if (d.wanderingSpeed !== undefined) wanderingSpeed = d.wanderingSpeed;
+      if (d.wander !== undefined) $('animate').checked = d.wander && !reducedMotion && !wallpaperStartEditing;
+      if (d.vignetteEnabled !== undefined) setVignetteEnabled(d.vignetteEnabled);
       if (d.colors) {
         try { restoreColors(d.colors); syncPalette(); syncColorControls(); }
         catch (error) { toast(error.message); }
