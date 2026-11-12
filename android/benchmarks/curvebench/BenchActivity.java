@@ -41,11 +41,13 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -63,7 +65,7 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
   private HandlerThread thread;
   private Handler worker;
   private SurfaceView video;
-  private Spinner sizes, frameRates;
+  private Spinner sizes, frameRates, comparisons;
   private ScrollView controls;
   private int panelHeight;
   private TextView status, details;
@@ -76,6 +78,12 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
   private JSONObject report, phase;
   private JSONArray phases;
   private String reportText, lastSummary = "";
+  private Uri reportUri;
+  private List<PowerProtocol.Trial> powerPlan;
+  private PowerProtocol.Trial powerTrial;
+  private long powerSeed, slotStart, firstDecodedAt;
+  private int comparisonIndex;
+  private JSONArray settlingSamples;
   private int[] profiles;
   private int cursor, mode, width, height;
   private boolean powerTest, measuring, firstFrame, verification;
@@ -116,11 +124,13 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
     box.addView(title);
     details =
         text(
-            "Compares the same clip across five playback paths. Identity curves keep screen"
-                + " colors the same.\n\n"
+            "Compares the same clip across five playback paths. Identity curves keep screen colors"
+                + " the same.\n\n"
                 + "Quick test: about 1 minute per target; measures rendering time, not battery %."
-                + " Optional power test: about 6 minutes, unplugged, with whole-phone"
-                + " battery-current readings. Background activity can swamp small differences.\n\n"
+                + " Paired power test: about 25 minutes per target, unplugged, with fixed"
+                + " brightness. Eight randomized ABBA/BAAB quartets, settling periods, drift"
+                + " correction and raw versus spike-limited results. Unknown background work can"
+                + " still make a run inconclusive.\n\n"
                 + "Fold/unfold before starting. Keep this app open; Stop, Home, screen lock or"
                 + " resizing ends the test. It does not change your wallpapers or settings.",
             13);
@@ -144,8 +154,13 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
             android.R.layout.simple_spinner_dropdown_item,
             new String[] {"15 fps · steady playback", "30 fps · entry / smoother loops"}));
     box.addView(frameRates);
+    comparisons = new Spinner(this);
+    comparisons.setAdapter(
+        new ArrayAdapter<>(
+            this, android.R.layout.simple_spinner_dropdown_item, PowerProtocol.LABELS));
+    box.addView(comparisons);
     quick = button("Run quick comparison", box, () -> start(false));
-    power = button("Run unplugged power comparison", box, () -> start(true));
+    power = button("Run paired power test · ~25 min / target", box, () -> start(true));
     stop = button("Stop", box, () -> cancel("Stopped by you"));
     stop.setVisibility(View.GONE);
     status =
@@ -157,25 +172,29 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
             "Share report",
             box,
             () -> {
-              if (reportText != null) {
+              if (reportUri != null) {
                 Intent intent =
                     new Intent(Intent.ACTION_SEND)
-                        .setType("text/plain")
+                        .setType("application/json")
                         .putExtra(Intent.EXTRA_SUBJECT, "Fractal playback benchmark")
-                        .putExtra(Intent.EXTRA_TEXT, reportText);
+                        .putExtra(Intent.EXTRA_TEXT, lastSummary)
+                        .putExtra(Intent.EXTRA_STREAM, reportUri)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                intent.setClipData(ClipData.newRawUri("Benchmark report", reportUri));
                 startActivity(Intent.createChooser(intent, "Share benchmark report"));
               }
             });
     copy =
         button(
-            "Copy report",
+            "Copy summary",
             box,
             () -> {
               if (reportText != null) {
                 ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE))
                     .setPrimaryClip(
-                        ClipData.newPlainText("Fractal playback benchmark", reportText));
-                status.setText(lastSummary + "\nReport copied.");
+                        ClipData.newPlainText("Fractal playback benchmark", lastSummary));
+                status.setText(
+                    lastSummary + "\nSummary copied. Share report attaches the full JSON.");
               }
             });
     share.setEnabled(false);
@@ -190,6 +209,18 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
       if (previous.isFile()) {
         reportText =
             new String(java.nio.file.Files.readAllBytes(previous.toPath()), StandardCharsets.UTF_8);
+        JSONObject restored = new JSONObject(reportText);
+        lastSummary =
+            restored.optString(
+                "summary", "Previous benchmark report. Share report attaches the full JSON.");
+        String name = restored.optString("shareFile", "");
+        if (name.matches("report-[0-9a-f]{32}\\.json")
+            && new File(new File(getFilesDir(), "reports"), name).isFile())
+          reportUri = ReportProvider.uri(name);
+        else
+          reportUri =
+              writeShareFile(
+                  reportText, "report-" + UUID.randomUUID().toString().replace("-", "") + ".json");
         share.setEnabled(true);
         copy.setEnabled(true);
       }
@@ -301,6 +332,20 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
       status.setText("Let the phone cool before testing.");
       return;
     }
+    if (battery
+        && !verification
+        && Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS_MODE, -1)
+            != Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL) {
+      status.setText(
+          "Turn off Adaptive brightness and choose a fixed brightness before the paired power test."
+              + " The app leaves your settings under your control.");
+      return;
+    }
+    if (battery && !verification && thermal() >= PowerManager.THERMAL_STATUS_MODERATE) {
+      status.setText(
+          "Let the phone cool before the paired power test; it is already thermally constrained.");
+      return;
+    }
     int selected = sizes.getSelectedItemPosition();
     Point physical = new Point();
     getWindowManager().getDefaultDisplay().getRealSize(physical);
@@ -316,20 +361,28 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
     fps = frameRates.getSelectedItemPosition() == 1 ? 30 : 15;
     if (verification && getIntent().getIntExtra("fps", fps) == 30) fps = 30;
     powerTest = battery;
-    warmMs = verification ? 200 : battery ? 5000 : 2000;
-    measureMs = verification ? 1000 : battery ? 30000 : 4000;
+    comparisonIndex = comparisons.getSelectedItemPosition();
+    if (verification) comparisonIndex = getIntent().getIntExtra("comparison", comparisonIndex);
+    powerSeed = new SecureRandom().nextLong();
+    if (verification) powerSeed = getIntent().getLongExtra("seed", powerSeed);
+    powerPlan = battery ? PowerProtocol.plan(profiles, comparisonIndex, powerSeed) : null;
+    warmMs = verification ? 200 : battery ? PowerProtocol.SETTLE_MS : 2000;
+    measureMs = verification ? 1000 : battery ? PowerProtocol.MEASURE_MS : 4000;
     cursor = 0;
     running = true;
     int token = ++generation;
     reportText = null;
+    reportUri = null;
     quick.setEnabled(false);
     power.setEnabled(false);
     sizes.setEnabled(false);
     frameRates.setEnabled(false);
+    comparisons.setEnabled(false);
     share.setEnabled(false);
     copy.setEnabled(false);
     stop.setVisibility(View.VISIBLE);
-    for (View control : new View[] {quick, power, sizes, frameRates, share, copy, details})
+    for (View control :
+        new View[] {quick, power, sizes, frameRates, comparisons, share, copy, details})
       control.setVisibility(View.GONE);
     FrameLayout.LayoutParams compact = (FrameLayout.LayoutParams) controls.getLayoutParams();
     compact.height = dp(205);
@@ -341,8 +394,8 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
       phases = new JSONArray();
       report
           .put("format", "fractal-playback-benchmark/v1")
-          .put("version", "1.0")
-          .put("runKind", battery ? "power-estimate" : "synchronized-render-service")
+          .put("version", "1.1")
+          .put("runKind", battery ? "paired-power" : "synchronized-render-service")
           .put("verificationRun", verification)
           .put(
               "startedAt",
@@ -360,11 +413,12 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
           .put(
               "method",
               "MediaPlayer decoding the same local H.264 clip. Direct output or ES2"
-                  + " external-texture rendering. 2 counterbalanced passes; same source/output size"
-                  + " and visible colors. No continuous redraw between video frames. Quick test"
-                  + " glFinish measures driver+GPU service time, not GPU-only timer-query time."
-                  + " Power test omits glFinish. Battery sensor values are whole-phone estimates,"
-                  + " not isolated GPU power.")
+                  + " external-texture rendering. Quick: 2 counterbalanced passes. Power: fixed,"
+                  + " balanced randomized ABBA/BAAB quartets; same source/output size and visible"
+                  + " colors. No continuous redraw between video frames. Quick test glFinish"
+                  + " measures driver+GPU service time, not GPU-only timer-query time. Power test"
+                  + " omits glFinish. Battery sensor values are whole-phone estimates, not isolated"
+                  + " GPU power.")
           .put(
               "limitations",
               "SurfaceView activity proxy, not the live wallpaper compositor. OEM overlay"
@@ -382,6 +436,45 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
               Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, -1))
           .put("startBattery", batteryNow)
           .put("decoders", decoders());
+      if (battery) {
+        JSONArray profileList = new JSONArray();
+        for (int profile : profiles) profileList.put(profile);
+        JSONArray order = new JSONArray();
+        for (int i = 0; i < powerPlan.size(); i++) {
+          PowerProtocol.Trial t = powerPlan.get(i);
+          order.put(
+              new JSONObject()
+                  .put("ordinal", i)
+                  .put("profile", t.profile)
+                  .put("mode", t.mode)
+                  .put("quartet", t.quartet)
+                  .put("slot", t.slot)
+                  .put("calibration", t.calibration)
+                  .put("treatment", t.treatment)
+                  .put("bInside", t.bInside));
+        }
+        report.put(
+            "powerProtocol",
+            new JSONObject()
+                .put("version", 2)
+                .put("seed", Long.toString(powerSeed))
+                .put("comparison", comparisonIndex)
+                .put("profiles", profileList)
+                .put("quartets", PowerProtocol.QUARTETS)
+                .put("baselineMode", PowerProtocol.COMPARISONS[comparisonIndex][0])
+                .put("treatmentMode", PowerProtocol.COMPARISONS[comparisonIndex][1])
+                .put("settleMs", PowerProtocol.SETTLE_MS)
+                .put("measurementMs", PowerProtocol.MEASURE_MS)
+                .put("calibrationMs", PowerProtocol.CALIBRATION_MS)
+                .put("plannedOrder", order)
+                .put("bucketMs", PowerStats.WINDOW_MS)
+                .put("maximumBridgeGapMs", PowerStats.MAX_GAP_MS)
+                .put("madScaleFloorMw", PowerStats.SCALE_FLOOR_MW)
+                .put("outlierZ", PowerStats.OUTLIER_Z)
+                .put("analysisRules", PowerAnalysis.rules())
+                .put("physicalPanelBrightnessMeasured", false)
+                .put("fixedBeforeMeasurement", true));
+      }
       worker.post(() -> beginPhase(token));
     } catch (Exception error) {
       finish("Could not start: " + error.getMessage());
@@ -431,7 +524,17 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
               state == null
                   ? JSONObject.NULL
                   : state.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) / 10d)
-          .put("thermalStatus", thermal());
+          .put("thermalStatus", thermal())
+          .put(
+              "brightnessMode",
+              Settings.System.getInt(
+                  getContentResolver(), Settings.System.SCREEN_BRIGHTNESS_MODE, -1))
+          .put(
+              "brightnessSetting",
+              Settings.System.getInt(getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, -1))
+          .put("powerSaveMode", ((PowerManager) getSystemService(POWER_SERVICE)).isPowerSaveMode())
+          .put("displayRefreshHz", getWindowManager().getDefaultDisplay().getRefreshRate())
+          .put("appCpuMs", Process.getElapsedCpuTime());
       double mw = BenchMath.dischargeMilliwatts(current, voltage, plugged != 0);
       value.put("estimatedDischargeMilliwatts", Double.isFinite(mw) ? mw : JSONObject.NULL);
     } catch (Exception e) {
@@ -446,12 +549,22 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
   private void beginPhase(int token) {
     if (!active(token)) return;
     release();
-    if (cursor >= profiles.length * BenchMath.order().length) {
+    if (cursor >= totalTrials()) {
       finish("Completed");
       return;
     }
-    int profile = profiles[cursor / BenchMath.order().length];
-    mode = BenchMath.order()[cursor % BenchMath.order().length];
+    powerTrial = powerTest ? powerPlan.get(cursor) : null;
+    int profile = powerTest ? powerTrial.profile : profiles[cursor / BenchMath.order().length];
+    mode = powerTest ? powerTrial.mode : BenchMath.order()[cursor % BenchMath.order().length];
+    warmMs = verification ? 200 : powerTest ? PowerProtocol.SETTLE_MS : 2000;
+    measureMs =
+        verification
+            ? 1000
+            : powerTest
+                ? (powerTrial.calibration ? PowerProtocol.CALIBRATION_MS : PowerProtocol.MEASURE_MS)
+                : 4000;
+    slotStart = SystemClock.elapsedRealtime();
+    firstDecodedAt = 0;
     boolean smallFixture = verification && !getIntent().getBooleanExtra("native", false);
     width = smallFixture ? 96 : SIZES[profile][0];
     height = smallFixture ? 128 : SIZES[profile][1];
@@ -464,6 +577,7 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
     cpuMs.clear();
     serviceMs.clear();
     batterySamples = new JSONArray();
+    settlingSamples = new JSONArray();
     try {
       phase =
           new JSONObject()
@@ -473,6 +587,18 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
               .put("profile", profile == 0 ? "cover" : "main")
               .put("width", width)
               .put("height", height);
+      if (powerTest)
+        phase
+            .put("calibration", powerTrial.calibration)
+            .put("quartet", powerTrial.quartet)
+            .put("slot", powerTrial.slot)
+            .put("treatment", powerTrial.treatment)
+            .put("bInside", powerTrial.bInside)
+            .put("settlingSamples", settlingSamples)
+            .put("scheduledMeasurementStartElapsedMs", slotStart + warmMs)
+            .put("plannedMeasurementMs", measureMs);
+      final JSONObject preparing = phase;
+      if (powerTest) worker.post(() -> sampleSettling(token, preparing));
       main.post(
           () -> {
             if (!active(token)) return;
@@ -483,7 +609,7 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
                     Locale.US,
                     "%d / %d · %s\n%d × %d · warming up…",
                     cursor + 1,
-                    profiles.length * 10,
+                    totalTrials(),
                     MODES[mode],
                     width,
                     height));
@@ -493,6 +619,42 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
     } catch (Exception error) {
       phaseError(token, error);
     }
+  }
+
+  private int totalTrials() {
+    return powerTest ? powerPlan.size() : profiles.length * BenchMath.order().length;
+  }
+
+  private void sampleSettling(int token, JSONObject expected) {
+    if (!active(token) || phase != expected || measuring) return;
+    JSONObject sample = battery();
+    settlingSamples.put(sample);
+    if (!checkPowerConditions(sample)) return;
+    worker.postDelayed(() -> sampleSettling(token, expected), 1000);
+  }
+
+  private boolean checkPowerConditions(JSONObject sample) {
+    if (sample.optInt("thermalStatus", 0) >= PowerManager.THERMAL_STATUS_SEVERE) {
+      cancel("Stopped because the phone became hot");
+      return false;
+    }
+    if (powerTest && !verification) {
+      if (sample.optInt("plugged", -1) != 0) {
+        cancel("Power test stopped: charger connected or charging state unavailable");
+        return false;
+      }
+      if (sample.optInt("brightnessMode", -1) != 0
+          || sample.optInt("brightnessSetting", -1) != report.optInt("brightnessSetting", -2)) {
+        cancel("Power test stopped: brightness changed");
+        return false;
+      }
+      if (sample.optBoolean("powerSaveMode")
+          != report.optJSONObject("startBattery").optBoolean("powerSaveMode")) {
+        cancel("Power test stopped: system power-saving mode changed");
+        return false;
+      }
+    }
+    return true;
   }
 
   private void prepare(int token, int profile, int tries) {
@@ -577,6 +739,7 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
   private void renderingStarted(int token) {
     if (firstFrame || !active(token)) return;
     firstFrame = true;
+    firstDecodedAt = SystemClock.elapsedRealtime();
     try {
       phase.put("firstFrameLatencyMs", SystemClock.elapsedRealtime() - firstFrameWait);
     } catch (Exception ignored) {
@@ -586,7 +749,7 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
         () -> {
           if (active(token) && phase == currentPhase) startMeasurement(token);
         },
-        warmMs);
+        powerTest ? Math.max(0, slotStart + warmMs - SystemClock.elapsedRealtime()) : warmMs);
   }
 
   private void onFrame(int token) {
@@ -595,8 +758,9 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
       gl.draw(measuring && !powerTest);
       renderingStarted(token);
       if (measuring) {
-        long time = SystemClock.elapsedRealtime();
         frames++;
+        if (powerTest) return;
+        long time = SystemClock.elapsedRealtime();
         if (lastFrame != 0) {
           long gap = time - lastFrame;
           maxGap = Math.max(maxGap, gap);
@@ -616,22 +780,39 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
     if (!active(token)) return;
     measuring = true;
     measurementStart = SystemClock.elapsedRealtime();
+    try {
+      phase
+          .put("measurementStartElapsedMs", measurementStart)
+          .put("settledMs", measurementStart - firstDecodedAt);
+    } catch (Exception ignored) {
+    }
     phaseCpuStart = Process.getElapsedCpuTime();
+    try {
+      phase.put("playerMetricsStart", bundleJson(player.getMetrics()));
+    } catch (Exception ignored) {
+    }
     startBattery = battery();
     sampleBattery(token, phase);
     main.post(
         () -> {
           if (active(token))
-            status.setText(
-                String.format(
-                    Locale.US,
-                    "%d / %d · %s\n%d × %d · measuring %d s",
-                    cursor + 1,
-                    profiles.length * 10,
-                    MODES[mode],
-                    width,
-                    height,
-                    measureMs / 1000));
+            if (powerTest) {
+              status.setText(
+                  "Paired power test in progress\n"
+                      + "Same video and brightness · leave the phone idle\n"
+                      + "Stop saves partial data.");
+              return;
+            }
+          status.setText(
+              String.format(
+                  Locale.US,
+                  "%d / %d · %s\n%d × %d · measuring %d s",
+                  cursor + 1,
+                  totalTrials(),
+                  MODES[mode],
+                  width,
+                  height,
+                  measureMs / 1000));
         });
     JSONObject currentPhase = phase;
     worker.postDelayed(
@@ -645,14 +826,7 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
     if (!active(token) || !measuring || phase != expected) return;
     JSONObject sample = battery();
     batterySamples.put(sample);
-    if (sample.optInt("thermalStatus", 0) >= PowerManager.THERMAL_STATUS_SEVERE) {
-      cancel("Stopped because the phone became hot");
-      return;
-    }
-    if (powerTest && !verification && sample.optInt("plugged", -1) != 0) {
-      cancel("Power test stopped: charger connected");
-      return;
-    }
+    if (!checkPowerConditions(sample)) return;
     worker.postDelayed(() -> sampleBattery(token, expected), 1000);
   }
 
@@ -666,8 +840,8 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
           .put("appCpuMs", Process.getElapsedCpuTime() - phaseCpuStart)
           .put("frameCallbacks", mode == 0 ? JSONObject.NULL : frames)
           .put("callbackFramesPerSecond", mode == 0 ? JSONObject.NULL : 1000d * frames / duration)
-          .put("maxCallbackGapMs", mode == 0 ? JSONObject.NULL : maxGap)
-          .put("callbackGapsOver120Ms", mode == 0 ? JSONObject.NULL : longGaps)
+          .put("maxCallbackGapMs", mode == 0 || powerTest ? JSONObject.NULL : maxGap)
+          .put("callbackGapsOver120Ms", mode == 0 || powerTest ? JSONObject.NULL : longGaps)
           .put("drawFinishEnabled", !powerTest && mode != 0)
           .put("drawServiceMs", stats(drawMs))
           .put("glThreadCpuMs", stats(cpuMs))
@@ -685,6 +859,15 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
             "warning",
             "Too few frame callbacks; inspect decoder/dropped frames before comparing timing.");
       phases.put(phase);
+      if (powerTest && powerTrial.calibration && !verification) {
+        int valid = 0;
+        for (int i = 0; i < batterySamples.length(); i++)
+          if (!batterySamples.getJSONObject(i).isNull("estimatedDischargeMilliwatts")) valid++;
+        if (valid < measureMs / 1000d * .8) {
+          finish("Current sensor did not provide enough valid readings during calibration");
+          return;
+        }
+      }
       cursor++;
       beginPhase(token);
     } catch (Exception error) {
@@ -721,6 +904,10 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
     } catch (Exception ignored) {
     }
     release();
+    if (powerTest) {
+      finish("Power test stopped after an unusable playback block");
+      return;
+    }
     cursor++;
     worker.postDelayed(() -> beginPhase(token), 250);
   }
@@ -776,65 +963,57 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
       for (int i = 0; i < phases.length(); i++)
         if (phases.getJSONObject(i).has("error")) failures++;
       report.put("outcome", reason).put("failedBlocks", failures).put("endBattery", battery());
-      reportText = report.toString(2);
-      try (FileOutputStream output =
-          new FileOutputStream(new File(getFilesDir(), "latest-report.json"))) {
-        output.write(reportText.getBytes(StandardCharsets.UTF_8));
-      }
-      String saved = saveDownloads(reportText);
       StringBuilder summary =
           new StringBuilder(reason)
               .append(" · ")
               .append(phases.length())
               .append(" / ")
-              .append(profiles.length * 10)
+              .append(totalTrials())
               .append(" blocks\n");
       if (failures > 0)
         summary.append(failures).append(" failed blocks; inspect the report before comparing.\n");
-      for (int profile : profiles)
-        for (int kind = powerTest ? 0 : 1; kind < 5; kind++) {
-          List<Double> medians = new ArrayList<>();
-          for (int i = 0; i < phases.length(); i++) {
-            JSONObject p = phases.getJSONObject(i);
-            if (p.optInt("mode") == kind
-                && p.optString("profile").equals(profile == 0 ? "cover" : "main")
-                && !p.has("error")
-                && !p.optBoolean("incomplete")) {
-              if (powerTest) {
-                JSONArray readings = p.optJSONArray("batterySamples");
-                List<Double> watts = new ArrayList<>();
-                if (readings != null)
-                  for (int b = 0; b < readings.length(); b++) {
-                    double mw =
-                        readings
-                            .getJSONObject(b)
-                            .optDouble("estimatedDischargeMilliwatts", Double.NaN);
-                    if (Double.isFinite(mw)) watts.add(mw);
-                  }
-                if (!watts.isEmpty()) medians.add(BenchMath.percentile(watts, .5));
-              } else {
+      if (powerTest) {
+        try {
+          JSONObject analysis = PowerAnalysis.analyze(report);
+          report.put("analysis", analysis);
+          summary.append(PowerAnalysis.summary(analysis));
+        } catch (Exception error) {
+          report.put("analysisError", error.toString());
+          summary.append("Analysis unavailable; raw data retained. No power verdict.\n");
+        }
+      }
+      if (!powerTest)
+        for (int profile : profiles)
+          for (int kind = 1; kind < 5; kind++) {
+            List<Double> medians = new ArrayList<>();
+            for (int i = 0; i < phases.length(); i++) {
+              JSONObject p = phases.getJSONObject(i);
+              if (p.optInt("mode") == kind
+                  && p.optString("profile").equals(profile == 0 ? "cover" : "main")
+                  && !p.has("error")
+                  && !p.optBoolean("incomplete")) {
                 JSONObject s = p.optJSONObject("drawServiceMs");
                 if (s != null && s.optInt("count") > 0) medians.add(s.getDouble("median"));
               }
             }
+            if (!medians.isEmpty())
+              summary
+                  .append(profile == 0 ? "Cover · " : "Main · ")
+                  .append(MODES[kind])
+                  .append(": ")
+                  .append(String.format(Locale.US, "%.3f ms\n", BenchMath.percentile(medians, .5)));
           }
-          if (!medians.isEmpty())
-            summary
-                .append(profile == 0 ? "Cover · " : "Main · ")
-                .append(MODES[kind])
-                .append(": ")
-                .append(
-                    String.format(
-                        Locale.US,
-                        powerTest ? "~%.0f mW whole phone\n" : "%.3f ms\n",
-                        BenchMath.percentile(medians, .5)));
-        }
-      summary
-          .append(
-              powerTest
-                  ? "Power readings are in the report; they need repeated A/B analysis.\n"
-                  : "Times include driver/GPU service, not battery consumption.\n")
-          .append(saved);
+      if (!powerTest)
+        summary.append("Times include driver/GPU service, not battery consumption.\n");
+      String shareName = "report-" + UUID.randomUUID().toString().replace("-", "") + ".json";
+      report.put("summary", summary.toString()).put("shareFile", shareName);
+      reportText = report.toString(2);
+      reportUri = writeShareFile(reportText, shareName);
+      try (FileOutputStream output =
+          new FileOutputStream(new File(getFilesDir(), "latest-report.json"))) {
+        output.write(reportText.getBytes(StandardCharsets.UTF_8));
+      }
+      summary.append(saveDownloads(reportText));
       lastSummary = summary.toString();
     } catch (Exception error) {
       lastSummary = reason + "\nCould not save report: " + error.getMessage();
@@ -846,16 +1025,31 @@ public final class BenchActivity extends Activity implements SurfaceHolder.Callb
           power.setEnabled(true);
           sizes.setEnabled(true);
           frameRates.setEnabled(true);
-          share.setEnabled(reportText != null);
+          comparisons.setEnabled(true);
+          share.setEnabled(reportUri != null);
           copy.setEnabled(reportText != null);
           stop.setVisibility(View.GONE);
-          for (View control : new View[] {quick, power, sizes, frameRates, share, copy, details})
+          for (View control :
+              new View[] {quick, power, sizes, frameRates, comparisons, share, copy, details})
             control.setVisibility(View.VISIBLE);
           FrameLayout.LayoutParams expanded = (FrameLayout.LayoutParams) controls.getLayoutParams();
           expanded.height = panelHeight;
           controls.setLayoutParams(expanded);
           status.setText(lastSummary);
         });
+  }
+
+  private Uri writeShareFile(String text, String name) throws Exception {
+    Uri uri = ReportProvider.uri(name);
+    File directory = new File(getFilesDir(), "reports");
+    if (!directory.isDirectory() && !directory.mkdirs())
+      throw new java.io.IOException("Cannot create report directory");
+    File file = new File(directory, name);
+    if (file.exists()) throw new java.io.IOException("Report already exists");
+    try (FileOutputStream output = new FileOutputStream(file)) {
+      output.write(text.getBytes(StandardCharsets.UTF_8));
+    }
+    return uri;
   }
 
   private String saveDownloads(String text) {

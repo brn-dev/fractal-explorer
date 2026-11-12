@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.fractalexplorer.curvebench.tests" android:versionCode="1" android:versionName="1">
+  <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="36" />
+  <application android:label="Curve benchmark verification" />
+  <instrumentation android:name=".ReportInstrumentation" android:targetPackage="org.fractalexplorer.curvebench" android:functionalTest="true" />
+</manifest>

@@ -141,10 +141,11 @@ final class CurveGl {
   }
 
   void draw(boolean synchronize) {
-    long start = System.nanoTime();
+    long start = synchronize ? System.nanoTime() : 0;
     videoTexture.updateTexImage();
     videoTexture.getTransformMatrix(transform);
-    long begin = System.nanoTime(), cpu = Debug.threadCpuTimeNanos();
+    long begin = synchronize ? System.nanoTime() : 0,
+        cpu = synchronize ? Debug.threadCpuTimeNanos() : 0;
     GLES20.glViewport(0, 0, width, height);
     GLES20.glUseProgram(program);
     int p = position, u = uv, m = matrix, c = crop, t = texture;
@@ -171,11 +172,13 @@ final class CurveGl {
       GLES20.glUniform1i(curve, 1);
     }
     GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
-    if (synchronize) GLES20.glFinish();
-    drawNanos = System.nanoTime() - begin;
-    threadCpuNanos = Debug.threadCpuTimeNanos() - cpu;
+    if (synchronize) {
+      GLES20.glFinish();
+      drawNanos = System.nanoTime() - begin;
+      threadCpuNanos = Debug.threadCpuTimeNanos() - cpu;
+    }
     check(EGL14.eglSwapBuffers(display, output), "eglSwapBuffers");
-    serviceNanos = System.nanoTime() - start;
+    if (synchronize) serviceNanos = System.nanoTime() - start;
   }
 
   private static int texture(int target) {
