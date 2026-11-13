@@ -38,6 +38,14 @@ public class Bitmap {
     return pixels.getHeight();
   }
 
+  public void getPixels(int[] colors, int offset, int stride, int x, int y, int width, int height) {
+    pixels.getRGB(x, y, width, height, colors, offset, stride);
+  }
+
+  public void setPixels(int[] colors, int offset, int stride, int x, int y, int width, int height) {
+    pixels.setRGB(x, y, width, height, colors, offset, stride);
+  }
+
   public Bitmap copy(Config config, boolean mutable) {
     BufferedImage out = new BufferedImage(getWidth(), getHeight(), BufferedImage.TYPE_INT_ARGB);
     java.awt.Graphics2D g = out.createGraphics();

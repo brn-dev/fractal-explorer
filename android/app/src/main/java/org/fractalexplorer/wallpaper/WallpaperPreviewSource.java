@@ -9,6 +9,7 @@ final class WallpaperPreviewSource {
   final String screen;
   final boolean image, hasEntry, idle;
   final int width, height;
+  final WallpaperColorGrade grade;
 
   WallpaperPreviewSource(
       File folder,
@@ -18,6 +19,19 @@ final class WallpaperPreviewSource {
       boolean idle,
       int width,
       int height)
+      throws IOException {
+    this(folder, screen, image, hasEntry, idle, width, height, WallpaperColorGrade.IDENTITY);
+  }
+
+  WallpaperPreviewSource(
+      File folder,
+      String screen,
+      boolean image,
+      boolean hasEntry,
+      boolean idle,
+      int width,
+      int height,
+      WallpaperColorGrade grade)
       throws IOException {
     if (!"cover".equals(screen) && !"inner".equals(screen))
       throw new IOException("Choose cover or main screen");
@@ -29,6 +43,7 @@ final class WallpaperPreviewSource {
     this.idle = !image && idle;
     this.width = width;
     this.height = height;
+    this.grade = grade;
   }
 
   PlaybackState.Mode mode() {

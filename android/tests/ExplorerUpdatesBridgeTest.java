@@ -58,6 +58,7 @@ public final class ExplorerUpdatesBridgeTest {
           }
         };
     set(bridge, "worker", worker);
+    set(bridge, "correctionLock", new Object());
     set(bridge, "host", host);
     ExecutorService threads = Executors.newFixedThreadPool(2);
     try {

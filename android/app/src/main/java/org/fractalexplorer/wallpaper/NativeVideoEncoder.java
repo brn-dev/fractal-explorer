@@ -34,6 +34,8 @@ final class NativeVideoEncoder {
   final String qualityMode;
   final int targetBitrate;
   private boolean started, closed;
+  private ColorGradeGl decodedDraw;
+  private long lastDecodedTimeUs = -1;
   private final FloatBuffer vertices = buffer(-1, -1, 1, -1, -1, 1, 1, 1);
   private final FloatBuffer uv = buffer(0, 1, 1, 1, 0, 0, 1, 0);
   private final MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
@@ -296,6 +298,29 @@ final class NativeVideoEncoder {
     } finally {
       close();
     }
+  }
+
+  void setDecodedGrade(WallpaperColorGrade grade) {
+    decodedDraw = new ColorGradeGl(true);
+    decodedDraw.setGrade(grade);
+  }
+
+  /** Decoder texture directly to the encoder surface; no per-frame bitmap/readback/upload. */
+  void addDecoded(int textureId, float[] matrix, long presentationUs) throws Exception {
+    if (closed
+        || decodedDraw == null
+        || presentationUs < 0
+        || presentationUs <= lastDecodedTimeUs
+        || frames >= 7200
+        || presentationUs > 61000000L) throw new IOException("Invalid decoded video timestamps");
+    drain(false);
+    decodedDraw.draw(textureId, matrix, 1, 1, width, height);
+    EGLExt.eglPresentationTimeANDROID(display, window, presentationUs * 1000);
+    if (!EGL14.eglSwapBuffers(display, window))
+      throw new IOException("Cannot submit corrected frame");
+    frames++;
+    lastDecodedTimeUs = presentationUs;
+    drain(false);
   }
 
   private void drain(boolean ending) throws Exception {

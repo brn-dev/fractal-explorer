@@ -173,6 +173,17 @@ final class WallpaperFiles {
   }
 
   private String publishLocked(File folder, JSONObject manifest) throws Exception {
+    return publishLocked(folder, manifest, true);
+  }
+
+  String retain(File folder, JSONObject manifest) throws Exception {
+    synchronized (WallpaperFiles.class) {
+      return publishLocked(folder, manifest, false);
+    }
+  }
+
+  private String publishLocked(File folder, JSONObject manifest, boolean activate)
+      throws Exception {
     validate(folder, manifest);
     byte[] encoded = manifest.toString().getBytes(StandardCharsets.UTF_8);
     if (encoded.length > PackPolicy.MAX_JSON_BYTES)
@@ -185,7 +196,7 @@ final class WallpaperFiles {
     File destination = new File(root(), id);
     if (!folder.renameTo(destination)) throw new IOException("Cannot finish the wallpaper package");
     try {
-      activateLocked(id, manifest);
+      if (activate) activateLocked(id, manifest);
     } catch (Exception error) {
       deleteFolder(destination);
       throw error;

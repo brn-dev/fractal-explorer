@@ -120,7 +120,7 @@ export function openCurveEditor(options) {
       event.preventDefault();move(point[0]+(event.key==='ArrowLeft'?-step:event.key==='ArrowRight'?step:0),point[1]+(event.key==='ArrowDown'?-step:event.key==='ArrowUp'?step:0));
     }
   };
-  $('curve-title').textContent=options.title??'Custom curve';$('curve-help').textContent=mode==='free'?'Tap to add points; drag points or hollow handles to reshape. Brightness adjusts light and dark tones; Red, Green and Blue adjust color balance. Interior color stays separate.':mode==='cycle'?'Tap to add points, drag points to reshape, and drag hollow handles to bend segments. The loop starts and returns to Start; 100% reaches Target.':'Tap to add points, drag points to reshape, and drag hollow handles to bend segments. The transition starts at 0% and ends at 100%.';
+  $('curve-title').textContent=options.title??'Custom curve';$('curve-help').textContent=options.help??(mode==='free'?'Tap to add points; drag points or hollow handles to reshape. Brightness adjusts light and dark tones; Red, Green and Blue adjust color balance. Interior color stays separate.':mode==='cycle'?'Tap to add points, drag points to reshape, and drag hollow handles to bend segments. The loop starts and returns to Start; 100% reaches Target.':'Tap to add points, drag points to reshape, and drag hollow handles to bend segments. The transition starts at 0% and ends at 100%.');
   $('curve-channel-row').hidden=channels.length===1;$('curve-channel').replaceChildren();
   for(const channel of channels){const option=document.createElement('option');option.value=channel.key;option.textContent=channel.label;$('curve-channel').append(option);}
   $('curve-channel').value=session.key;$('curve-channel').onchange=()=>{session.key=$('curve-channel').value;session.selected=1;session.segment=0;sync();};
@@ -136,11 +136,15 @@ export function openCurveEditor(options) {
   $('curve-reset-all').hidden=channels.length===1;$('curve-reset-all').onclick=()=>{session.working={};session.selected=1;session.segment=0;curve();emit();};
   $('curve-play').hidden=mode==='free';$('curve-play').onclick=()=>{session.playing=!session.playing;sync();};
   $('curve-palette-ramps').hidden=!options.getPalette;
+  $('curve-apply').textContent=options.applyLabel??'Apply curve';
+  $('curve-alternate-apply').hidden=!options.onAlternateApply;
+  $('curve-alternate-apply').textContent=options.alternateLabel??'Save a copy…';
+  $('curve-alternate-apply').onclick=()=>{try{options.onAlternateApply(output());session.applied=true;dialog.close();}catch(e){error(e.message);}};
   $('curve-apply').onclick=()=>{try{options.onApply(output());session.applied=true;dialog.close();}catch(e){error(e.message);}};
   $('curve-cancel').onclick=()=>dialog.close();
   if(!initialized){
     dialog.addEventListener('cancel',event=>{if(dialog.classList.contains('curve-preview-expanded')){event.preventDefault();toggle.click();}});
-    dialog.addEventListener('close',()=>{const ended=current;current=null;cancelAnimationFrame(raf);ended?.restorePreview?.();dialog.classList.remove('curve-with-preview','curve-preview-expanded');if(ended&&!ended.applied)ended.options.onCancel?.();});
+    dialog.addEventListener('close',()=>{const ended=current;current=null;cancelAnimationFrame(raf);ended?.restorePreview?.();dialog.classList.remove('curve-with-preview','curve-preview-expanded');if(ended&&!ended.applied)ended.options.onCancel?.();ended?.options.onClose?.();});
     initialized=true;
   }
   error('');sync();dialog.showModal();let last=performance.now(),lastDraw=0;

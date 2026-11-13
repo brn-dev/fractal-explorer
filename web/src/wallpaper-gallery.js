@@ -1,5 +1,6 @@
 import { nativeBridge, nativeCall } from './native-bridge.mjs';
 import { wallpaperScreenName } from './wallpaper.mjs';
+import { setupWallpaperCorrections } from './wallpaper-corrections.js';
 
 const $ = id => document.getElementById(id);
 
@@ -16,8 +17,13 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
   const shuffleToggle = $('wallpaper-gallery-shuffle');
   $('wallpaper-gallery-shuffle-options').hidden = !shuffleSupported;
   let pools = {};
+  const correctionsSupported=typeof nativeBridge().wallpaperCorrectionSource==='function'&&typeof nativeBridge().setWallpaperCorrection==='function'&&typeof nativeBridge().beginWallpaperCorrectionCopy==='function';
+  const corrections=correctionsSupported?setupWallpaperCorrections({
+    onSaved:message=>{refresh();status.textContent=message;},
+    isCurrent:screen=>dialog.open&&screenSelect.value===screen,
+  }):null;
   const report = action => {
-    try { action(); } catch (error) { status.textContent = error.message; }
+    try { const value=action();value?.catch?.(error=>{status.textContent=error.message;}); } catch (error) { status.textContent = error.message; }
   };
   const button = (label, action) => {
     const node = document.createElement('button'); node.type = 'button';
@@ -55,6 +61,7 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
       const content = document.createElement('div'), heading = document.createElement('h3'); heading.textContent = entry.name;
       const detail = document.createElement('p'); detail.className = 'export-note';
       detail.textContent = `${active ? 'Selected · ' : ''}${screenLabel} · ${entry.kind === 'static' ? 'Static image' : entry.kind === 'loop' ? 'Steady loop · no entry transition' : 'Animated'} · ${(entry.bytes / 1024 ** 2).toFixed(1)} MB${entry.editable ? '' : entry.kind === 'static' ? ' · imported image' : ' · imported videos only'}`;
+      if(entry.corrections?.[screen])detail.textContent+=' · live color correction';
       const actions = document.createElement('div'); actions.className = 'wallpaper-state-actions';
       const apply = button(pool.enabled ? 'Use only this' : active ? 'Selected' : `Use on ${screen === 'cover' ? 'cover' : 'main'}`, () => {
         nativeCall('applyWallpaperScreen', entry.id, screen); refresh();
@@ -94,7 +101,9 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
       const preview = button('Preview', () => nativeCall('previewWallpaper', entry.id, screen));
       preview.disabled = !previewSupported;
       preview.title = preview.disabled ? 'Install Android app 0.17.0 or newer for full-screen previews.' : 'Play this saved wallpaper full screen. Tap anywhere to return.';
-      actions.append(preview, apply, edit, duplicate, rename, remove); content.append(heading, detail, actions, renameForm, confirm); card.append(image, content); container.append(card);
+      actions.append(preview, apply);
+      if(corrections)actions.append(button('Adjust rendered colors',()=>corrections.open(entry,screen)));
+      actions.append(edit, duplicate, rename, remove); content.append(heading, detail, actions, renameForm, confirm); card.append(image, content); container.append(card);
       if (shuffleSupported) {
         const label = document.createElement('label'); label.className = 'field-label';
         const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = pool.ids.includes(entry.id);

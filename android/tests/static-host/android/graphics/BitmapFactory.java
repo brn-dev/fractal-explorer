@@ -7,6 +7,8 @@ import javax.imageio.ImageIO;
 public class BitmapFactory {
   public static class Options {
     public boolean inJustDecodeBounds;
+    public boolean inMutable;
+    public Bitmap.Config inPreferredConfig;
     public int outWidth, outHeight, inSampleSize;
   }
 

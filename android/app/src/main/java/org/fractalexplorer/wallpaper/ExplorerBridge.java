@@ -20,6 +20,8 @@ final class ExplorerBridge {
 
     void wallpaperPicker();
 
+    default void correctionCopyRunning(String lease, boolean running) {}
+
     default void previewWallpaper(String id, String screen) throws Exception {
       throw new IOException("Full-screen previews need a newer Android app.");
     }
@@ -43,6 +45,9 @@ final class ExplorerBridge {
   private String encoderId, encoderSlot;
   private File encoderFile, pack;
   private boolean webReloading;
+  private volatile WallpaperBakeJobs.Job gradeBake;
+  private volatile boolean correctionForeground = true;
+  private final Object correctionLock = new Object();
 
   ExplorerBridge(android.content.Context context, Host host) {
     this.context = context.getApplicationContext();
@@ -104,7 +109,7 @@ final class ExplorerBridge {
 
   @JavascriptInterface
   public String info() {
-    return "{\"ok\":true,\"version\":2,\"nativeVideo\":true,\"maxEdge\":4096,\"dynamicQuality\":true,\"staticWallpapers\":true,\"shuffleRules\":true,\"wallpaperPreview\":true}";
+    return "{\"ok\":true,\"version\":2,\"nativeVideo\":true,\"maxEdge\":4096,\"dynamicQuality\":true,\"staticWallpapers\":true,\"shuffleRules\":true,\"wallpaperPreview\":true,\"renderCorrections\":true}";
   }
 
   @JavascriptInterface
@@ -131,7 +136,7 @@ final class ExplorerBridge {
 
   private void freezeWebReload() throws IOException {
     if (webReloading) throw new IOException("The explorer is already reloading.");
-    if (encoder != null || pack != null)
+    if (encoder != null || pack != null || (gradeBake != null && !gradeBake.terminal()))
       throw new IOException("Finish or cancel the current export before updating.");
     webReloading = true;
   }
@@ -372,6 +377,86 @@ final class ExplorerBridge {
   }
 
   @JavascriptInterface
+  public String wallpaperCorrectionSource(String id, String screen) {
+    return call(() -> gallery.correctionSource(id, screen));
+  }
+
+  @JavascriptInterface
+  public String setWallpaperCorrection(String id, String screen, String json) {
+    return call(
+        () -> {
+          gallery.setGrade(id, screen, WallpaperColorGrade.parse(json));
+          return new JSONObject();
+        });
+  }
+
+  @JavascriptInterface
+  public String beginWallpaperCorrectionCopy(String id, String screen, String json) {
+    return call(
+        () -> {
+          synchronized (correctionLock) {
+            if (!correctionForeground)
+              throw new IOException("Keep the explorer open while saving a corrected copy");
+            if (gradeBake != null && !gradeBake.terminal())
+              throw new IOException("A corrected copy is already being saved");
+            JSONObject request = object(json);
+            WallpaperColorGrade grade = new WallpaperColorGrade(request.getJSONObject("curves"));
+            String lease = WallpaperFiles.newId();
+            host.correctionCopyRunning(lease, true);
+            try {
+              gradeBake =
+                  WallpaperBakeJobs.start(
+                      context,
+                      id,
+                      screen,
+                      grade,
+                      request,
+                      () -> host.correctionCopyRunning(lease, false));
+            } catch (Exception | OutOfMemoryError e) {
+              host.correctionCopyRunning(lease, false);
+              throw e;
+            }
+            return gradeBake.status();
+          }
+        });
+  }
+
+  @JavascriptInterface
+  public String wallpaperCorrectionCopyStatus(String job) {
+    return call(
+        () -> {
+          if (gradeBake == null || !gradeBake.token.equals(job))
+            throw new IOException("Unknown correction job");
+          return gradeBake.status();
+        });
+  }
+
+  @JavascriptInterface
+  public String cancelWallpaperCorrectionCopy(String job) {
+    return call(
+        () -> {
+          if (gradeBake == null || !gradeBake.token.equals(job))
+            throw new IOException("Unknown correction job");
+          gradeBake.cancel();
+          return gradeBake.status();
+        });
+  }
+
+  void pauseCorrectionCopy() {
+    synchronized (correctionLock) {
+      correctionForeground = false;
+      WallpaperBakeJobs.Job job = gradeBake;
+      if (job != null) job.cancel();
+    }
+  }
+
+  void resumeCorrectionCopies() {
+    synchronized (correctionLock) {
+      correctionForeground = true;
+    }
+  }
+
+  @JavascriptInterface
   public String setWallpaperShuffleRule(String screen, String id, String json) {
     return call(
         () -> {
@@ -521,6 +606,7 @@ final class ExplorerBridge {
   }
 
   void close() {
+    pauseCorrectionCopy();
     worker.close(
         () -> {
           try {

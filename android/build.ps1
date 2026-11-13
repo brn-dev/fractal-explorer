@@ -102,10 +102,15 @@ Run-Tool $java @('-cp', "$buildRoot\tests;$buildRoot\classes;$jsonJar;$AndroidJa
 $staticTests = Join-Path $buildRoot 'static-tests'
 New-Item -ItemType Directory -Path $staticTests -Force | Out-Null
 $staticSources = @(Get-ChildItem -LiteralPath "$PSScriptRoot\tests\static-host" -Recurse -Filter '*.java' | Select-Object -ExpandProperty FullName)
-$staticSources += @('PackPolicy', 'WallpaperFiles', 'WallpaperGallery', 'ShufflePolicy', 'StaticImageImporter', 'ViennaSun', 'PlaybackState', 'WallpaperPreviewSource') | ForEach-Object { "$sourceRoot\java\org\fractalexplorer\wallpaper\$_.java" }
+$staticSources += @('PackPolicy', 'WallpaperFiles', 'WallpaperGallery', 'ShufflePolicy', 'StaticImageImporter', 'ViennaSun', 'PlaybackState', 'WallpaperPreviewSource', 'WallpaperColorGrade', 'ColorGradeBitmap') | ForEach-Object { "$sourceRoot\java\org\fractalexplorer\wallpaper\$_.java" }
 Run-Tool $javac (@('-cp', $jsonJar, '-d', $staticTests) + $staticSources + @("$PSScriptRoot\tests\StaticWallpaperTest.java", "$PSScriptRoot\tests\ShuffleScheduleTest.java", "$PSScriptRoot\tests\ViennaSunTest.java", "$PSScriptRoot\tests\LoopWallpaperTest.java", "$PSScriptRoot\tests\WallpaperPreviewTest.java"))
 Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.StaticWallpaperTest', $buildRoot)
 Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.ShuffleScheduleTest', $buildRoot)
 Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.LoopWallpaperTest', $buildRoot)
 Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.WallpaperPreviewTest', $buildRoot)
+Run-Tool 'node.exe' @("$PSScriptRoot\tests\color-grade-fixtures.mjs", "$buildRoot\color-grade-fixtures.json")
+Run-Tool $javac @('-cp', "$staticTests;$jsonJar", '-d', $staticTests, "$PSScriptRoot\tests\WallpaperColorGradeTest.java")
+Run-Tool $java @('-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.WallpaperColorGradeTest', "$buildRoot\color-grade-fixtures.json")
+Run-Tool $javac @('-cp', "$staticTests;$jsonJar", '-d', $staticTests, "$PSScriptRoot\tests\WallpaperCorrectionStorageTest.java")
+Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.WallpaperCorrectionStorageTest', $buildRoot)
 Write-Output "APK ready: $apk"

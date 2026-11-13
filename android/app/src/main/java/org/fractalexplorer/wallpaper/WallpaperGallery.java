@@ -334,6 +334,69 @@ final class WallpaperGallery {
         "gallery_name_" + id, manifest.optString("name", "My fractal wallpaper"));
   }
 
+  static String gradeKey(String screen, String id) {
+    return "gallery_grade_" + screen + "_" + id;
+  }
+
+  WallpaperColorGrade grade(String id, String screen) throws Exception {
+    checkScreen(screen);
+    synchronized (WallpaperFiles.class) {
+      if (!PackPolicy.supports(manifest(folder(id)).optString("screen", ""), screen))
+        throw new IOException("This wallpaper belongs to the other screen");
+      return WallpaperColorGrade.parse(preferences.getString(gradeKey(screen, id), "{}"));
+    }
+  }
+
+  void setGrade(String id, String screen, WallpaperColorGrade grade) throws Exception {
+    synchronized (WallpaperFiles.class) {
+      requireNoImport();
+      grade(id, screen);
+      String key = gradeKey(screen, id);
+      commit(preferences, preferences.edit().putString(key, grade.key), key);
+    }
+  }
+
+  JSONObject correctionSource(String id, String screen) throws Exception {
+    synchronized (WallpaperFiles.class) {
+      return new JSONObject()
+          .put("curves", grade(id, screen).json)
+          .put("image", thumbnail(id, screen, 1024, false))
+          .put("name", name(id, manifest(folder(id))));
+    }
+  }
+
+  /** Snapshot media before a long conversion, so deleting the original cannot race its decoder. */
+  JSONObject copyForCorrection(String id, String screen, File destination) throws Exception {
+    checkScreen(screen);
+    synchronized (WallpaperFiles.class) {
+      requireNoImport();
+      File source = folder(id);
+      JSONObject saved = manifest(source);
+      if (!PackPolicy.supports(saved.optString("screen", ""), screen))
+        throw new IOException("This wallpaper belongs to the other screen");
+      String kind = saved.optString("kind", "animated");
+      for (String file : PackPolicy.files(screen, kind))
+        if (!file.equals("wallpaper.json"))
+          Files.copy(
+              PackPolicy.child(source, file).toPath(),
+              PackPolicy.child(destination, file).toPath());
+      saved
+          .put("screen", screen)
+          .put("name", name(id, saved))
+          .put("steadyMotion", previewSource(id, screen).idle ? "animated" : "still");
+      saved.remove("editor");
+      if (!PackPolicy.isStatic(kind)) {
+        JSONObject clips = saved.getJSONObject("clips");
+        for (int i = 0; i < PackPolicy.KEYS.length; i++)
+          if (!PackPolicy.VIDEOS[i].startsWith(screen + "-")) clips.remove(PackPolicy.KEYS[i]);
+      } else {
+        JSONObject images = saved.getJSONObject("images");
+        images.remove("cover".equals(screen) ? "inner" : "cover");
+      }
+      return saved;
+    }
+  }
+
   JSONArray list() throws Exception {
     synchronized (WallpaperFiles.class) {
       JSONArray result = new JSONArray();
@@ -364,6 +427,19 @@ final class WallpaperGallery {
                   .put("activeCover", cover)
                   .put("activeInner", inner)
                   .put("editable", manifest.optJSONObject("editor") != null)
+                  .put(
+                      "corrections",
+                      new JSONObject()
+                          .put(
+                              "cover",
+                              WallpaperColorGrade.parse(
+                                      preferences.getString(gradeKey("cover", id), "{}"))
+                                  .active)
+                          .put(
+                              "inner",
+                              WallpaperColorGrade.parse(
+                                      preferences.getString(gradeKey("inner", id), "{}"))
+                                  .active))
                   .put("bytes", size)
                   .put("created", folder.lastModified()));
         } catch (Exception ignored) {
@@ -414,7 +490,8 @@ final class WallpaperGallery {
           PackPolicy.hasEntry(kind),
           idle,
           dimensions.outWidth,
-          dimensions.outHeight);
+          dimensions.outHeight,
+          grade(id, screen));
     }
   }
 
@@ -426,6 +503,11 @@ final class WallpaperGallery {
   }
 
   String thumbnail(String id, String screen) throws Exception {
+    return thumbnail(id, screen, 320, true);
+  }
+
+  private String thumbnail(String id, String screen, int maxEdge, boolean corrected)
+      throws Exception {
     synchronized (WallpaperFiles.class) {
       if (!PackPolicy.supports(manifest(folder(id)).optString("screen", ""), screen))
         throw new IOException("This wallpaper belongs to the other screen");
@@ -438,12 +520,14 @@ final class WallpaperGallery {
           || Math.max(options.outWidth, options.outHeight) > 4096)
         throw new IOException("Cannot read this wallpaper's thumbnail");
       options.inSampleSize = 1;
-      while (Math.max(options.outWidth, options.outHeight) / options.inSampleSize > 320)
+      while (Math.max(options.outWidth, options.outHeight) / options.inSampleSize > maxEdge)
         options.inSampleSize *= 2;
       options.inJustDecodeBounds = false;
+      options.inMutable = corrected;
       Bitmap image = BitmapFactory.decodeFile(poster.getAbsolutePath(), options);
       if (image == null) throw new IOException("Cannot read this wallpaper's thumbnail");
       try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+        if (corrected) ColorGradeBitmap.apply(image, grade(id, screen));
         if (!image.compress(Bitmap.CompressFormat.PNG, 100, output))
           throw new IOException("Cannot create thumbnail");
         return "data:image/png;base64,"
@@ -524,6 +608,8 @@ final class WallpaperGallery {
                 .remove("gallery_cover_arrival_" + id)
                 .remove("gallery_inner_idle_" + id)
                 .remove("gallery_inner_arrival_" + id)
+                .remove(gradeKey("cover", id))
+                .remove(gradeKey("inner", id))
                 .putString("shuffle_cover_rules", coverRules.toString())
                 .putString("shuffle_inner_rules", innerRules.toString()),
             "gallery_name_" + id,
@@ -533,6 +619,8 @@ final class WallpaperGallery {
             "gallery_cover_arrival_" + id,
             "gallery_inner_idle_" + id,
             "gallery_inner_arrival_" + id,
+            gradeKey("cover", id),
+            gradeKey("inner", id),
             "shuffle_cover_rules",
             "shuffle_inner_rules");
       } catch (Exception error) {

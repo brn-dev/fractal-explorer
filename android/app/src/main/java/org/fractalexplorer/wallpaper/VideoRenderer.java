@@ -22,22 +22,10 @@ import android.view.Surface;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.FloatBuffer;
 import java.util.concurrent.CountDownLatch;
 
 /** Video decoding feeds a texture. Draw only when a new video frame arrives. */
 final class VideoRenderer {
-  private static final String VERTEX =
-      "attribute vec2 aPosition; attribute vec2 aUV; varying mediump vec2 vUV; void"
-          + " main(){vUV=aUV;gl_Position=vec4(aPosition,0.,1.);}";
-  private static final String BODY =
-      "precision mediump float; varying mediump vec2 vUV; uniform mat4 uMatrix; uniform vec2 uCrop;"
-          + " ";
-  private static final String SAMPLE =
-      "void main(){vec2"
-          + " uv=(vUV-.5)*uCrop+.5;gl_FragColor=texture2D(uTexture,(uMatrix*vec4(uv,0.,1.)).xy);}";
   private final Context context;
   private final Surface window;
   private final boolean shuffleAllowed;
@@ -46,8 +34,6 @@ final class VideoRenderer {
   private final HandlerThread thread = new HandlerThread("Fractal video");
   private final Handler handler;
   private final PlaybackState state = new PlaybackState();
-  private final FloatBuffer vertices = floats(-1, -1, 1, -1, -1, 1, 1, 1);
-  private final FloatBuffer coords = floats(0, 0, 1, 0, 0, 1, 1, 1);
   private final float[] videoMatrix = new float[16];
   private final float[] posterMatrix = {1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1};
   private EGLDisplay display = EGL14.EGL_NO_DISPLAY;
@@ -76,7 +62,9 @@ final class VideoRenderer {
   }
 
   private MediaPlayer player;
-  private int videoProgram, posterProgram, posterId, videoId;
+  private ColorGradeGl videoDraw, posterDraw;
+  private String gradeKey = "";
+  private int posterId, videoId;
   private int width, height, videoWidth = 1, videoHeight = 1, posterWidth = 1, posterHeight = 1;
   private int arrivalPosterId, arrivalPosterWidth = 1, arrivalPosterHeight = 1;
   private boolean initialized, showVideo;
@@ -257,6 +245,19 @@ final class VideoRenderer {
             changed |= state.update(mode, visible, false, false, saving, currentRevision, now);
           }
         }
+        WallpaperColorGrade grade =
+            preview != null
+                ? preview.grade
+                : WallpaperColorGrade.parse(
+                    preferences.getString(
+                        WallpaperGallery.gradeKey(
+                            screen, WallpaperFiles.activeId(preferences, screen)),
+                        "{}"));
+        if (!grade.key.equals(gradeKey)) {
+          videoDraw.setGrade(grade);
+          posterDraw.setGrade(grade);
+          gradeKey = grade.key;
+        }
         if (!shuffleBlank && (newArtwork || posterId == 0 || this.revision != currentRevision)) {
           loadPoster();
           showVideo = false;
@@ -311,15 +312,8 @@ final class VideoRenderer {
         || eglSurface == EGL14.EGL_NO_SURFACE
         || !EGL14.eglMakeCurrent(display, eglSurface, eglSurface, glContext))
       throw new IllegalStateException("Cannot attach wallpaper graphics");
-    String precision = fragmentPrecision();
-    videoProgram =
-        program(
-            "#extension GL_OES_EGL_image_external : require\n"
-                + BODY
-                + "uniform samplerExternalOES uTexture;"
-                + SAMPLE,
-            precision);
-    posterProgram = program(BODY + "uniform sampler2D uTexture;" + SAMPLE, precision);
+    videoDraw = new ColorGradeGl(true);
+    posterDraw = new ColorGradeGl(false);
     initialized = true;
   }
 
@@ -520,7 +514,6 @@ final class VideoRenderer {
       swapBuffers();
       return;
     }
-    int selected = video ? videoProgram : posterProgram;
     int imageWidth = posterWidth, imageHeight = posterHeight, imageId = posterId;
     float[] imageMatrix = posterMatrix;
     if (showVideo) {
@@ -539,24 +532,9 @@ final class VideoRenderer {
       imageId = arrivalPosterId;
     }
     float ratio = (imageWidth / (float) imageHeight) / (width / (float) height);
-    GLES20.glViewport(0, 0, width, height);
-    GLES20.glUseProgram(selected);
-    int position = GLES20.glGetAttribLocation(selected, "aPosition"),
-        uv = GLES20.glGetAttribLocation(selected, "aUV");
-    GLES20.glEnableVertexAttribArray(position);
-    GLES20.glEnableVertexAttribArray(uv);
-    GLES20.glVertexAttribPointer(position, 2, GLES20.GL_FLOAT, false, 0, vertices);
-    GLES20.glVertexAttribPointer(uv, 2, GLES20.GL_FLOAT, false, 0, coords);
-    GLES20.glUniform2f(
-        GLES20.glGetUniformLocation(selected, "uCrop"),
-        ratio > 1 ? 1 / ratio : 1,
-        ratio < 1 ? ratio : 1);
-    GLES20.glUniformMatrix4fv(
-        GLES20.glGetUniformLocation(selected, "uMatrix"), 1, false, imageMatrix, 0);
-    GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-    GLES20.glBindTexture(video ? GLES11Ext.GL_TEXTURE_EXTERNAL_OES : GLES20.GL_TEXTURE_2D, imageId);
-    GLES20.glUniform1i(GLES20.glGetUniformLocation(selected, "uTexture"), 0);
-    GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+    (video ? videoDraw : posterDraw)
+        .draw(
+            imageId, imageMatrix, ratio > 1 ? 1 / ratio : 1, ratio < 1 ? ratio : 1, width, height);
     swapBuffers();
   }
 
@@ -714,13 +692,6 @@ final class VideoRenderer {
     }
   }
 
-  private static FloatBuffer floats(float... values) {
-    FloatBuffer buffer =
-        ByteBuffer.allocateDirect(values.length * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
-    buffer.put(values).position(0);
-    return buffer;
-  }
-
   private static int texture(int target) {
     int[] names = new int[1];
     GLES20.glGenTextures(1, names, 0);
@@ -730,30 +701,5 @@ final class VideoRenderer {
     GLES20.glTexParameteri(target, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
     GLES20.glTexParameteri(target, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
     return names[0];
-  }
-
-  private static int shader(int type, String source) {
-    int shader = GLES20.glCreateShader(type);
-    GLES20.glShaderSource(shader, source);
-    GLES20.glCompileShader(shader);
-    int[] okay = new int[1];
-    GLES20.glGetShaderiv(shader, GLES20.GL_COMPILE_STATUS, okay, 0);
-    if (okay[0] == 0) throw new IllegalStateException(GLES20.glGetShaderInfoLog(shader));
-    return shader;
-  }
-
-  private static int program(String fragment, String precision) {
-    int vertex = shader(GLES20.GL_VERTEX_SHADER, VERTEX.replace("mediump", precision)),
-        pixel = shader(GLES20.GL_FRAGMENT_SHADER, fragment.replace("mediump", precision));
-    int program = GLES20.glCreateProgram();
-    GLES20.glAttachShader(program, vertex);
-    GLES20.glAttachShader(program, pixel);
-    GLES20.glLinkProgram(program);
-    GLES20.glDeleteShader(vertex);
-    GLES20.glDeleteShader(pixel);
-    int[] okay = new int[1];
-    GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, okay, 0);
-    if (okay[0] == 0) throw new IllegalStateException(GLES20.glGetProgramInfoLog(program));
-    return program;
   }
 }

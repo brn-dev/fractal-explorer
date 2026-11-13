@@ -44,6 +44,8 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
   private File pendingSave;
   private boolean galleryRequested;
   private boolean previewShowing;
+  private final java.util.Set<String> correctionWakeLeases = new java.util.HashSet<>();
+  private boolean correctionForeground;
   private static boolean recoveredExports;
   private static final java.util.Set<String> copying =
       java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -555,6 +557,10 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
 
   @Override
   protected void onPause() {
+    correctionForeground = false;
+    if (bridge != null) bridge.pauseCorrectionCopy();
+    correctionWakeLeases.clear();
+    getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     if (web != null) {
       web.onPause();
       web.pauseTimers();
@@ -565,6 +571,8 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
   @Override
   protected void onResume() {
     super.onResume();
+    correctionForeground = true;
+    if (bridge != null) bridge.resumeCorrectionCopies();
     previewShowing = false;
     refreshWallpaperDisplay();
     if (web != null) {
@@ -578,6 +586,19 @@ public final class MainActivity extends Activity implements ExplorerBridge.Host 
     if (web != null)
       web.evaluateJavascript(
           "window.dispatchEvent(new Event('wallpaper-displays-changed'));", null);
+  }
+
+  @Override
+  public void correctionCopyRunning(String lease, boolean running) {
+    runOnUiThread(
+        () -> {
+          if (isDestroyed() || (running && !correctionForeground)) return;
+          if (running) correctionWakeLeases.add(lease);
+          else correctionWakeLeases.remove(lease);
+          if (correctionWakeLeases.isEmpty())
+            getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+          else getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        });
   }
 
   @Override

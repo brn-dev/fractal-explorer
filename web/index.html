@@ -513,9 +513,23 @@
           <div class="wallpaper-state-actions curve-tools"><button id="curve-add" type="button" class="secondary-button">Add point</button><button id="curve-remove" type="button" class="secondary-button">Remove point</button><button id="curve-play" type="button" class="secondary-button">Play curve</button></div>
           <div class="wallpaper-state-actions curve-tools"><button id="curve-reset" type="button" class="secondary-button">Reset curve</button><button id="curve-reset-all" type="button" class="secondary-button">Reset all channels</button></div>
           <p id="curve-error" class="custom-error" role="status" hidden></p>
+          <button id="curve-alternate-apply" type="button" class="secondary-button" hidden>Save a copy…</button>
         </div>
         <div class="palette-editor-buttons"><button id="curve-cancel" type="button" class="secondary-button">Cancel</button><button id="curve-apply" type="button" class="primary-button">Apply curve</button></div>
       </div>
+    </dialog>
+    <dialog id="wallpaper-correction-copy-dialog" aria-labelledby="wallpaper-correction-copy-title">
+      <h2 id="wallpaper-correction-copy-title">Save corrected copy</h2>
+      <p>The correction is baked into the existing image and videos. No fractal calculation is needed. Your original stays in the gallery, and the copy is not selected automatically.</p>
+      <p class="export-note">Video is encoded again, so some compression loss is possible. The copy contains rendered media; keep the original for its editable fractal design. Keep this app open while saving.</p>
+      <div id="wallpaper-correction-copy-options">
+        <label class="field-label">Copy name<input id="wallpaper-correction-copy-name" type="text" maxlength="80" required></label>
+        <label class="field-label">Video quality<select id="wallpaper-correction-copy-quality"><option value="dynamic-high">Dynamic · high quality</option><option value="dynamic-balanced">Dynamic · balanced</option><option value="maximum">Maximum quality</option><option value="custom">Custom variable bitrate</option></select></label>
+        <label id="wallpaper-correction-copy-bitrate-row" class="field-label" hidden>Bitrate · Mbps<input id="wallpaper-correction-copy-bitrate" type="number" min="0.5" max="600" step="0.5" value="20"></label>
+      </div>
+      <progress id="wallpaper-correction-copy-progress" max="1" value="0" hidden aria-label="Corrected copy progress"></progress>
+      <p id="wallpaper-correction-copy-status" role="status" aria-live="polite"></p>
+      <div class="palette-editor-buttons"><button id="wallpaper-correction-copy-cancel" type="button" class="secondary-button">Cancel</button><button id="wallpaper-correction-copy-start" type="button" class="primary-button">Save corrected copy</button></div>
     </dialog>
     <dialog id="palette-dialog" aria-labelledby="palette-editor-title">
       <form method="dialog"><button class="dialog-close icon-button" aria-label="Close palette editor">×</button></form>
