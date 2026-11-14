@@ -55,7 +55,7 @@ function setup(reset=true, overrides={}) {
   hold=null;
   if (!globalThis.FractalNative) globalThis.window=new EventTarget();
   if(reset){const draft=defaultWallpaperDraft(wallpaperSnapshot(state,palettes));draft.states['open-steady'].view.x='-.12345';storage=JSON.stringify(draft);}
-  const extra=['wallpaper-palettes','wallpaper-palette-count','wallpaper-entry-transition','wallpaper-entry-note','wallpaper-endpoints-note','wallpaper-arrival-note','wallpaper-steady-note','wallpaper-kind','wallpaper-static-note','wallpaper-download-image','wallpaper-device','wallpaper-gallery-screen','wallpaper-gallery-dialog','wallpaper-gallery-status','wallpaper-gallery-cards','open-wallpaper-gallery','wallpaper-gallery','wallpaper-gallery-new','wallpaper-gallery-set','wallpaper-replace-dialog','wallpaper-replace-continue','wallpaper-editing-help'];
+  const extra=['wallpaper-new-current','wallpaper-palettes','wallpaper-palette-count','wallpaper-entry-transition','wallpaper-entry-note','wallpaper-endpoints-note','wallpaper-arrival-note','wallpaper-steady-note','wallpaper-kind','wallpaper-static-note','wallpaper-download-image','wallpaper-device','wallpaper-gallery-screen','wallpaper-gallery-dialog','wallpaper-gallery-status','wallpaper-gallery-cards','open-wallpaper-gallery','wallpaper-gallery','wallpaper-gallery-new','wallpaper-gallery-set','wallpaper-replace-dialog','wallpaper-replace-continue','wallpaper-editing-help'];
   const elements=Object.fromEntries([...ids,...extra,'wallpaper-supersampling','wallpaper-gallery-shuffle','wallpaper-gallery-shuffle-options','wallpaper-gallery-shuffle-note','wallpaper-renderer-note','wallpaper-pc','wallpaper-pc-dialog','wallpaper-pc-link','wallpaper-pc-status','wallpaper-pc-summary','wallpaper-pc-copy','wallpaper-pc-share','wallpaper-pc-file'].map(id=>[id,new Element(id)]));
   const find=(node,id)=>node.id===id?node:node.children.map(child=>find(child,id)).find(Boolean);
   globalThis.document={hidden:false,getElementById:id=>elements[id]??Object.values(elements).map(node=>find(node,id)).find(Boolean),createElement:tag=>new Element(tag),addEventListener(){}};
@@ -466,6 +466,64 @@ test('New wallpaper keeps the current working draft until replacement is confirm
     assert.equal(elements['wallpaper-dialog'].open,true);
     assert.equal(JSON.parse(storage).states['open-steady'].view.x,state.view.x);
   } finally {await close(elements);delete globalThis.FractalNative;}
+});
+
+test('New from current view replaces old scenes, palette batches and curves, retaining only target setup',async()=>{
+  for(const target of ['inner','cover']) {
+    const current=structuredClone(state);current.view={...current.view,x:'.234',rotation:35};current.colors={...current.colors,density:2,phase:.25};
+    const {elements,api}=setup(true,{getState:()=>current});
+    try {
+      elements['open-wallpaper-export'].click();await flush();
+      if(target==='cover'){elements['wallpaper-screen'].value=target;elements['wallpaper-screen'].onchange();await flush();}
+      const prefix=target==='cover'?'closed':'open',old=api.draft();
+      old.name='Old wallpaper';old.kind='static';old.entryTransition=false;old.quality='maximum';old.idleSeconds=20;
+      old.displayProfile='fold8-ultra';old.longest='native';old.paletteVariants=[{name:'Extra',colors:['#000000','#ff0000']}];
+      old.states[`${prefix}-steady`].view.x='-.987';
+      old.states[`${prefix}-steady`].colors.colorCurves={tone:{points:[[0,0],[.5,.2],[1,1]],interpolation:'smooth'}};
+      old.transitions[`${prefix}-transition`]={seconds:7,easing:'custom',curve:{points:[[0,0],[.3,.9],[1,1]],interpolation:'smooth'}};
+      // Reopen restores the previous draft, as before; only the explicit action resets it.
+      await close(elements);elements['open-wallpaper-export'].click();await flush();
+      assert.equal(api.draft().name,'Old wallpaper');const before=structuredClone(api.draft());
+      elements['wallpaper-new-current'].click();assert.equal(elements['wallpaper-replace-dialog'].open,true);assert.deepEqual(api.draft(),before);
+      elements['wallpaper-replace-dialog'].close();await flush();assert.deepEqual(api.draft(),before);
+      elements['wallpaper-new-current'].click();elements['wallpaper-replace-continue'].click();await flush();
+      const fresh=api.draft(),steady=fresh.states[`${prefix}-steady`];
+      assert.equal(fresh.screen,target);assert.equal(fresh.name,'My fractal wallpaper');assert.equal(fresh.kind,undefined);
+      assert.equal(fresh.quality,'dynamic-high');assert.equal(fresh.entryTransition,true);assert.equal(fresh.idleSeconds,8);
+      assert.equal(fresh.paletteVariants,undefined);assert.deepEqual(fresh.transitions[`${prefix}-transition`],{seconds:3,easing:'ease-out'});
+      assert.equal(steady.view.x,current.view.x);assert.equal(steady.view.rotation,35);assert.deepEqual(steady.colors.colorCurves,{});
+      assert.equal(steady.colors.density,2);assert.equal(steady.colors.phase,.25);assert.equal(fresh.displayProfile,'fold8-ultra');assert.equal(fresh.longest,'native');
+      assert.deepEqual(fresh.screenSizes[target],target==='cover'?{width:1080,height:2520}:{width:2256,height:2504});
+      assert.match(elements['wallpaper-preview-status'].textContent,/steady loop/);assert.equal(elements['wallpaper-apply'].hidden,true);
+    }finally{await close(elements);}
+  }
+});
+
+test('New from current view preserves the other screen and current grading without carrying old draft curves',async()=>{
+  const oldStorage=globalThis.localStorage,values=new Map();
+  globalThis.localStorage={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)};
+  const current=structuredClone(state);current.colors.colorCurves={red:{points:[[0,0],[.5,.65],[1,1]],interpolation:'smooth'}};
+  try {
+    const {elements,api}=setup(true,{getState:()=>current});elements['open-wallpaper-export'].click();await flush();
+    const inner=structuredClone(api.draft());
+    elements['wallpaper-screen'].value='cover';elements['wallpaper-screen'].onchange();await flush();
+    api.draft().screenSizes={cover:{width:1000,height:2400}};api.draft().longest='native';
+    elements['wallpaper-new-current'].click();elements['wallpaper-replace-continue'].click();await flush();
+    assert.deepEqual(api.draft().screenSizes.cover,{width:1000,height:2400});
+    assert.deepEqual(api.draft().states['closed-steady'].colors.colorCurves.red.points,current.colors.colorCurves.red.points);
+    assert.deepEqual(JSON.parse(values.get('fractal-web-wallpaper-v1-inner')),inner);
+    elements['wallpaper-screen'].value='inner';elements['wallpaper-screen'].onchange();await flush();assert.deepEqual(api.draft(),inner);
+    await close(elements);
+  }finally{globalThis.localStorage=oldStorage;}
+});
+
+test('New from current view cannot replace a draft during an active export',async()=>{
+  const {elements,api}=setup();elements['open-wallpaper-export'].click();await flush();hold='render';
+  const exportJob=elements['wallpaper-create'].onclick();await flush();
+  try {
+    const before=structuredClone(api.draft());elements['wallpaper-new-current'].click();
+    assert.equal(elements['wallpaper-replace-dialog'].open,false);assert.deepEqual(api.draft(),before);
+  }finally{elements['wallpaper-cancel'].click();await exportJob;await close(elements);}
 });
 
 test('gallery New uses native resolution on either screen while preserving imported sizes',async()=>{

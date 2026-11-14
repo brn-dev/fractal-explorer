@@ -471,6 +471,22 @@ export function setupWallpaper({ engine, palettes, paletteOptions = palettes, ge
     } catch (error) { $('export-menu-status').textContent = error.message; }
   }
   $('open-wallpaper-export').onclick = open;
+  $('wallpaper-new-current').onclick = () => {
+    if (job || loadingDraft) return;
+    try {
+      const previous = draft, target = screen, version = draftLoadVersion, next = newWorkingDraft(target);
+      // Start fresh artwork without losing the PC/phone target-screen setup.
+      for (const key of ['displayProfile', 'screenSizes', 'coverAspect', 'innerAspect'])
+        if (previous?.[key] !== undefined) next[key] = structuredClone(previous[key]);
+      if (previous?.longest === 'native' || next.displayProfile) next.longest = 'native';
+      assignScreenSizes(next);
+      replaceWorkingDraft(next, {
+        isCurrent: () => !job && !loadingDraft && draftLoadVersion === version && screen === target,
+        selectSteady: true,
+        message: 'Fresh draft from the current view and colors. Extra palettes, saved scene settings and custom transition curves have been reset.',
+      });
+    } catch (error) { $('wallpaper-status').textContent = error.message; }
+  };
   $('wallpaper-save-state').onclick = () => {
     if (!editing) return;
     try { storeScene(editing); selected = editing; finishEditing(); open(); }
@@ -689,12 +705,12 @@ export function setupWallpaper({ engine, palettes, paletteOptions = palettes, ge
     } catch (error) { $('wallpaper-status').textContent = error.message; }
   };
   $('wallpaper-download-image').onclick = () => createWallpaper(true);
-  function replaceWorkingDraft(next, { isCurrent = () => true, fromLink = false, message = '' } = {}) {
+  function replaceWorkingDraft(next, { isCurrent = () => true, fromLink = false, message = '', selectSteady = false } = {}) {
     designPlan(next); wallpaperJSON(next);
     const replace = () => {
       pendingHandoff = null;
       if (!isCurrent()) return;
-      draft = structuredClone(next); draft.resolutionVersion = 1; renderedDraft = null; save(); finishEditing(); selected = wallpaperSlots(draft)[0].key;
+      draft = structuredClone(next); draft.resolutionVersion = 1; renderedDraft = null; save(); finishEditing(); selected = (selectSteady ? wallpaperSlots(draft).find(slot => !slot.transition) : wallpaperSlots(draft)[0]).key;
       $('wallpaper-editing').hidden = true; $('wallpaper-apply').hidden = true;
       $('wallpaper-status').textContent = message; $('wallpaper-gallery-dialog').close(); open();
     };
