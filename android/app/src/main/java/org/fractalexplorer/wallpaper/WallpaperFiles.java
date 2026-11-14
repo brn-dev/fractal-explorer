@@ -6,12 +6,15 @@ import android.graphics.BitmapFactory;
 import android.media.MediaMetadataRetriever;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
@@ -373,55 +376,140 @@ final class WallpaperFiles {
     }
   }
 
-  void importZip(InputStream source) throws Exception {
-    File folder = null;
-    boolean complete = false;
-    Set<String> seen = new HashSet<>();
-    long total = 0;
+  /** Selects a single imported package; palette batches only add gallery entries. */
+  int importZip(InputStream source) throws Exception {
+    List<File> folders = new ArrayList<>();
+    List<JSONObject> manifests = new ArrayList<>();
+    boolean batch;
     try {
       try (ZipInputStream archive = new ZipInputStream(source)) {
-        folder = staging();
-        ZipEntry entry;
-        while ((entry = archive.getNextEntry()) != null) {
-          if (entry.isDirectory() || !seen.add(entry.getName()) || seen.size() > 7)
-            throw new IOException("Invalid or duplicated wallpaper entry");
-          File file = PackPolicy.child(folder, entry.getName());
-          try (FileOutputStream output = new FileOutputStream(file)) {
-            byte[] buffer = new byte[65536];
-            int count;
-            long size = 0;
-            while ((count = archive.read(buffer)) != -1) {
-              size += count;
-              total += count;
-              long limit =
-                  entry.getName().endsWith(".mp4")
-                      ? PackPolicy.MAX_VIDEO_BYTES
-                      : entry.getName().endsWith(".json")
-                          ? PackPolicy.MAX_JSON_BYTES
-                          : PackPolicy.MAX_POSTER_BYTES;
-              if (size > limit || total > PackPolicy.MAX_PACKAGE_BYTES)
-                throw new IOException("Wallpaper package is too large");
-              output.write(buffer, 0, count);
+        ZipEntry entry = archive.getNextEntry();
+        if (entry == null) throw new IOException("This ZIP contains no wallpaper packages");
+        batch = entry.getName().endsWith(".zip");
+        long[] unpacked = {0};
+        if (batch) {
+          Set<String> names = new HashSet<>();
+          do {
+            String name = entry.getName();
+            if (entry.isDirectory()
+                || !name.matches("[a-z0-9-]+\\.zip")
+                || !names.add(name)
+                || names.size() > 4)
+              throw new IOException("A palette batch must contain 1–4 unique wallpaper ZIPs");
+            File folder = staging();
+            folders.add(folder);
+            PackageInput input = new PackageInput(archive);
+            try (ZipInputStream nested = new ZipInputStream(input)) {
+              manifests.add(readPackage(nested, nested.getNextEntry(), folder, unpacked));
+            } catch (Exception error) {
+              throw new IOException("Could not read " + name + ": " + error.getMessage(), error);
             }
-          }
-          archive.closeEntry();
+            // Nested ZIP readers stop at their directory. Finish the outer entry
+            // to check its CRC/size, including bytes buffered by the nested reader.
+            byte[] buffer = new byte[65536];
+            while (input.read(buffer) != -1) {}
+            archive.closeEntry();
+          } while ((entry = archive.getNextEntry()) != null);
+        } else {
+          File folder = staging();
+          folders.add(folder);
+          manifests.add(readPackage(archive, entry, folder, unpacked));
         }
       }
-      // A document provider can fail while closing. Do not activate until all
-      // input I/O has succeeded, so a reported import failure keeps the old pack.
-      byte[] bytes =
-          java.nio.file.Files.readAllBytes(PackPolicy.child(folder, "wallpaper.json").toPath());
-      JSONObject manifest = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
-      if (!seen.equals(
-          PackPolicy.files(
-              manifest.optString("screen", ""), manifest.optString("kind", "animated"))))
-        throw new IOException(
-            "Wallpaper package does not contain the files required for its type and screen");
-      publish(folder, manifest);
-      complete = true;
+      // A provider may fail on close. Publish only after all input has succeeded.
+      synchronized (WallpaperFiles.class) {
+        List<File> published = new ArrayList<>();
+        try {
+          for (int i = 0; i < folders.size(); i++) {
+            String id = publishLocked(folders.get(i), manifests.get(i), !batch);
+            published.add(new File(root(), id));
+          }
+        } catch (Exception error) {
+          for (File folder : published)
+            try {
+              deleteFolder(folder);
+            } catch (IOException cleanup) {
+              error.addSuppressed(cleanup);
+            }
+          throw error;
+        }
+      }
+      return folders.size();
     } finally {
-      if (!complete && folder != null) deleteFolder(folder);
+      for (File folder : folders) if (folder.exists()) deleteFolder(folder);
     }
+  }
+
+  /** Bounded, non-closing view of one outer ZIP entry; recursion is never allowed. */
+  private static final class PackageInput extends FilterInputStream {
+    private long count;
+
+    PackageInput(InputStream source) {
+      super(source);
+    }
+
+    private void record(int size) throws IOException {
+      if (size > 0 && (count += size) > 512L * 1024 * 1024)
+        throw new IOException("A palette wallpaper ZIP exceeds 512 MiB");
+    }
+
+    @Override
+    public int read() throws IOException {
+      int value = in.read();
+      record(value < 0 ? 0 : 1);
+      return value;
+    }
+
+    @Override
+    public int read(byte[] bytes, int offset, int length) throws IOException {
+      int size = in.read(bytes, offset, length);
+      record(size);
+      return size;
+    }
+
+    @Override
+    public void close() {
+      /* The outer archive owns the document stream. */
+    }
+  }
+
+  private JSONObject readPackage(ZipInputStream archive, ZipEntry entry, File folder, long[] total)
+      throws Exception {
+    Set<String> seen = new HashSet<>();
+    if (entry == null) throw new IOException("Empty wallpaper ZIP");
+    do {
+      if (entry.isDirectory() || !seen.add(entry.getName()) || seen.size() > 7)
+        throw new IOException("Invalid or duplicated wallpaper entry");
+      File file = PackPolicy.child(folder, entry.getName());
+      try (FileOutputStream output = new FileOutputStream(file)) {
+        byte[] buffer = new byte[65536];
+        int count;
+        long size = 0;
+        while ((count = archive.read(buffer)) != -1) {
+          size += count;
+          total[0] += count;
+          long limit =
+              entry.getName().endsWith(".mp4")
+                  ? PackPolicy.MAX_VIDEO_BYTES
+                  : entry.getName().endsWith(".json")
+                      ? PackPolicy.MAX_JSON_BYTES
+                      : PackPolicy.MAX_POSTER_BYTES;
+          if (size > limit || total[0] > PackPolicy.MAX_PACKAGE_BYTES)
+            throw new IOException("Wallpaper package is too large");
+          output.write(buffer, 0, count);
+        }
+      }
+      archive.closeEntry();
+    } while ((entry = archive.getNextEntry()) != null);
+    if (!seen.contains("wallpaper.json")) throw new IOException("Missing wallpaper.json");
+    byte[] bytes =
+        java.nio.file.Files.readAllBytes(PackPolicy.child(folder, "wallpaper.json").toPath());
+    JSONObject manifest = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
+    if (!seen.equals(
+        PackPolicy.files(manifest.optString("screen", ""), manifest.optString("kind", "animated"))))
+      throw new IOException(
+          "Wallpaper package does not contain the files required for its type and screen");
+    return manifest;
   }
 
   void deleteFolder(File folder) throws IOException {

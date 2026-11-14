@@ -640,7 +640,7 @@ export function setupWallpaper({ engine, palettes, paletteOptions = palettes, ge
             $('wallpaper-status').textContent = `${plan.title} · frame ${index + 1} / ${plan.frames} · ${palettes} palettes · ${Math.round(100 * complete / total)}%`;
           } });
         check(signal); await downloadBlob(result.archive, 'fractal-wallpaper-palettes.zip');
-        $('wallpaper-status').textContent = `${result.count} palette wallpapers ready. Extract this ZIP, then import each wallpaper ZIP into the Android app.`;
+        $('wallpaper-status').textContent = `${result.count} palette wallpapers ready. Import this ZIP with Wallpaper settings → Import wallpaper package in Android 0.18.1+. On older versions, extract it and import each wallpaper ZIP separately.`;
         return;
       }
       const entries = [], canvas = document.createElement('canvas');

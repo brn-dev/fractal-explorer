@@ -105,6 +105,8 @@ $staticSources = @(Get-ChildItem -LiteralPath "$PSScriptRoot\tests\static-host" 
 $staticSources += @('PackPolicy', 'WallpaperFiles', 'WallpaperGallery', 'ShufflePolicy', 'StaticImageImporter', 'ViennaSun', 'PlaybackState', 'WallpaperPreviewSource', 'WallpaperColorGrade', 'ColorGradeBitmap') | ForEach-Object { "$sourceRoot\java\org\fractalexplorer\wallpaper\$_.java" }
 Run-Tool $javac (@('-cp', $jsonJar, '-d', $staticTests) + $staticSources + @("$PSScriptRoot\tests\StaticWallpaperTest.java", "$PSScriptRoot\tests\ShuffleScheduleTest.java", "$PSScriptRoot\tests\ViennaSunTest.java", "$PSScriptRoot\tests\LoopWallpaperTest.java", "$PSScriptRoot\tests\WallpaperPreviewTest.java"))
 Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.StaticWallpaperTest', $buildRoot)
+Run-Tool $javac @('-cp', "$staticTests;$jsonJar", '-d', $staticTests, "$PSScriptRoot\tests\WallpaperBatchImportTest.java")
+Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.WallpaperBatchImportTest', $buildRoot)
 Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.ShuffleScheduleTest', $buildRoot)
 Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.LoopWallpaperTest', $buildRoot)
 Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.WallpaperPreviewTest', $buildRoot)

@@ -104,6 +104,9 @@ public final class SettingsActivity extends Activity {
               intent.addCategory(Intent.CATEGORY_OPENABLE);
               startActivityForResult(intent, PICK_PACKAGE);
             }));
+    status = text(column, "Import a wallpaper ZIP or a multi-palette ZIP.", 14);
+    String previousError = preferences.getString("last_error", "");
+    if (!previousError.isEmpty()) status.setText("Last playback error: " + previousError);
     text(
         column,
         "Open or close your Fold to reveal a short fractal animation. Then choose a still image or"
@@ -267,9 +270,6 @@ public final class SettingsActivity extends Activity {
                         android.widget.Toast.makeText(
                                 getApplicationContext(), message, android.widget.Toast.LENGTH_LONG)
                             .show()));
-    status = text(column, "Pre-rendered artwork. No fractal calculation on your phone.", 14);
-    String previousError = preferences.getString("last_error", "");
-    if (!previousError.isEmpty()) status.setText("Last playback error: " + previousError);
   }
 
   private Switch toggle(LinearLayout column, String label, String key) {
@@ -502,8 +502,13 @@ public final class SettingsActivity extends Activity {
                 try {
                   InputStream source = getContentResolver().openInputStream(uri);
                   if (source == null) throw new java.io.IOException("Cannot open package");
-                  new WallpaperFiles(this).importZip(source);
-                  message = "Wallpaper imported. Preview & set wallpaper to use it.";
+                  int count = new WallpaperFiles(this).importZip(source);
+                  message =
+                      count == 1
+                          ? "1 wallpaper imported. Open Wallpaper gallery to preview or select it."
+                          : count
+                              + " wallpapers imported. Open Wallpaper gallery to select one or"
+                              + " include them in shuffle. Your current wallpaper is unchanged.";
                 } catch (Exception error) {
                   message = "Could not import wallpaper: " + error.getMessage();
                 }

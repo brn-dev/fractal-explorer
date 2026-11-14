@@ -4,4 +4,5 @@
   <instrumentation android:name=".SmokeInstrumentation" android:targetPackage="org.fractalexplorer.wallpaper" android:functionalTest="true" />
   <instrumentation android:name=".PreviewInstrumentation" android:targetPackage="org.fractalexplorer.wallpaper" android:functionalTest="true" />
   <instrumentation android:name=".CorrectionInstrumentation" android:targetPackage="org.fractalexplorer.wallpaper" android:functionalTest="true" />
+  <instrumentation android:name=".BatchImportInstrumentation" android:targetPackage="org.fractalexplorer.wallpaper" android:functionalTest="true" />
 </manifest>
