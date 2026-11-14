@@ -109,7 +109,7 @@ final class ExplorerBridge {
 
   @JavascriptInterface
   public String info() {
-    return "{\"ok\":true,\"version\":2,\"nativeVideo\":true,\"maxEdge\":4096,\"dynamicQuality\":true,\"staticWallpapers\":true,\"shuffleRules\":true,\"wallpaperPreview\":true,\"renderCorrections\":true}";
+    return "{\"ok\":true,\"version\":2,\"nativeVideo\":true,\"maxEdge\":4096,\"dynamicQuality\":true,\"staticWallpapers\":true,\"shuffleRules\":true,\"wallpaperPreview\":true,\"renderCorrections\":true,\"shuffleOrientation\":true}";
   }
 
   @JavascriptInterface

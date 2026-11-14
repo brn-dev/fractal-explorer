@@ -14,6 +14,8 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
   const screenSelect = $('wallpaper-gallery-screen'); screenSelect.value = 'inner';
   const shuffleSupported = typeof nativeBridge().setWallpaperShuffle === 'function';
   const rulesSupported = typeof nativeBridge().setWallpaperShuffleRule === 'function';
+  let orientationSupported = false;
+  try { orientationSupported = !!nativeCall('info').shuffleOrientation; } catch { /* Older hosts omit this capability. */ }
   const shuffleToggle = $('wallpaper-gallery-shuffle');
   $('wallpaper-gallery-shuffle-options').hidden = !shuffleSupported;
   let pools = {};
@@ -124,16 +126,23 @@ export function setupWallpaperGallery({ canOpen, newWallpaper, editWallpaper, be
             const option = document.createElement('option'); option.value = value; option.textContent = text; period.append(option);
           }
           period.value = settings.period; periodLabel.append(period); fields.append(weightLabel, periodLabel);
+          const orientation = document.createElement('input'); orientation.type = 'checkbox'; orientation.checked = settings.randomOrientation === true;
+          if (orientationSupported) {
+            const label = document.createElement('label'); label.className = 'field-label wallpaper-shuffle-orientation';
+            const text = document.createElement('span'); text.textContent = 'Randomize orientation when shuffling';
+            label.append(orientation, text); fields.append(label);
+          }
           const save = button('Save shuffle settings', () => {
             const value = Number(weight.value);
             if (!Number.isFinite(value) || value < .1 || value > 100) { status.textContent = 'Choose a weight between 0.1 and 100.'; weight.focus(); return; }
             try {
-              nativeCall('setWallpaperShuffleRule', screen, entry.id, JSON.stringify({ weight:value, period:period.value }));
-              refresh(); status.textContent = 'Shuffle weight and time filter saved for this screen.';
+              nativeCall('setWallpaperShuffleRule', screen, entry.id, JSON.stringify({ weight:value, period:period.value, ...(orientationSupported ? {randomOrientation:orientation.checked} : {}) }));
+              refresh(); status.textContent = 'Shuffle settings saved for this wallpaper and screen.';
             } catch (error) { try { refresh(); } catch {} status.textContent = error.message; }
           });
           form.onsubmit = event => { event.preventDefault(); save.click(); };
           const help = document.createElement('p'); help.className = 'export-note'; help.textContent = 'Weight 2 has twice the chance of weight 1 when both qualify. Daytime is sunrise to sunset; nighttime is sunset to sunrise.';
+          if (orientationSupported) help.textContent += ' Random orientation applies only to this wallpaper on this screen: original, left/right mirror, top/bottom mirror or 180° rotation, consistent through the entry and steady scene.';
           form.append(fields, help, save); content.append(form);
         }
       }

@@ -305,10 +305,12 @@ public final class SettingsActivity extends Activity {
           }
         }
         edit.putString("active_" + screen, "")
+            .putInt(screen + "_orientation", 0)
             .putBoolean(screen + "_static", false)
             .putBoolean(screen + "_has_entry", true)
             .putLong(screen + "_revision", WallpaperFiles.revision(preferences, screen) + 1);
         keys.add("active_" + screen);
+        keys.add(screen + "_orientation");
         keys.add(screen + "_static");
         keys.add(screen + "_has_entry");
         keys.add(screen + "_revision");

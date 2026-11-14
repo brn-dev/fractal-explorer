@@ -65,6 +65,7 @@ final class VideoRenderer {
   private ColorGradeGl videoDraw, posterDraw;
   private String gradeKey = "";
   private int posterId, videoId;
+  private int orientation;
   private int width, height, videoWidth = 1, videoHeight = 1, posterWidth = 1, posterHeight = 1;
   private int arrivalPosterId, arrivalPosterWidth = 1, arrivalPosterHeight = 1;
   private boolean initialized, showVideo;
@@ -245,6 +246,7 @@ final class VideoRenderer {
             changed |= state.update(mode, visible, false, false, saving, currentRevision, now);
           }
         }
+        orientation = preview == null ? WallpaperFiles.orientation(preferences, screen) : 0;
         WallpaperColorGrade grade =
             preview != null
                 ? preview.grade
@@ -532,9 +534,11 @@ final class VideoRenderer {
       imageId = arrivalPosterId;
     }
     float ratio = (imageWidth / (float) imageHeight) / (width / (float) height);
-    (video ? videoDraw : posterDraw)
-        .draw(
-            imageId, imageMatrix, ratio > 1 ? 1 / ratio : 1, ratio < 1 ? ratio : 1, width, height);
+    // Signed crop coordinates mirror around the image center before the codec's
+    // texture matrix. This reuses the existing pass for posters, video and held frames.
+    float cropX = (ratio > 1 ? 1 / ratio : 1) * ((orientation & 1) == 0 ? 1 : -1);
+    float cropY = (ratio < 1 ? ratio : 1) * ((orientation & 2) == 0 ? 1 : -1);
+    (video ? videoDraw : posterDraw).draw(imageId, imageMatrix, cropX, cropY, width, height);
     swapBuffers();
   }
 

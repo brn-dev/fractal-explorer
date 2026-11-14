@@ -273,3 +273,31 @@ test('invalid or failed rule saves keep the last native rule and selection intac
     assert.equal(t.entries[0].active,true);
   } finally {t.cleanup();}
 });
+
+test('orientation randomization is opt-in per wallpaper and screen and survives refresh',()=>{
+  const t=setup();try {
+    const pools={inner:{enabled:true,ids:['a','b'],rules:{}},cover:{enabled:true,ids:['a'],rules:{}}};
+    FractalNative.info=()=>'{"ok":true,"shuffleOrientation":true}';
+    FractalNative.setWallpaperShuffle=()=>'{"ok":true}';
+    FractalNative.listWallpapers=()=>JSON.stringify({ok:true,wallpapers:t.entries,shuffle:pools});
+    FractalNative.setWallpaperShuffleRule=(screen,id,json)=>{pools[screen].rules[id]=JSON.parse(json);return '{"ok":true}';};
+    setupWallpaperGallery({canOpen:()=>true,newWallpaper(){},editWallpaper(){},beforeOpen(){}});
+    t.elements['open-wallpaper-gallery'].click();
+    const form=i=>t.content(i).children[6],toggle=i=>form(i).children[0].children[2].children[0];
+    assert.equal(toggle(0).checked,false);assert.equal(toggle(1).checked,false);
+    toggle(0).checked=true;form(0).children[2].click();
+    assert.equal(toggle(0).checked,true);assert.equal(toggle(1).checked,false);
+    assert.deepEqual(pools.inner.rules.a,{weight:1,period:'any',randomOrientation:true});
+    assert.deepEqual(pools.cover.rules,{});assert.deepEqual(pools.inner.ids,['a','b']);
+    t.elements['wallpaper-gallery-screen'].value='cover';t.elements['wallpaper-gallery-screen'].onchange();assert.equal(toggle(0).checked,false);
+    t.elements['wallpaper-gallery-screen'].value='inner';t.elements['wallpaper-gallery-screen'].onchange();assert.equal(toggle(0).checked,true);
+    toggle(0).checked=false;form(0).children[2].click();assert.equal(pools.inner.rules.a.randomOrientation,false);
+    FractalNative.setWallpaperShuffleRule=()=>'{"ok":false,"error":"Storage full"}';
+    toggle(0).checked=true;form(0).children[2].click();assert.equal(toggle(0).checked,false);
+    assert.equal(t.elements['wallpaper-gallery-status'].textContent,'Storage full');
+    // Updated web UI can still edit rules on an older APK without sending unsupported fields.
+    FractalNative.info=()=>'{"ok":true}';
+    setupWallpaperGallery({canOpen:()=>true,newWallpaper(){},editWallpaper(){},beforeOpen(){}});
+    t.elements['open-wallpaper-gallery'].click();assert.equal(form(0).children[0].children.length,2);
+  }finally{t.cleanup();}
+});

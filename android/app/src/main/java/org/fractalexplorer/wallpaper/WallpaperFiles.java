@@ -108,6 +108,12 @@ final class WallpaperFiles {
     return preferences.getLong(screen + "_revision", preferences.getLong("revision", 0));
   }
 
+  // Two mirror bits: 0 = original, 1 = left/right, 2 = top/bottom, 3 = 180 degrees.
+  static int orientation(SharedPreferences preferences, String screen) {
+    int value = preferences.getInt(screen + "_orientation", 0);
+    return value >= 0 && value < 4 ? value : 0;
+  }
+
   void validate(File folder, JSONObject manifest) throws Exception {
     String kind = manifest.optString("kind", "animated");
     boolean image = PackPolicy.isStatic(kind);
@@ -218,6 +224,13 @@ final class WallpaperFiles {
 
   void activateLocked(String id, JSONObject manifest, String selectedScreen, boolean keepPlayback)
       throws Exception {
+    activateLocked(id, manifest, selectedScreen, keepPlayback, 0);
+  }
+
+  void activateLocked(
+      String id, JSONObject manifest, String selectedScreen, boolean keepPlayback, int orientation)
+      throws Exception {
+    if (orientation < 0 || orientation > 3) throw new IOException("Invalid wallpaper orientation");
     SharedPreferences preferences = context.getSharedPreferences("wallpaper", 0);
     String scope = manifest.optString("screen", "");
     if (selectedScreen != null && !PackPolicy.supports(scope, selectedScreen))
@@ -238,7 +251,16 @@ final class WallpaperFiles {
         keys.add("shuffle_" + screen);
       }
       String previous = activeId(preferences, screen);
-      if (id.equals(previous)) continue;
+      boolean orientationChanged = orientation(preferences, screen) != orientation;
+      edit.putInt(screen + "_orientation", orientation);
+      keys.add(screen + "_orientation");
+      if (id.equals(previous)) {
+        if (orientationChanged) {
+          edit.putLong(screen + "_revision", revision(preferences, screen) + 1);
+          keys.add(screen + "_revision");
+        }
+        continue;
+      }
       for (String key : new String[] {"idle", "arrival"}) {
         String saved = "gallery_" + screen + "_" + key + "_";
         boolean fallback =

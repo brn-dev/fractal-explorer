@@ -108,6 +108,8 @@ Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'or
 Run-Tool $javac @('-cp', "$staticTests;$jsonJar", '-d', $staticTests, "$PSScriptRoot\tests\WallpaperBatchImportTest.java")
 Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.WallpaperBatchImportTest', $buildRoot)
 Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.ShuffleScheduleTest', $buildRoot)
+Run-Tool $javac @('-cp', "$staticTests;$jsonJar", '-d', $staticTests, "$PSScriptRoot\tests\ShuffleOrientationTest.java")
+Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.ShuffleOrientationTest', $buildRoot)
 Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.LoopWallpaperTest', $buildRoot)
 Run-Tool $java @('-Djava.awt.headless=true', '-cp', "$staticTests;$jsonJar", 'org.fractalexplorer.wallpaper.WallpaperPreviewTest', $buildRoot)
 Run-Tool 'node.exe' @("$PSScriptRoot\tests\color-grade-fixtures.mjs", "$buildRoot\color-grade-fixtures.json")

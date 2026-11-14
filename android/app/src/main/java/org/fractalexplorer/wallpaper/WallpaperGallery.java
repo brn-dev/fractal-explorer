@@ -45,7 +45,10 @@ final class WallpaperGallery {
     JSONObject item = rules.optJSONObject(id);
     return item == null
         ? new ShufflePolicy.Rule(1, "any")
-        : new ShufflePolicy.Rule(item.getDouble("weight"), item.getString("period"));
+        : new ShufflePolicy.Rule(
+            item.getDouble("weight"),
+            item.getString("period"),
+            item.optBoolean("randomOrientation", false));
   }
 
   JSONObject solarInfo() throws Exception {
@@ -75,7 +78,9 @@ final class WallpaperGallery {
           .append(':')
           .append(setting.weight)
           .append(':')
-          .append(setting.period);
+          .append(setting.period)
+          .append(':')
+          .append(setting.randomOrientation);
     }
     if (timed) context.append(ViennaSun.at(wallTime).daytime(wallTime) ? "|day" : "|night");
     context.append(SettingsActivity.hasPendingChanges() ? "|pending" : "|ready");
@@ -94,15 +99,23 @@ final class WallpaperGallery {
   void setShuffleRule(String screen, String id, JSONObject item) throws Exception {
     checkScreen(screen);
     if (!(item.opt("weight") instanceof Number)) throw new IOException("Enter a numeric weight");
-    ShufflePolicy.Rule setting =
-        new ShufflePolicy.Rule(item.getDouble("weight"), item.getString("period"));
+    if (item.has("randomOrientation") && !(item.opt("randomOrientation") instanceof Boolean))
+      throw new IOException("Choose whether to randomize orientation");
     synchronized (WallpaperFiles.class) {
       requireNoImport();
       JSONObject saved = manifest(folder(id));
       if (!PackPolicy.supports(saved.optString("screen", ""), screen))
         throw new IOException("This wallpaper belongs to the other screen");
       JSONObject rules = shuffleRules(screen);
+      ShufflePolicy.Rule setting =
+          new ShufflePolicy.Rule(
+              item.getDouble("weight"),
+              item.getString("period"),
+              item.has("randomOrientation")
+                  ? item.getBoolean("randomOrientation")
+                  : rule(rules, id).randomOrientation);
       rules.put(id, new JSONObject().put("weight", setting.weight).put("period", setting.period));
+      rules.getJSONObject(id).put("randomOrientation", setting.randomOrientation);
       commit(
           preferences,
           preferences.edit().putString("shuffle_" + screen + "_rules", rules.toString()),
@@ -197,7 +210,8 @@ final class WallpaperGallery {
       String recent = shufflePolicy.recent(screen, pool, active, event, now);
       if (recent != null) return recent;
       String chosen = ShufflePolicy.weightedPick(valid, active, random);
-      if (!chosen.equals(active)) files.activateLocked(chosen, saved.get(chosen), screen, true);
+      int orientation = rule(rules, chosen).randomOrientation ? random.nextInt(4) : 0;
+      files.activateLocked(chosen, saved.get(chosen), screen, true, orientation);
       shufflePolicy.remember(screen, pool, chosen, event, now);
       return chosen;
     }

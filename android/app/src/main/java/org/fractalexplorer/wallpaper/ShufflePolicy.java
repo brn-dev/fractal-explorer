@@ -24,14 +24,20 @@ final class ShufflePolicy {
   static final class Rule {
     final double weight;
     final String period;
+    final boolean randomOrientation;
 
     Rule(double weight, String period) {
+      this(weight, period, false);
+    }
+
+    Rule(double weight, String period, boolean randomOrientation) {
       if (!Double.isFinite(weight) || weight < 0.1 || weight > 100)
         throw new IllegalArgumentException("Choose a weight between 0.1 and 100");
       if (!"any".equals(period) && !"day".equals(period) && !"night".equals(period))
         throw new IllegalArgumentException("Choose Any time, Daytime or Nighttime");
       this.weight = weight;
       this.period = period;
+      this.randomOrientation = randomOrientation;
     }
 
     boolean eligible(boolean daytime) {
